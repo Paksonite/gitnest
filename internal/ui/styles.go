@@ -192,7 +192,7 @@ func panel(title string, lines []string, w, h int, focused bool) string {
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(col).Render(strings.Join(rows, "\n"))
 }
 
-// tabsTitle renders a panel title with tabs, lazygit style: "[3] Commits - Reflog"
+// tabsTitle renders a panel title with tabs: "[3] Commits - Reflog"
 // with the active tab highlighted.
 func tabsTitle(num string, tabs []string, active int, focused bool) string {
 	numStyle := lipgloss.NewStyle().Foreground(cDim)

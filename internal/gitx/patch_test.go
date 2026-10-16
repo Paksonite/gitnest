@@ -5,15 +5,6 @@ import (
 	"testing"
 )
 
-// lines10 is "1".."10", one per line.
-func lines10() string {
-	var b strings.Builder
-	for i := 1; i <= 10; i++ {
-		b.WriteString(strings.Repeat("x", 0) + string(rune('0'+i%10)) + "\n")
-	}
-	return b.String()
-}
-
 // selectChanges selects change lines of d whose text (without prefix) is in want.
 func selectChanges(d Diff, want ...string) map[LineRef]bool {
 	sel := map[LineRef]bool{}

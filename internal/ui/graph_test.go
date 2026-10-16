@@ -85,3 +85,13 @@ func TestGraphLineThroughConnectedLane(t *testing.T) {
 		}
 	}
 }
+
+// graphString is the plain graph, one line per commit.
+func graphString(rows [][]gcell) string {
+	var out []string
+	for _, r := range rows {
+		p, _ := graphText(r)
+		out = append(out, p)
+	}
+	return strings.Join(out, "\n")
+}

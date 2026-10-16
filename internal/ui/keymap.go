@@ -109,7 +109,6 @@ const (
 	actForcePush
 	actReload
 	actUndo
-	actLazygit
 
 	// operation in progress
 	actContinue
@@ -131,6 +130,7 @@ const (
 	actHunkMode
 	actSwitchSide
 	actToggleTree
+	actToggleIcons
 
 	// branches
 	actToggleRemote
@@ -202,6 +202,7 @@ var keymap = [scopes][]binding{
 		b(actTop, "first theme", "", "home", "g"),
 		b(actBottom, "last theme", "", "end", "G"),
 		b(actSave, "use and save the theme", "save", "enter"),
+		b(actToggleIcons, "icons: Nerd Font or plain Unicode (saved)", "icons", "i"),
 		b(actCancel, "keep the previous theme", "cancel", "esc", "q"),
 	},
 	scGlobal: {
@@ -212,7 +213,7 @@ var keymap = [scopes][]binding{
 	},
 	scList: {
 		b(actOpen, "open the repository", "open", "enter"),
-		b(actSearch, "search by name (also host, path; @text = branch)", "search", "/"),
+		b(actSearch, "new search by name (also host, path; @text = branch)", "search", "/"),
 		b(actClearSearch, "clear the search", "", "esc"),
 		b(actUp, "move up", "", "up", "k"),
 		b(actDown, "move down", "", "down", "j"),
@@ -263,7 +264,6 @@ var keymap = [scopes][]binding{
 		b(actForcePush, "force push (--force-with-lease)", "", "F"),
 		b(actUndo, "undo the last history change (again to redo)", "undo", "z"),
 		b(actReload, "reload", "", "ctrl+r"),
-		b(actLazygit, "open in lazygit", "", "L"),
 		b(actCdQuit, "quit and cd into this repository (gn shell function)", "", "o"),
 	},
 	scState: {

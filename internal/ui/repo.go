@@ -386,13 +386,6 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 		return a.undoLast()
 	case actCdQuit:
 		return a.cdQuit(rp.dir)
-	case actLazygit:
-		if _, err := exec.LookPath("lazygit"); err != nil {
-			a.setToast("lazygit not found in PATH", true)
-			return nil
-		}
-		c := exec.Command("lazygit", "-p", dir)
-		return a.execCmd(c)
 	}
 	return nil
 }
@@ -927,8 +920,8 @@ func (a *App) undoLast() tea.Cmd {
 	return nil
 }
 
-// panelHeights splits the left column between the four panels the way
-// lazygit does: every panel shows its items, the focused one gets the most
+// panelHeights splits the left column between the four panels:
+// every panel shows its items, the focused one gets the most
 // room, and panels with few items give their unused rows away.
 func panelHeights(total, focus int, counts [4]int) [4]int {
 	const minH = 3 // border + title, no rows
@@ -1111,7 +1104,7 @@ func commitsTitle(rp *repoState) string {
 	return tabsTitle("[3]", []string{fmt.Sprintf("Commits (%d)", len(rp.commits)), fmt.Sprintf("Reflog (%d)", len(rp.refs))}, active, rp.focus == pCommits)
 }
 
-// currentFirst puts the checked-out branch at the top, like lazygit; the
+// currentFirst puts the checked-out branch at the top; the
 // rest keep their order (most recent commit first).
 func currentFirst(bs []gitx.Branch) []gitx.Branch {
 	out := make([]gitx.Branch, 0, len(bs))

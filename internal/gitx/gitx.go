@@ -1,4 +1,4 @@
-// Package gitx wraps the git CLI. Shelling out (like lazygit does) keeps behaviour
+// Package gitx wraps the git CLI. Shelling out keeps behaviour
 // identical to what the user's own git config would do.
 package gitx
 
@@ -604,15 +604,6 @@ func Message(ctx context.Context, dir, rev string) (string, error) {
 	return run(ctx, kRead, dir, nil, "log", "-1", "--format=%B", rev)
 }
 
-// replaceSubject swaps the first line of a commit message.
-func replaceSubject(msg, subject string) string {
-	msg = strings.TrimRight(msg, "\n")
-	if i := strings.IndexByte(msg, '\n'); i >= 0 {
-		return subject + msg[i:]
-	}
-	return subject
-}
-
 // ---------------------------------------------------------------- branches
 
 type Branch struct {
@@ -980,4 +971,38 @@ func Preview(ctx context.Context, dir string) string {
 	o, _ = run(ctx, kRead, dir, nil, colored("log", "--oneline", "--decorate", "-n", "15")...)
 	b.WriteString(o)
 	return b.String()
+}
+
+// MinGitVersion is the oldest git gitnest is tested with (Debian 12 ships
+// 2.39, macOS 2.39+). Older versions mostly work; stashing only staged
+// changes needs 2.35.
+const MinGitVersion = "2.35"
+
+// GitVersion returns the installed git's version, e.g. "2.39.5".
+func GitVersion(ctx context.Context) (string, error) {
+	out, err := run(ctx, kRead, "", nil, "version")
+	if err != nil {
+		return "", err
+	}
+	f := strings.Fields(out) // git version 2.39.5 (Apple Git-154)
+	if len(f) < 3 {
+		return "", fmt.Errorf("unexpected output %q", out)
+	}
+	return f[2], nil
+}
+
+// VersionAtLeast compares dotted version numbers: VersionAtLeast("2.39.5", "2.35").
+func VersionAtLeast(have, want string) bool {
+	h, w := strings.Split(have, "."), strings.Split(want, ".")
+	for i := 0; i < len(w); i++ {
+		var a, b int
+		if i < len(h) {
+			a, _ = strconv.Atoi(strings.TrimFunc(h[i], func(r rune) bool { return r < '0' || r > '9' }))
+		}
+		b, _ = strconv.Atoi(w[i])
+		if a != b {
+			return a > b
+		}
+	}
+	return true
 }

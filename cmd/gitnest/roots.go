@@ -79,7 +79,7 @@ func savedRoots() ([]string, error) {
 
 func addRoots(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: gitnest roots add <dir>...")
+		return errors.New("usage: gitnest roots add <dir> [<dir>]")
 	}
 	roots, err := savedRoots()
 	if err != nil {
@@ -119,7 +119,7 @@ func addRoots(args []string) error {
 
 func removeRoots(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: gitnest roots rm <dir>...")
+		return errors.New("usage: gitnest roots rm <dir> [<dir>]")
 	}
 	roots, err := savedRoots()
 	if err != nil {

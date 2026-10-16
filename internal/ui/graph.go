@@ -8,7 +8,7 @@ import (
 	"github.com/Paksonite/gitnest/internal/gitx"
 )
 
-// The commit graph is drawn the way lazygit does it: one row per commit,
+// The commit graph: one row per commit,
 // every line of development in its own column and colour, merges and
 // branch points joined with box-drawing lines on the commit's own row.
 
@@ -202,14 +202,4 @@ func graphText(row []gcell) (plain, styled string) {
 		st.WriteString(fg(laneColor(c.color), string(c.ch)))
 	}
 	return p.String(), st.String()
-}
-
-// graphString is the plain graph, used by tests.
-func graphString(rows [][]gcell) string {
-	var out []string
-	for _, r := range rows {
-		p, _ := graphText(r)
-		out = append(out, p)
-	}
-	return strings.Join(out, "\n")
 }

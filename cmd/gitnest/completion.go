@@ -23,6 +23,7 @@ _gitnest() {
     'theme:list, export or check colour themes'
     'completion:print a shell completion script'
     'shell:print the gn shell function (cd into a repository)'
+    'doctor:check git, config, icons, terminal and shell setup'
   )
   roots_cmds=(
     'list:list the scanned directories'
@@ -71,7 +72,7 @@ _gitnest() {
       fi
       ;;
     completion|shell)
-      (( CURRENT == 3 )) && compadd zsh
+      (( CURRENT == 3 )) && compadd zsh bash
       ;;
   esac
 }
@@ -83,14 +84,50 @@ else
 fi
 `
 
+// bashCompletion completes the same things for bash (bash-completion is
+// not required).
+const bashCompletion = `_gitnest() {
+  local cur=${COMP_WORDS[COMP_CWORD]} sub=${COMP_WORDS[1]}
+  local IFS=$'\n'
+  if [ "$COMP_CWORD" -eq 1 ]; then
+    COMPREPLY=($(compgen -W $'roots\nscan\ninit\nversion\nhelp\ndoctor\ntheme\ncompletion\nshell' -- "$cur") $(compgen -d -- "$cur"))
+    return
+  fi
+  case $sub in
+    roots)
+      if [ "$COMP_CWORD" -eq 2 ]; then
+        COMPREPLY=($(compgen -W $'list\nadd\nrm' -- "$cur"))
+      else
+        case ${COMP_WORDS[2]} in
+          add) COMPREPLY=($(compgen -d -- "$cur")) ;;
+          rm|remove) COMPREPLY=($(compgen -W "$(gitnest roots list --plain 2>/dev/null)" -- "$cur")) ;;
+        esac
+      fi ;;
+    theme|themes)
+      if [ "$COMP_CWORD" -eq 2 ]; then
+        COMPREPLY=($(compgen -W $'list\nexport\ncheck' -- "$cur"))
+      elif [ "$COMP_CWORD" -eq 3 ]; then
+        COMPREPLY=($(compgen -W "$(gitnest theme list 2>/dev/null | awk 'NF && $1 != "mode:" {print $1}')" -- "$cur"))
+        [ "${COMP_WORDS[2]}" = check ] && COMPREPLY+=($(compgen -f -- "$cur"))
+      fi ;;
+    init) COMPREPLY=($(compgen -W "--force" -- "$cur")) ;;
+    completion|shell) COMPREPLY=($(compgen -W $'zsh\nbash' -- "$cur")) ;;
+  esac
+}
+complete -o filenames -o bashdefault -F _gitnest gitnest
+`
+
 func completionCmd(args []string) error {
 	if len(args) != 1 {
-		return errors.New("usage: gitnest completion zsh")
+		return errors.New("usage: gitnest completion zsh|bash")
 	}
 	switch args[0] {
 	case "zsh":
 		fmt.Print(zshCompletion)
-		return nil
+	case "bash":
+		fmt.Print(bashCompletion)
+	default:
+		return fmt.Errorf("no completion for %q (zsh and bash are supported)", args[0])
 	}
-	return fmt.Errorf("no completion for %q (only zsh is supported)", args[0])
+	return nil
 }

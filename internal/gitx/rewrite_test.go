@@ -117,7 +117,7 @@ func TestRewriteRefusesMerges(t *testing.T) {
 		t.Fatalf("HEAD moved")
 	}
 	// After the merge everything is linear again.
-	if err := Reword(bg, dir, h["m2"], "m2 reworded"); err != nil {
+	if err := RewordMessage(bg, dir, h["m2"], "m2 reworded"); err != nil {
 		t.Fatal(err)
 	}
 	// Squashing m2 into the merge commit would replay the merge: refused.
@@ -129,7 +129,7 @@ func TestRewriteRefusesMerges(t *testing.T) {
 func TestRewordHeadMergeCommit(t *testing.T) {
 	dir, h := mergeRepo(t)
 	git(t, dir, "reset", "-q", "--hard", h["merge"])
-	if err := Reword(bg, dir, "HEAD", "merged side branch"); err != nil {
+	if err := RewordMessage(bg, dir, "HEAD", "merged side branch"); err != nil {
 		t.Fatal(err)
 	}
 	if parents := strings.Fields(git(t, dir, "log", "-1", "--format=%P")); len(parents) != 2 {
@@ -240,7 +240,7 @@ func TestUndoAndRedo(t *testing.T) {
 
 func TestUndoRefusals(t *testing.T) {
 	dir, h := linearRepo(t)
-	if err := Reword(bg, dir, h["d"], "d2"); err != nil {
+	if err := RewordMessage(bg, dir, h["d"], "d2"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -266,7 +266,7 @@ func TestUndoRefusals(t *testing.T) {
 
 func TestUndoIgnoresStaleFile(t *testing.T) {
 	dir, h := linearRepo(t)
-	if err := Reword(bg, dir, h["d"], "d2"); err != nil {
+	if err := RewordMessage(bg, dir, h["d"], "d2"); err != nil {
 		t.Fatal(err)
 	}
 	git(t, dir, "update-ref", "-d", undoRef)

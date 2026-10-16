@@ -33,7 +33,7 @@ type trieNode struct {
 	children map[string]*trieNode
 }
 
-// buildFileRows lays out the changed files the way lazygit does: a tree with
+// buildFileRows lays out the changed files as a tree: a tree with
 // directories first, single-directory chains merged ("src/app"), and the
 // children of collapsed directories hidden. In flat mode it is a plain list
 // sorted by path. The order never depends on staging state.
@@ -144,9 +144,9 @@ func fileRow(n fileNode, collapsed bool) rowItem {
 		case staged:
 			col = cYellow
 		}
-		icon := fileIcon(n.Path, true, collapsed)
+		icon, sicon := fileIconStyled(n.Path, true, collapsed)
 		plain := indent + arrow + " " + icon + n.Name + "/"
-		return rowItem{plain: plain, styled: indent + fg(cDim, arrow) + " " + fg(col, icon+n.Name+"/")}
+		return rowItem{plain: plain, styled: indent + fg(cDim, arrow) + " " + sicon + fg(col, n.Name+"/")}
 	}
 	f := n.File
 	code := string([]byte{f.X, f.Y})
@@ -166,8 +166,8 @@ func fileRow(n fileNode, collapsed bool) rowItem {
 		}
 		st = x + y
 	}
-	icon := fileIcon(n.Path, false, false)
-	plain, styled := indent+code+" "+icon+n.Name, indent+st+" "+icon+n.Name
+	icon, sicon := fileIconStyled(n.Path, false, false)
+	plain, styled := indent+code+" "+icon+n.Name, indent+st+" "+sicon+n.Name
 	if f.Orig != "" { // rename or copy
 		plain += " ← " + f.Orig
 		styled += fg(cDim, " ← "+f.Orig)

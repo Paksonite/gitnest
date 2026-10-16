@@ -1,4 +1,4 @@
-// Package ui is the bubbletea TUI: a repository list screen and a lazygit-style repo screen.
+// Package ui is the bubbletea TUI: the repository list and the repository view.
 package ui
 
 import (
@@ -102,16 +102,22 @@ type App struct {
 func Run(cfg config.Config, noConfig bool, startDir, cdFile string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	a := newApp(ctx, cfg, noConfig, startDir, cdFile)
+	_, err := tea.NewProgram(a, tea.WithAltScreen(), tea.WithReportFocus()).Run()
+	return err
+}
+
+func newApp(ctx context.Context, cfg config.Config, noConfig bool, startDir, cdFile string) *App {
 	a := &App{ctx: ctx, cfg: cfg, st: state.Load(), noConfig: noConfig, startDir: startDir, cdFile: cdFile,
 		scanner: scan.NewScanner(scan.FromConfig(cfg))}
 	a.loadThemes()
-	setIcons(cfg.Icons)
+	mode, _ := config.Icons(cfg)
+	setIcons(mode)
 	a.rs.marked = map[string]bool{}
 	a.rs.isNew = map[string]bool{}
 	a.rs.collapsed = map[string]bool{}
 	a.rs.tree = a.st.ListTree
-	_, err := tea.NewProgram(a, tea.WithAltScreen(), tea.WithReportFocus()).Run()
-	return err
+	return a
 }
 
 // loadThemes loads built-in and user themes and applies the configured one.

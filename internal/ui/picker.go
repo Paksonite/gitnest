@@ -51,6 +51,20 @@ func (a *App) pickerKey(k tea.KeyMsg) tea.Cmd {
 		move(-len(p.names))
 	case actBottom:
 		move(len(p.names))
+	case actToggleIcons:
+		mode := "nerd"
+		if nerdIcons {
+			mode = "unicode"
+		}
+		setIcons(mode)
+		a.cfg.Icons = mode
+		if err := config.SetValue([]string{"icons"}, mode); err != nil {
+			a.setToast("saving icons: "+err.Error(), true)
+		} else if mode == "nerd" {
+			a.setToast("Nerd Font icons on (saved) — they need a Nerd Font in the terminal", false)
+		} else {
+			a.setToast("plain Unicode icons (saved)", false)
+		}
 	case actCancel:
 		a.previewTheme(p.orig)
 		a.picker = nil
@@ -116,7 +130,7 @@ func (a *App) viewPicker() string {
 	showPreview := a.h >= 28
 	fixed := 2 + 2*editorPad(a.h) + 2 + 1 + 2
 	if showPreview {
-		fixed += 7
+		fixed += 8
 	}
 	listH := clamp(a.h-fixed, 1, len(p.names))
 	off := scrollTo(p.cur, clamp(p.cur-listH/2, 0, len(p.names)), listH)
@@ -145,7 +159,14 @@ func (a *App) viewPicker() string {
 
 	// A small sample of the UI in the previewed theme.
 	sel := lipgloss.NewStyle().Bold(true).Background(cSel).Foreground(cText)
+	_, sficon := fileIconStyled("main.go", false, false)
+	_, sdicon := fileIconStyled("src", true, false)
+	iconsMode := "Unicode"
+	if nerdIcons {
+		iconsMode = "Nerd Font"
+	}
 	sample := []string{
+		fg(cDim, "icons: "+iconsMode+" (i)") + "   " + fg(cDim, "▾ ") + sdicon + fg(cCyan, "src/") + "  " + fg(cRed, " M") + " " + sficon + "main.go",
 		sel.Render(fit(" ● gitnest       main      ↑1 ↓2 ~3   2h", 44)),
 		" " + fg(cYellow, "●") + " " + bold("org-core-dns") + fg(cDim, " · forgejo") + " " + fg(cCyan, "main") + " " + fg(cGreen, "↑1") + " " + fg(cRed, "↓2"),
 		"   " + bold("terraform-modules") + "  " + fg(cCyan, "feature/x") + "  " + fg(cDim, "3d"),

@@ -97,3 +97,22 @@ func TestUserThemeIsOffered(t *testing.T) {
 		t.Errorf("theme %s accent %v warn %q", a.theme.Name, cAccent, a.themeWarn)
 	}
 }
+
+func TestPickerTogglesIcons(t *testing.T) {
+	a := themedApp(t)
+	setIcons("unicode")
+	defer setIcons("unicode")
+	a.onKey(key("T"))
+	a.onKey(key("i"))
+	cfg, _, _ := config.Load()
+	if !nerdIcons || cfg.Icons != "nerd" {
+		t.Fatalf("nerd=%v saved=%q", nerdIcons, cfg.Icons)
+	}
+	if !strings.Contains(a.View(), "icons: Nerd Font") {
+		t.Error("chooser should show the icon mode")
+	}
+	a.onKey(key("i"))
+	if cfg, _, _ = config.Load(); nerdIcons || cfg.Icons != "unicode" {
+		t.Errorf("back: nerd=%v saved=%q", nerdIcons, cfg.Icons)
+	}
+}

@@ -109,20 +109,6 @@ func TestParseStashes(t *testing.T) {
 	}
 }
 
-func TestReplaceSubject(t *testing.T) {
-	cases := map[string]string{
-		"old\n":                     "new",
-		"old\n\nbody line\nmore\n":  "new\n\nbody line\nmore",
-		"old":                       "new",
-		"old\nno blank line body\n": "new\nno blank line body",
-	}
-	for in, want := range cases {
-		if got := replaceSubject(in, "new"); got != want {
-			t.Errorf("replaceSubject(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestSubcommand(t *testing.T) {
 	cases := map[string][]string{
 		"diff":   {"-c", "color.ui=always", "diff", "--cached"},

@@ -525,8 +525,12 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 			a.rebuildView(a.selectedKey())
 			return a.previewCmd()
 		}
-	case actSearch:
+	case actSearch: // a new search; tab kept the old one on screen until now
 		rs.filtering = true
+		if rs.filter != "" {
+			rs.filter = ""
+			a.rebuildView(a.selectedKey())
+		}
 	case actOpen:
 		if i, ok := a.selectedDir(); ok { // enter on a directory folds it
 			d := rs.rows[i].dir
