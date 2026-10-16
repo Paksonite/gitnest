@@ -103,8 +103,18 @@ func press(t *testing.T, a tea.Model, keys ...string) {
 			msg = tea.KeyMsg{Type: tea.KeyCtrlN}
 		case k == "ctrl+w":
 			msg = tea.KeyMsg{Type: tea.KeyCtrlW}
-		case k == "ctrl+o":
-			msg = tea.KeyMsg{Type: tea.KeyCtrlO}
+		case k == "ctrl+g":
+			msg = tea.KeyMsg{Type: tea.KeyCtrlG}
+		case k == "ctrl+left":
+			msg = tea.KeyMsg{Type: tea.KeyCtrlLeft}
+		case k == "ctrl+right":
+			msg = tea.KeyMsg{Type: tea.KeyCtrlRight}
+		case k == "ctrl+up":
+			msg = tea.KeyMsg{Type: tea.KeyCtrlUp}
+		case k == "ctrl+down":
+			msg = tea.KeyMsg{Type: tea.KeyCtrlDown}
+		case k == "alt+right":
+			msg = tea.KeyMsg{Type: tea.KeyRight, Alt: true}
 		default:
 			msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
 		}
