@@ -150,7 +150,8 @@ Press `?` in the app for every key binding.
 One line in your shell's startup file gives you completion for `gitnest` and
 the **`gn`** command: it opens gitnest, and when you press `o` on a
 repository (in the list or inside it) gitnest quits and your shell is in that
-repository's folder.
+repository's folder. After it, `gitnest` itself does the same — `gn` is just
+shorter.
 
 **zsh** — add to `~/.zshrc` (anywhere: before or after `compinit` or oh-my-zsh):
 
@@ -164,7 +165,7 @@ eval "$(gitnest shell zsh)"
 eval "$(gitnest shell bash)"
 ```
 
-Open a new terminal and try `gn`. (Completion alone: `gitnest completion zsh`
+Open a new terminal and try `gn` (or `gitnest`), then `o`. (Completion alone: `gitnest completion zsh`
 or `gitnest completion bash`.)
 
 ## Icons (Nerd Font)
@@ -202,7 +203,7 @@ icons in the Files tree and git icons for branches, tags and the reflog.
 | `space` | mark (on a folder: everything below); `f` fetch / `p` pull the marked ones |
 | `R` / `r` | rescan the folders / refresh the status |
 | `q` | quit |
-| `o` | quit and go to the repository (with `gn`) |
+| `o` | quit and go to the repository (needs the [shell integration](#shell-integration-completion-and-gn)) |
 | `T` | theme and icons |
 | `ctrl+n` | open a second gitnest next to this one ([panes](#several-repositories-side-by-side)) |
 

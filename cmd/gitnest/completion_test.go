@@ -108,3 +108,33 @@ func TestZshShellBeforeCompinit(t *testing.T) {
 		}
 	}
 }
+
+// After the eval, gitnest goes through gn too: both get --cd-file, so o can
+// change the shell's directory either way.
+func TestShellWrapsGitnest(t *testing.T) {
+	bin := t.TempDir()
+	repo := t.TempDir()
+	fake := "#!/bin/sh\necho \"args: $*\"\nif [ \"$1\" = --cd-file ]; then printf '%s\\n' \"$REPO\" > \"$2\"; fi\n"
+	if err := os.WriteFile(filepath.Join(bin, "gitnest"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for shell, script := range map[string]string{"zsh": zshCompletion + "\n" + zshShell, "bash": bashCompletion + "\n" + bashShell} {
+		path, err := exec.LookPath(shell)
+		if err != nil {
+			continue
+		}
+		f := filepath.Join(t.TempDir(), "init."+shell)
+		os.WriteFile(f, []byte(script), 0o644)
+		for _, name := range []string{"gn", "gitnest"} {
+			cmd := exec.Command(path, "-c", "source "+f+"; cd /; "+name+" x; echo \"pwd: $PWD\"")
+			cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "REPO="+repo, "TMPDIR="+t.TempDir())
+			out, err := cmd.CombinedOutput()
+			real, _ := filepath.EvalSymlinks(repo)
+			got := string(out)
+			if err != nil || !strings.Contains(got, "args: --cd-file ") || !strings.Contains(got, " x\n") ||
+				!(strings.Contains(got, "pwd: "+repo+"\n") || strings.Contains(got, "pwd: "+real+"\n")) {
+				t.Errorf("%s, %s: %v\n%s", shell, name, err, got)
+			}
+		}
+	}
+}

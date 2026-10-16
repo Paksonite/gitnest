@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -503,7 +504,11 @@ func (a *App) cdQuit(path string) tea.Cmd {
 		return nil
 	}
 	if a.cdFile == "" {
-		a.setToast(`o needs the gn shell function: add  eval "$(gitnest shell zsh)"  to ~/.zshrc and start with gn`, true)
+		shell, rc := "zsh", "~/.zshrc"
+		if filepath.Base(os.Getenv("SHELL")) == "bash" {
+			shell, rc = "bash", "~/.bashrc"
+		}
+		a.setToast(fmt.Sprintf(`o needs the shell integration: add  eval "$(gitnest shell %s)"  to %s and open a new terminal`, shell, rc), true)
 		return nil
 	}
 	if err := os.WriteFile(a.cdFile, []byte(path+"\n"), 0o600); err != nil {
