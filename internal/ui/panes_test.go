@@ -76,7 +76,7 @@ func TestLayout(t *testing.T) {
 }
 
 func TestFocusTowards(t *testing.T) {
-	s := shellOf(t, 220, 60, "/r/a")
+	s := shellOf(t, 200, 60, "/r/a")
 	for i := 0; i < 3; i++ {
 		press(t, s, "ctrl+n")
 	}
@@ -92,7 +92,7 @@ func TestFocusTowards(t *testing.T) {
 			t.Fatalf("%s: focus %d, want %d", st.key, s.focus, st.want)
 		}
 	}
-	press(t, s, "ctrl+g") // side by side would need 4×52 columns: falls back to the grid
+	press(t, s, "ctrl+g") // four side by side need 4×52 columns, 200 is too few: the grid stays
 	if s.mode != paneColumns || !strings.Contains(s.focused().app.toast, "doesn't fit this window, showing grid") {
 		t.Errorf("ctrl+g: mode %d toast %q", s.mode, s.focused().app.toast)
 	}
