@@ -33,6 +33,7 @@ Usage:
   gitnest theme           list colour themes (also: theme export <name>, theme check <name|file>)
   gitnest completion zsh  print the completion script (zsh or bash)
   gitnest shell zsh       gn + completion for ~/.zshrc (or: shell bash for ~/.bashrc)
+  gitnest update          install the latest release (--check only looks)
   gitnest version         print version information
   gitnest doctor          check git, config, icons, terminal and shell setup
   gitnest help            show this help
@@ -73,6 +74,8 @@ func run(args []string) error {
 			return shellCmd(args[1:])
 		case "doctor":
 			return doctorCmd(args[1:])
+		case "update", "upgrade":
+			return updateCmd(args[1:])
 		}
 		if len(args) > 1 {
 			return fmt.Errorf("unexpected arguments: %v (see `gitnest help`)", args[1:])
@@ -89,6 +92,7 @@ func run(args []string) error {
 			return err
 		}
 	}
+	ui.Version, _, _ = buildVersion()
 	return ui.Run(cfg, !existed, startDir, cdFile)
 }
 

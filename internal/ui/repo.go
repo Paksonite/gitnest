@@ -817,7 +817,7 @@ func (a *App) viewRepo() string {
 	if st := rp.info.State; st != gitx.StateNone {
 		head += "  " + lipgloss.NewStyle().Bold(true).Foreground(cYellow).Render(st.String()+" — "+stateKeys(st))
 	}
-	head += a.copiedBadge()
+	head += a.copiedBadge() + a.updateBadge()
 
 	leftW := clamp(a.w*2/5, 34, 64)
 	if a.w < 80 {

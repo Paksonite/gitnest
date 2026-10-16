@@ -252,3 +252,23 @@ func TestE2EPanes(t *testing.T) {
 }
 
 func lipglossWidth(s string) int { return lipgloss.Width(s) }
+
+func TestUpdateBadge(t *testing.T) {
+	s := shellOf(t, 220, 50, "/r/app", "/r/lib")
+	press(t, s, "ctrl+n")
+	if strings.Contains(s.View(), "⬆") {
+		t.Fatal("badge without a newer release")
+	}
+	s.Update(updateMsg{"9.9.9"})
+	for i, p := range s.panes {
+		if !strings.Contains(p.app.viewRepos(), "⬆ 9.9.9") {
+			t.Errorf("pane %d: no update badge", i)
+		}
+	}
+	if !strings.Contains(s.focused().app.toast, "gitnest update") {
+		t.Errorf("toast %q", s.focused().app.toast)
+	}
+	if (&App{}).updateCheck() != nil {
+		t.Error("a development build must not look for updates")
+	}
+}

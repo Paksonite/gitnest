@@ -46,3 +46,10 @@ a `HOMEBREW_TAP_TOKEN` repository secret: a fine-grained token with
 *Contents: read and write* on `homebrew-tap`.
 
 `make snapshot` builds the same artifacts locally without publishing.
+
+`gitnest update` (in `internal/update`) and `install.sh` depend on the asset
+names in `.goreleaser.yaml` — `gitnest_<version>_darwin_universal.tar.gz`,
+`gitnest_<version>_linux_<arch>.tar.gz`, `gitnest_<version>_<arch>.deb|.rpm`
+and `checksums.txt` — so keep them in step when changing it. Pre-release tags
+(`v1.1.0-rc1`) are never offered as updates, and `/releases/latest` skips
+releases marked as pre-release on GitHub.

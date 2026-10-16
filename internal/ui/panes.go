@@ -118,7 +118,7 @@ func mapCmd(cmd tea.Cmd, f func(tea.Msg) tea.Msg) tea.Cmd {
 
 func (s *Shell) Init() tea.Cmd {
 	a := s.panes[0].app
-	return tea.Batch(wrap(s.panes[0].id, a.startCmds()), shellRescanTick(a), shellStatusTick(a))
+	return tea.Batch(wrap(s.panes[0].id, a.startCmds()), shellRescanTick(a), shellStatusTick(a), a.updateCheck())
 }
 
 // broadcast lists the messages about the shared repository list: every
@@ -141,6 +141,10 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, s.onKey(m)
 	case tea.FocusMsg, tea.BlurMsg:
 		return s, s.deliver(s.focused(), msg)
+	case updateMsg:
+		s.panes[0].app.sh.update = m.version // every pane shares sh
+		s.focused().app.setToast("gitnest "+m.version+" is out — quit and run: gitnest update", false)
+		return s, nil
 	case shellRescanTickMsg:
 		a := s.panes[0].app
 		return s, tea.Batch(wrap(s.panes[0].id, a.scanCmd(false)), shellRescanTick(a))
