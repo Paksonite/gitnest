@@ -30,7 +30,7 @@ type reposState struct {
 
 // loadRepos reads the cached repo list (or scans) and gathers status in the background.
 func (a *App) loadRepos(forceScan bool) tea.Cmd {
-	cfg, recent := a.cfg, a.st.Snapshot()
+	ctx, cfg, recent := a.ctx, a.cfg, a.st.Snapshot()
 	a.rs.loading = true
 	return func() tea.Msg {
 		var paths []string
@@ -45,7 +45,7 @@ func (a *App) loadRepos(forceScan bool) tea.Cmd {
 			_ = state.SaveCache(paths)
 			scanned = true
 		}
-		return reposMsg{repos: scan.Gather(paths, cfg.Jobs, recent), scanned: scanned, fromCache: fromCache}
+		return reposMsg{repos: scan.Gather(ctx, paths, cfg.Jobs, recent), scanned: scanned, fromCache: fromCache}
 	}
 }
 
@@ -110,14 +110,14 @@ func (a *App) previewCmd() tea.Cmd {
 		a.rs.preview = ""
 	}
 	a.rs.previewPath = p
-	return func() tea.Msg { return previewMsg{path: p, text: gitx.Preview(p)} }
+	return func() tea.Msg { return previewMsg{path: p, text: gitx.Preview(a.ctx, p)} }
 }
 
 func (a *App) openDir(path string) tea.Cmd {
 	a.st.Touch(path)
 	a.scr = scrRepo
 	a.rp = repoState{dir: path, name: filepath.Base(path)}
-	return loadRepoData(path)
+	return loadRepoData(a.ctx, path)
 }
 
 func (a *App) moveRepos(delta int) tea.Cmd {
@@ -142,6 +142,7 @@ func (a *App) targets(fallback func() []string) []string {
 
 func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 	rs := &a.rs
+	ctx := a.ctx
 	s := k.String()
 
 	if rs.filtering {
@@ -229,7 +230,7 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 		ps := a.targets(a.paths)
 		jobs := a.cfg.Jobs
 		return a.doMsg(fmt.Sprintf("fetching %d repos", len(ps)), func() (string, error) {
-			failed := scan.RunAll(ps, jobs, gitx.Fetch)
+			failed := scan.RunAll(ps, jobs, func(p string) error { return gitx.Fetch(ctx, p) })
 			return fmt.Sprintf("fetched %d repos, %d failed", len(ps), failed), nil
 		})
 	case "p":
@@ -241,7 +242,7 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 		})
 		jobs := a.cfg.Jobs
 		return a.doMsg(fmt.Sprintf("pulling %d repos", len(ps)), func() (string, error) {
-			failed := scan.RunAll(ps, jobs, func(p string) error { return gitx.Pull(p, false) })
+			failed := scan.RunAll(ps, jobs, func(p string) error { return gitx.Pull(ctx, p, false) })
 			return fmt.Sprintf("pulled %d repos, %d failed", len(ps), failed), nil
 		})
 	}

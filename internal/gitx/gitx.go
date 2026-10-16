@@ -3,60 +3,16 @@
 package gitx
 
 import (
-	"bytes"
+	"context"
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
 
-func run(dir string, env []string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	e := append(os.Environ(),
-		"GIT_TERMINAL_PROMPT=0", "GIT_EDITOR=true", "LC_MESSAGES=C", "GIT_OPTIONAL_LOCKS=0")
-	if os.Getenv("GIT_SSH_COMMAND") == "" {
-		e = append(e, "GIT_SSH_COMMAND=ssh -o BatchMode=yes")
-	}
-	cmd.Env = append(e, env...)
-	var out, errb bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &errb
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(errb.String())
-		if msg == "" {
-			msg = strings.TrimSpace(out.String())
-		}
-		if msg == "" {
-			msg = err.Error()
-		}
-		return out.String(), errors.New(firstLines(msg, 3))
-	}
-	return out.String(), nil
-}
-
-func firstLines(s string, n int) string {
-	lines := strings.Split(s, "\n")
-	if len(lines) > n {
-		lines = lines[:n]
-	}
-	return strings.Join(lines, " ")
-}
-
-func limitLines(s string, n int) string {
-	if strings.Count(s, "\n") <= n {
-		return s
-	}
-	lines := strings.SplitN(s, "\n", n+1)
-	return strings.Join(lines[:n], "\n") + "\n… (truncated)"
-}
-
 // Toplevel returns the repository root containing dir.
-func Toplevel(dir string) (string, error) {
-	out, err := run(dir, nil, "rev-parse", "--show-toplevel")
+func Toplevel(ctx context.Context, dir string) (string, error) {
+	out, err := run(ctx, kRead, dir, nil, "rev-parse", "--show-toplevel")
 	return strings.TrimSpace(out), err
 }
 
@@ -72,13 +28,27 @@ type Info struct {
 	Conflicts bool
 	LastUnix  int64
 	LastRel   string
+	State     State
 }
 
-func GetInfo(dir string) (Info, error) {
-	out, err := run(dir, nil, "status", "--porcelain=v2", "--branch")
+func GetInfo(ctx context.Context, dir string) (Info, error) {
+	out, err := run(ctx, kRead, dir, nil, "status", "--porcelain=v2", "--branch")
 	if err != nil {
 		return Info{}, err
 	}
+	in := parseStatusV2(out)
+	if o, err := run(ctx, kRead, dir, nil, "log", "-1", "--format=%ct%x1f%cr"); err == nil {
+		parts := strings.SplitN(strings.TrimSpace(o), "\x1f", 2)
+		if len(parts) == 2 {
+			in.LastUnix, _ = strconv.ParseInt(parts[0], 10, 64)
+			in.LastRel = parts[1]
+		}
+	}
+	in.State, _ = GetState(ctx, dir)
+	return in, nil
+}
+
+func parseStatusV2(out string) Info {
 	var in Info
 	for _, l := range strings.Split(out, "\n") {
 		switch {
@@ -97,14 +67,7 @@ func GetInfo(dir string) (Info, error) {
 			}
 		}
 	}
-	if o, err := run(dir, nil, "log", "-1", "--format=%ct%x1f%cr"); err == nil {
-		parts := strings.SplitN(strings.TrimSpace(o), "\x1f", 2)
-		if len(parts) == 2 {
-			in.LastUnix, _ = strconv.ParseInt(parts[0], 10, 64)
-			in.LastRel = parts[1]
-		}
-	}
-	return in, nil
+	return in
 }
 
 // Sync returns a compact plain-text summary like "↑1 ↓2 ~3".
@@ -140,11 +103,15 @@ func (f File) Conflict() bool {
 	return f.X == 'U' || f.Y == 'U' || (f.X == 'A' && f.Y == 'A') || (f.X == 'D' && f.Y == 'D')
 }
 
-func Files(dir string) ([]File, error) {
-	out, err := run(dir, nil, "status", "--porcelain=v1", "-z", "-uall")
+func Files(ctx context.Context, dir string) ([]File, error) {
+	out, err := run(ctx, kRead, dir, nil, "status", "--porcelain=v1", "-z", "-uall")
 	if err != nil {
 		return nil, err
 	}
+	return parseFiles(out), nil
+}
+
+func parseFiles(out string) []File {
 	parts := strings.Split(out, "\x00")
 	var files []File
 	for i := 0; i < len(parts); i++ {
@@ -159,22 +126,22 @@ func Files(dir string) ([]File, error) {
 		}
 		files = append(files, f)
 	}
-	return files, nil
+	return files
 }
 
-func DiffFile(dir string, f File) string {
+func DiffFile(ctx context.Context, dir string, f File) string {
 	var b strings.Builder
 	if f.Untracked() {
-		out, _ := run(dir, nil, "-c", "color.ui=always", "diff", "--no-index", "--", "/dev/null", f.Path)
+		out, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "diff", "--no-index", "--", "/dev/null", f.Path)
 		return limitLines(out, 5000)
 	}
 	if f.Staged() {
-		if o, _ := run(dir, nil, "-c", "color.ui=always", "diff", "--cached", "--", f.Path); o != "" {
+		if o, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "diff", "--cached", "--", f.Path); o != "" {
 			b.WriteString("── staged ──\n" + o)
 		}
 	}
 	if f.Unstaged() {
-		if o, _ := run(dir, nil, "-c", "color.ui=always", "diff", "--", f.Path); o != "" {
+		if o, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "diff", "--", f.Path); o != "" {
 			b.WriteString("── unstaged ──\n" + o)
 		}
 	}
@@ -184,38 +151,38 @@ func DiffFile(dir string, f File) string {
 	return limitLines(b.String(), 5000)
 }
 
-func Stage(dir, path string) error {
-	_, err := run(dir, nil, "add", "--", path)
+func Stage(ctx context.Context, dir, path string) error {
+	_, err := run(ctx, kWrite, dir, nil, "add", "--", path)
 	return err
 }
 
-func Unstage(dir, path string) error {
-	_, err := run(dir, nil, "restore", "--staged", "--", path)
+func Unstage(ctx context.Context, dir, path string) error {
+	_, err := run(ctx, kWrite, dir, nil, "restore", "--staged", "--", path)
 	if err != nil { // e.g. repository without commits
-		_, err = run(dir, nil, "rm", "--cached", "-q", "--", path)
+		_, err = run(ctx, kWrite, dir, nil, "rm", "--cached", "-q", "--", path)
 	}
 	return err
 }
 
-func StageAll(dir string) error {
-	_, err := run(dir, nil, "add", "-A")
+func StageAll(ctx context.Context, dir string) error {
+	_, err := run(ctx, kWrite, dir, nil, "add", "-A")
 	return err
 }
 
-func UnstageAll(dir string) error {
-	_, err := run(dir, nil, "reset", "-q")
+func UnstageAll(ctx context.Context, dir string) error {
+	_, err := run(ctx, kWrite, dir, nil, "reset", "-q")
 	return err
 }
 
-func Discard(dir string, f File) error {
+func Discard(ctx context.Context, dir string, f File) error {
 	var err error
 	switch {
 	case f.Untracked():
-		_, err = run(dir, nil, "clean", "-fd", "--", f.Path)
+		_, err = run(ctx, kWrite, dir, nil, "clean", "-fd", "--", f.Path)
 	case f.X == 'A':
-		_, err = run(dir, nil, "rm", "-f", "-q", "--", f.Path)
+		_, err = run(ctx, kWrite, dir, nil, "rm", "-f", "-q", "--", f.Path)
 	default:
-		_, err = run(dir, nil, "restore", "--source=HEAD", "--staged", "--worktree", "--", f.Path)
+		_, err = run(ctx, kWrite, dir, nil, "restore", "--source=HEAD", "--staged", "--worktree", "--", f.Path)
 	}
 	return err
 }
@@ -227,12 +194,17 @@ type Commit struct {
 	Merge                                   bool
 }
 
-func Log(dir string, n int) ([]Commit, error) {
-	out, err := run(dir, nil, "log", "-n", strconv.Itoa(n),
-		"--format=%H%x1f%h%x1f%an%x1f%ar%x1f%s%x1f%D%x1f%P")
+const logFormat = "--format=%H%x1f%h%x1f%an%x1f%ar%x1f%s%x1f%D%x1f%P"
+
+func Log(ctx context.Context, dir string, n int) ([]Commit, error) {
+	out, err := run(ctx, kRead, dir, nil, "log", "-n", strconv.Itoa(n), logFormat)
 	if err != nil {
 		return nil, err
 	}
+	return parseLog(out), nil
+}
+
+func parseLog(out string) []Commit {
 	var cs []Commit
 	for _, l := range strings.Split(out, "\n") {
 		f := strings.Split(l, "\x1f")
@@ -242,12 +214,12 @@ func Log(dir string, n int) ([]Commit, error) {
 		cs = append(cs, Commit{Hash: f[0], Short: f[1], Author: f[2], Rel: f[3],
 			Subject: f[4], Refs: f[5], Merge: strings.Contains(strings.TrimSpace(f[6]), " ")})
 	}
-	return cs, nil
+	return cs
 }
 
 // Unpushed returns the set of commit hashes not on the upstream (nil if no upstream).
-func Unpushed(dir string) map[string]bool {
-	out, err := run(dir, nil, "rev-list", "@{u}..HEAD")
+func Unpushed(ctx context.Context, dir string) map[string]bool {
+	out, err := run(ctx, kRead, dir, nil, "rev-list", "@{u}..HEAD")
 	if err != nil {
 		return nil
 	}
@@ -258,40 +230,74 @@ func Unpushed(dir string) map[string]bool {
 	return m
 }
 
-func Show(dir, hash string) string {
-	out, _ := run(dir, nil, "-c", "color.ui=always", "show", "--stat", "--patch", hash)
+func Show(ctx context.Context, dir, hash string) string {
+	out, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "show", "--stat", "--patch", hash)
 	return limitLines(out, 5000)
 }
 
-func CommitMsg(dir, msg string) error {
-	_, err := run(dir, nil, "commit", "-m", msg)
+func CommitMsg(ctx context.Context, dir, msg string) error {
+	_, err := run(ctx, kWrite, dir, nil, "commit", "-m", msg)
 	return err
 }
 
-func AmendNoEdit(dir string) error {
-	_, err := run(dir, nil, "commit", "--amend", "--no-edit")
+// AmendNoEdit folds the staged changes into HEAD, keeping its message.
+func AmendNoEdit(ctx context.Context, dir string) error {
+	_, err := run(ctx, kWrite, dir, nil, "commit", "--amend", "--no-edit")
 	return err
 }
 
-func AmendMessage(dir, msg string) error {
-	_, err := run(dir, nil, "commit", "--amend", "-m", msg)
+// Message returns the full commit message of rev.
+func Message(ctx context.Context, dir, rev string) (string, error) {
+	return run(ctx, kRead, dir, nil, "log", "-1", "--format=%B", rev)
+}
+
+// Reword replaces the subject line of commit hash and keeps its body.
+// HEAD is amended with --only, so staged changes stay staged instead of
+// being folded into the commit; older commits go through an interactive rebase.
+func Reword(ctx context.Context, dir, hash, subject string) error {
+	subject = strings.TrimSpace(subject)
+	if subject == "" || strings.Contains(subject, "\n") {
+		return errors.New("reword: subject must be a single non-empty line")
+	}
+	full, err := Message(ctx, dir, hash)
+	if err != nil {
+		return err
+	}
+	msg := replaceSubject(full, subject)
+	head, err := run(ctx, kRead, dir, nil, "rev-parse", "HEAD")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(head) == hash {
+		_, err = run(ctx, kWrite, dir, nil, "commit", "--amend", "--only", "--allow-empty", "-m", msg)
+		return err
+	}
+	return RebaseAction(ctx, dir, hash, "reword", msg)
+}
+
+// replaceSubject swaps the first line of a commit message.
+func replaceSubject(msg, subject string) string {
+	msg = strings.TrimRight(msg, "\n")
+	if i := strings.IndexByte(msg, '\n'); i >= 0 {
+		return subject + msg[i:]
+	}
+	return subject
+}
+
+func UndoCommit(ctx context.Context, dir string) error {
+	_, err := run(ctx, kWrite, dir, nil, "reset", "--soft", "HEAD~1")
 	return err
 }
 
-func UndoCommit(dir string) error {
-	_, err := run(dir, nil, "reset", "--soft", "HEAD~1")
-	return err
-}
-
-func Revert(dir, hash string) error {
-	_, err := run(dir, nil, "revert", "--no-edit", hash)
+func Revert(ctx context.Context, dir, hash string) error {
+	_, err := run(ctx, kWrite, dir, nil, "revert", "--no-edit", hash)
 	return err
 }
 
 // RebaseAction rewrites history non-interactively via `git rebase -i` with a
 // scripted todo editor. action is one of: drop, reword, squash, fixup.
 // squash/fixup meld the commit into the one before it.
-func RebaseAction(dir, hash, action, msg string) error {
+func RebaseAction(ctx context.Context, dir, hash, action, msg string) error {
 	line := 1
 	spec := hash + "^"
 	if action == "squash" || action == "fixup" {
@@ -299,7 +305,7 @@ func RebaseAction(dir, hash, action, msg string) error {
 		spec = hash + "^^"
 	}
 	args := []string{"rebase", "-i", "--autostash"}
-	if _, err := run(dir, nil, "rev-parse", "--verify", "-q", spec); err != nil {
+	if _, err := run(ctx, kRead, dir, nil, "rev-parse", "--verify", "-q", spec); err != nil {
 		args = append(args, "--root")
 	} else {
 		args = append(args, spec)
@@ -310,34 +316,7 @@ func RebaseAction(dir, hash, action, msg string) error {
 			"GITNEST_MSG="+msg,
 			`GIT_EDITOR=sh -c 'printf "%s\n" "$GITNEST_MSG" > "$1"' sh`)
 	}
-	_, err := run(dir, env, args...)
-	return err
-}
-
-func RebaseInProgress(dir string) bool {
-	for _, p := range []string{"rebase-merge", "rebase-apply"} {
-		out, err := run(dir, nil, "rev-parse", "--git-path", p)
-		if err != nil {
-			continue
-		}
-		path := strings.TrimSpace(out)
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(dir, path)
-		}
-		if st, err := os.Stat(path); err == nil && st.IsDir() {
-			return true
-		}
-	}
-	return false
-}
-
-func RebaseContinue(dir string) error {
-	_, err := run(dir, nil, "rebase", "--continue")
-	return err
-}
-
-func RebaseAbort(dir string) error {
-	_, err := run(dir, nil, "rebase", "--abort")
+	_, err := run(ctx, kWrite, dir, env, args...)
 	return err
 }
 
@@ -366,108 +345,108 @@ func parseBranches(out string, remote bool) []Branch {
 	return bs
 }
 
-func Branches(dir string) (local, remote []Branch, err error) {
-	out, err := run(dir, nil, "for-each-ref", "--sort=-committerdate", "--format="+branchFormat, "refs/heads")
+func Branches(ctx context.Context, dir string) (local, remote []Branch, err error) {
+	out, err := run(ctx, kRead, dir, nil, "for-each-ref", "--sort=-committerdate", "--format="+branchFormat, "refs/heads")
 	if err != nil {
 		return nil, nil, err
 	}
 	local = parseBranches(out, false)
-	if out, err = run(dir, nil, "for-each-ref", "--sort=-committerdate", "--format="+branchFormat, "refs/remotes"); err == nil {
+	if out, err = run(ctx, kRead, dir, nil, "for-each-ref", "--sort=-committerdate", "--format="+branchFormat, "refs/remotes"); err == nil {
 		remote = parseBranches(out, true)
 	}
 	return local, remote, nil
 }
 
-func BranchLog(dir, name string) string {
-	out, _ := run(dir, nil, "-c", "color.ui=always", "log", "--graph", "--oneline", "--decorate", "-n", "60", name)
+func BranchLog(ctx context.Context, dir, name string) string {
+	out, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "log", "--graph", "--oneline", "--decorate", "-n", "60", name)
 	return out
 }
 
-func Checkout(dir string, b Branch) error {
+func Checkout(ctx context.Context, dir string, b Branch) error {
 	var err error
 	if b.Remote {
-		_, err = run(dir, nil, "checkout", "--track", b.Name)
+		_, err = run(ctx, kWrite, dir, nil, "checkout", "--track", b.Name)
 	} else {
-		_, err = run(dir, nil, "checkout", b.Name)
+		_, err = run(ctx, kWrite, dir, nil, "checkout", b.Name)
 	}
 	return err
 }
 
-func NewBranch(dir, name, base string) error {
+func NewBranch(ctx context.Context, dir, name, base string) error {
 	args := []string{"checkout", "-b", name}
 	if base != "" {
 		args = append(args, base)
 	}
-	_, err := run(dir, nil, args...)
+	_, err := run(ctx, kWrite, dir, nil, args...)
 	return err
 }
 
-func DeleteBranch(dir, name string, force bool) error {
+func DeleteBranch(ctx context.Context, dir, name string, force bool) error {
 	flag := "-d"
 	if force {
 		flag = "-D"
 	}
-	_, err := run(dir, nil, "branch", flag, name)
+	_, err := run(ctx, kWrite, dir, nil, "branch", flag, name)
 	return err
 }
 
-func DeleteRemoteBranch(dir, name string) error {
+func DeleteRemoteBranch(ctx context.Context, dir, name string) error {
 	i := strings.Index(name, "/")
 	if i < 0 {
 		return errors.New("not a remote branch: " + name)
 	}
-	_, err := run(dir, nil, "push", name[:i], "--delete", name[i+1:])
+	_, err := run(ctx, kNet, dir, nil, "push", name[:i], "--delete", name[i+1:])
 	return err
 }
 
-func RenameBranch(dir, old, name string) error {
-	_, err := run(dir, nil, "branch", "-m", old, name)
+func RenameBranch(ctx context.Context, dir, old, name string) error {
+	_, err := run(ctx, kWrite, dir, nil, "branch", "-m", old, name)
 	return err
 }
 
-func Merge(dir, name string) error {
-	_, err := run(dir, nil, "merge", "--no-edit", name)
+func Merge(ctx context.Context, dir, name string) error {
+	_, err := run(ctx, kWrite, dir, nil, "merge", "--no-edit", name)
 	return err
 }
 
-func RebaseOnto(dir, name string) error {
-	_, err := run(dir, nil, "rebase", "--autostash", name)
+func RebaseOnto(ctx context.Context, dir, name string) error {
+	_, err := run(ctx, kWrite, dir, nil, "rebase", "--autostash", name)
 	return err
 }
 
 // ------------------------------------------------------------ remote sync
 
-func Fetch(dir string) error {
-	_, err := run(dir, nil, "fetch", "--all", "--prune", "-q")
+func Fetch(ctx context.Context, dir string) error {
+	_, err := run(ctx, kNet, dir, nil, "fetch", "--all", "--prune", "-q")
 	return err
 }
 
-func Pull(dir string, rebase bool) error {
+func Pull(ctx context.Context, dir string, rebase bool) error {
 	args := []string{"pull", "-q"}
 	if rebase {
 		args = append(args, "--rebase", "--autostash")
 	} else {
 		args = append(args, "--ff-only")
 	}
-	_, err := run(dir, nil, args...)
+	_, err := run(ctx, kNet, dir, nil, args...)
 	return err
 }
 
-func Push(dir string, force, hasUpstream bool) error {
+func Push(ctx context.Context, dir string, force, hasUpstream bool) error {
 	args := []string{"push"}
 	if force {
 		args = append(args, "--force-with-lease")
 	}
 	if !hasUpstream {
 		remote := "origin"
-		if o, err := run(dir, nil, "remote"); err == nil {
+		if o, err := run(ctx, kRead, dir, nil, "remote"); err == nil {
 			if f := strings.Fields(o); len(f) > 0 {
 				remote = f[0]
 			}
 		}
 		args = append(args, "-u", remote, "HEAD")
 	}
-	_, err := run(dir, nil, args...)
+	_, err := run(ctx, kNet, dir, nil, args...)
 	return err
 }
 
@@ -475,11 +454,15 @@ func Push(dir string, force, hasUpstream bool) error {
 
 type Stash struct{ Ref, Msg, Rel string }
 
-func Stashes(dir string) ([]Stash, error) {
-	out, err := run(dir, nil, "stash", "list", "--format=%gd%x1f%s%x1f%cr")
+func Stashes(ctx context.Context, dir string) ([]Stash, error) {
+	out, err := run(ctx, kRead, dir, nil, "stash", "list", "--format=%gd%x1f%s%x1f%cr")
 	if err != nil {
 		return nil, err
 	}
+	return parseStashes(out), nil
+}
+
+func parseStashes(out string) []Stash {
 	var ss []Stash
 	for _, l := range strings.Split(out, "\n") {
 		f := strings.Split(l, "\x1f")
@@ -487,47 +470,47 @@ func Stashes(dir string) ([]Stash, error) {
 			ss = append(ss, Stash{Ref: f[0], Msg: f[1], Rel: f[2]})
 		}
 	}
-	return ss, nil
+	return ss
 }
 
-func StashPush(dir, msg string) error {
+func StashPush(ctx context.Context, dir, msg string) error {
 	args := []string{"stash", "push", "-u"}
 	if msg != "" {
 		args = append(args, "-m", msg)
 	}
-	_, err := run(dir, nil, args...)
+	_, err := run(ctx, kWrite, dir, nil, args...)
 	return err
 }
 
-func StashApply(dir, ref string) error {
-	_, err := run(dir, nil, "stash", "apply", ref)
+func StashApply(ctx context.Context, dir, ref string) error {
+	_, err := run(ctx, kWrite, dir, nil, "stash", "apply", ref)
 	return err
 }
 
-func StashPop(dir, ref string) error {
-	_, err := run(dir, nil, "stash", "pop", ref)
+func StashPop(ctx context.Context, dir, ref string) error {
+	_, err := run(ctx, kWrite, dir, nil, "stash", "pop", ref)
 	return err
 }
 
-func StashDrop(dir, ref string) error {
-	_, err := run(dir, nil, "stash", "drop", ref)
+func StashDrop(ctx context.Context, dir, ref string) error {
+	_, err := run(ctx, kWrite, dir, nil, "stash", "drop", ref)
 	return err
 }
 
-func StashShow(dir, ref string) string {
-	out, _ := run(dir, nil, "-c", "color.ui=always", "stash", "show", "-p", ref)
+func StashShow(ctx context.Context, dir, ref string) string {
+	out, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "stash", "show", "-p", ref)
 	return limitLines(out, 5000)
 }
 
 // ---------------------------------------------------------------- preview
 
 // Preview is the right-hand pane of the repository list.
-func Preview(dir string) string {
+func Preview(ctx context.Context, dir string) string {
 	var b strings.Builder
-	o, _ := run(dir, nil, "-c", "color.ui=always", "status", "-sb")
+	o, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "status", "-sb")
 	b.WriteString(o)
 	b.WriteString("\n")
-	o, _ = run(dir, nil, "-c", "color.ui=always", "log", "--oneline", "--decorate", "-n", "15")
+	o, _ = run(ctx, kRead, dir, nil, "-c", "color.ui=always", "log", "--oneline", "--decorate", "-n", "15")
 	b.WriteString(o)
 	return b.String()
 }

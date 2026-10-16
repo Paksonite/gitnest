@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -97,7 +98,7 @@ func repoRoot(p string) (string, error) {
 	} else if !st.IsDir() {
 		abs = filepath.Dir(abs)
 	}
-	top, err := gitx.Toplevel(abs)
+	top, err := gitx.Toplevel(context.Background(), abs)
 	if err != nil || top == "" {
 		return "", fmt.Errorf("%s is not inside a git repository", p)
 	}

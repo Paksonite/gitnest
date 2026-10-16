@@ -2,6 +2,7 @@
 package ui
 
 import (
+	"context"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -49,6 +50,7 @@ type prompt struct {
 }
 
 type App struct {
+	ctx      context.Context // canceled when the UI exits; kills running git commands
 	cfg      config.Config
 	st       *state.State
 	noConfig bool
@@ -69,7 +71,9 @@ type App struct {
 // Run starts the TUI. startDir, if non-empty, opens that repository directly.
 func Run(cfg config.Config, noConfig bool, startDir string) error {
 	applyTheme(cfg)
-	a := &App{cfg: cfg, st: state.Load(), noConfig: noConfig, startDir: startDir}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a := &App{ctx: ctx, cfg: cfg, st: state.Load(), noConfig: noConfig, startDir: startDir}
 	a.rs.marked = map[string]bool{}
 	_, err := tea.NewProgram(a, tea.WithAltScreen()).Run()
 	return err
@@ -216,7 +220,7 @@ func (a *App) onOp(m opMsg) tea.Cmd {
 func (a *App) reloadCurrent() tea.Cmd {
 	if a.scr == scrRepo {
 		a.rp.mainKey = ""
-		return loadRepoData(a.rp.dir)
+		return loadRepoData(a.ctx, a.rp.dir)
 	}
 	return a.gather(a.paths())
 }
@@ -230,9 +234,9 @@ func (a *App) paths() []string {
 }
 
 func (a *App) gather(paths []string) tea.Cmd {
-	jobs, recent := a.cfg.Jobs, a.st.Snapshot()
+	ctx, jobs, recent := a.ctx, a.cfg.Jobs, a.st.Snapshot()
 	return func() tea.Msg {
-		return reposMsg{repos: scan.Gather(paths, jobs, recent)}
+		return reposMsg{repos: scan.Gather(ctx, paths, jobs, recent)}
 	}
 }
 

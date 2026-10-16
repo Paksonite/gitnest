@@ -1,0 +1,156 @@
+package gitx
+
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+)
+
+func TestParseStatusV2(t *testing.T) {
+	out := "# branch.oid 1234\n" +
+		"# branch.head main\n" +
+		"# branch.upstream origin/main\n" +
+		"# branch.ab +2 -1\n" +
+		"1 .M N... 100644 100644 100644 aaa bbb a.txt\n" +
+		"u UU N... 100644 100644 100644 100644 aaa bbb ccc c.txt\n" +
+		"? new.txt\n"
+	got := parseStatusV2(out)
+	want := Info{Branch: "main", Upstream: true, Ahead: 2, Behind: 1, Changes: 3, Conflicts: true}
+	if got != want {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+
+	got = parseStatusV2("# branch.oid 1234\n# branch.head (detached)\n")
+	if !got.Detached || got.Upstream || got.Changes != 0 {
+		t.Fatalf("detached: got %+v", got)
+	}
+}
+
+func TestInfoSync(t *testing.T) {
+	cases := []struct {
+		in   Info
+		want string
+	}{
+		{Info{Upstream: true}, ""},
+		{Info{Upstream: true, Ahead: 1, Behind: 2, Changes: 3}, "↑1 ↓2 ~3"},
+		{Info{}, "∅"},
+		{Info{Detached: true, Changes: 1}, "~1"},
+	}
+	for _, c := range cases {
+		if got := c.in.Sync(); got != c.want {
+			t.Errorf("%+v: got %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestParseFiles(t *testing.T) {
+	out := " M a.txt\x00R  new name.txt\x00old name.txt\x00?? dir/u.txt\x00UU c.txt\x00"
+	got := parseFiles(out)
+	want := []File{
+		{Path: "a.txt", X: ' ', Y: 'M'},
+		{Path: "new name.txt", Orig: "old name.txt", X: 'R', Y: ' '},
+		{Path: "dir/u.txt", X: '?', Y: '?'},
+		{Path: "c.txt", X: 'U', Y: 'U'},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v\nwant %+v", got, want)
+	}
+	if !got[2].Untracked() || got[2].Staged() {
+		t.Error("untracked file flags")
+	}
+	if !got[1].Staged() || got[1].Unstaged() {
+		t.Error("renamed file flags")
+	}
+	if !got[3].Conflict() {
+		t.Error("conflict flag")
+	}
+}
+
+func TestParseLog(t *testing.T) {
+	out := "h1\x1fs1\x1fAnn\x1f2 days ago\x1fsubject one\x1fHEAD -> main\x1fp1 p2\n" +
+		"h2\x1fs2\x1fBob\x1f3 days ago\x1fsubject two\x1f\x1fp3\n" +
+		"garbage\n"
+	got := parseLog(out)
+	want := []Commit{
+		{Hash: "h1", Short: "s1", Author: "Ann", Rel: "2 days ago", Subject: "subject one", Refs: "HEAD -> main", Merge: true},
+		{Hash: "h2", Short: "s2", Author: "Bob", Rel: "3 days ago", Subject: "subject two"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v\nwant %+v", got, want)
+	}
+}
+
+func TestParseBranches(t *testing.T) {
+	out := "*\x1fmain\x1forigin/main\x1f[ahead 1]\x1f1 day ago\x1fs\n" +
+		" \x1ffeature\x1f\x1f\x1f2 days ago\x1fs\n"
+	got := parseBranches(out, false)
+	if len(got) != 2 || !got[0].Current || got[0].Track != "[ahead 1]" || got[1].Current {
+		t.Fatalf("local: %+v", got)
+	}
+
+	remote := " \x1forigin/HEAD\x1f\x1f\x1fx\x1fs\n" +
+		" \x1forigin\x1f\x1f\x1fx\x1fs\n" +
+		" \x1forigin/main\x1f\x1f\x1fx\x1fs\n"
+	got = parseBranches(remote, true)
+	if len(got) != 1 || got[0].Name != "origin/main" || !got[0].Remote {
+		t.Fatalf("remote: %+v", got)
+	}
+}
+
+func TestParseStashes(t *testing.T) {
+	got := parseStashes("stash@{0}\x1fWIP on main: abc\x1f5 minutes ago\n\n")
+	want := []Stash{{Ref: "stash@{0}", Msg: "WIP on main: abc", Rel: "5 minutes ago"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestReplaceSubject(t *testing.T) {
+	cases := map[string]string{
+		"old\n":                     "new",
+		"old\n\nbody line\nmore\n":  "new\n\nbody line\nmore",
+		"old":                       "new",
+		"old\nno blank line body\n": "new\nno blank line body",
+	}
+	for in, want := range cases {
+		if got := replaceSubject(in, "new"); got != want {
+			t.Errorf("replaceSubject(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestSubcommand(t *testing.T) {
+	cases := map[string][]string{
+		"diff":   {"-c", "color.ui=always", "diff", "--cached"},
+		"status": {"status", "-sb"},
+		"log":    {"-C", "/x", "log"},
+		"git":    {"-c", "a=b"},
+	}
+	for want, args := range cases {
+		if got := subcommand(args); got != want {
+			t.Errorf("subcommand(%q) = %q, want %q", args, got, want)
+		}
+	}
+}
+
+func TestSequencerState(t *testing.T) {
+	dir := t.TempDir()
+	todo := filepath.Join(dir, "todo")
+	if got := sequencerState(todo); got != StateNone {
+		t.Fatalf("missing todo: %v", got)
+	}
+	write := func(s string) {
+		if err := os.WriteFile(todo, []byte(s), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("# comment\n\npick abc subject\n")
+	if got := sequencerState(todo); got != StateCherryPicking {
+		t.Errorf("pick: %v", got)
+	}
+	write("revert abc subject\n")
+	if got := sequencerState(todo); got != StateReverting {
+		t.Errorf("revert: %v", got)
+	}
+}
