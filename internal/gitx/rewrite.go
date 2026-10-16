@@ -351,14 +351,15 @@ func hasMerges(ctx context.Context, dir, oldest string) bool {
 }
 
 func remotesContaining(ctx context.Context, dir, hash string) []string {
-	out, err := run(ctx, kRead, dir, nil, "for-each-ref", "--contains", hash, "--format=%(refname:short)", "refs/remotes")
+	// Full names: refs/remotes/origin/HEAD shortens to just "origin".
+	out, err := run(ctx, kRead, dir, nil, "for-each-ref", "--contains", hash, "--format=%(refname)", "refs/remotes")
 	if err != nil {
 		return nil
 	}
 	var refs []string
 	for _, r := range strings.Fields(out) {
 		if !strings.HasSuffix(r, "/HEAD") {
-			refs = append(refs, r)
+			refs = append(refs, strings.TrimPrefix(r, "refs/remotes/"))
 		}
 	}
 	return refs

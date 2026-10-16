@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -235,7 +236,11 @@ func Files(ctx context.Context, dir string) ([]File, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parseFiles(out), nil
+	files := parseFiles(out)
+	// git lists untracked files after tracked ones; sort by path so staging
+	// a new file doesn't move it.
+	sort.SliceStable(files, func(i, j int) bool { return files[i].Path < files[j].Path })
+	return files, nil
 }
 
 func parseFiles(out string) []File {
@@ -278,6 +283,26 @@ func DiffFile(ctx context.Context, dir string, f File) string {
 	return limitLines(b.String(), 5000)
 }
 
+// DiffDir shows the staged and unstaged changes below directory path, and
+// lists its untracked files.
+func DiffDir(ctx context.Context, dir, path string, untracked []string) string {
+	var b strings.Builder
+	if o, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "diff", "--cached", "--", path); o != "" {
+		b.WriteString("── staged ──\n" + o)
+	}
+	if o, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "diff", "--", path); o != "" {
+		b.WriteString("── unstaged ──\n" + o)
+	}
+	if len(untracked) > 0 {
+		b.WriteString("── untracked ──\n" + strings.Join(untracked, "\n") + "\n")
+	}
+	if b.Len() == 0 {
+		return "(no diff)"
+	}
+	return limitLines(b.String(), 5000)
+}
+
+// Stage adds a file or a whole directory to the index.
 func Stage(ctx context.Context, dir, path string) error {
 	_, err := run(ctx, kWrite, dir, nil, "add", "--", path)
 	return err
@@ -551,6 +576,44 @@ func Push(ctx context.Context, dir string, force, hasUpstream bool) error {
 	}
 	_, err := run(ctx, kNet, dir, nil, args...)
 	return err
+}
+
+// UpstreamSeenLocally reports whether every commit on the current branch's
+// upstream was at some point part of the local branch (per its reflog).
+// After rewriting commits that were already pushed this is true, and a
+// force push loses nothing; when someone else pushed new commits it is false.
+func UpstreamSeenLocally(ctx context.Context, dir string) (bool, error) {
+	branch, err := run(ctx, kRead, dir, nil, "symbolic-ref", "-q", "--short", "HEAD")
+	if err != nil {
+		return false, errors.New("not on a branch")
+	}
+	refl, err := run(ctx, kRead, dir, nil, "log", "-g", "--format=%H", "-n", "500", "refs/heads/"+strings.TrimSpace(branch))
+	if err != nil {
+		return false, err
+	}
+	args := []string{"rev-list", "-n", "1", "@{u}", "--not", "HEAD"}
+	seen := map[string]bool{}
+	for _, h := range strings.Fields(refl) {
+		if !seen[h] {
+			seen[h] = true
+			args = append(args, h)
+		}
+	}
+	out, err := run(ctx, kRead, dir, nil, args...)
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(out) == "", nil
+}
+
+// PushRejected reports whether err is git refusing a non-fast-forward push.
+func PushRejected(err error) bool {
+	var ge *Error
+	if !errors.As(err, &ge) {
+		return false
+	}
+	return strings.Contains(ge.Output, "non-fast-forward") || strings.Contains(ge.Output, "fetch first") ||
+		strings.Contains(ge.Output, "[rejected]")
 }
 
 // ------------------------------------------------------------------ stash

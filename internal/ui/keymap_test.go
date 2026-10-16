@@ -41,7 +41,7 @@ func TestHintsAndHelpComeFromKeymap(t *testing.T) {
 		t.Errorf("stash hints = %q", got)
 	}
 	help := strings.Join(helpLines(), "\n")
-	for _, want := range []string{"Repository list", "fast-forward to upstream", "shift+tab", "ctrl+s alt+enter"} {
+	for _, want := range []string{"Repository list", "fast-forward to upstream", "shift+tab", "move to the body"} {
 		if !strings.Contains(help, want) {
 			t.Errorf("help lacks %q", want)
 		}

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -46,9 +47,13 @@ type repoState struct {
 	main       string
 	mainKey    string
 	mainOff    int
-	mainFocus  bool // keys scroll the main (diff) panel
-	mainH      int  // rows of the main panel on screen (set while rendering)
-	mainLen    int  // lines in the main panel
+	mainFocus  bool            // keys scroll the main (diff) panel
+	fileRows   []fileNode      // Files panel rows (tree or flat)
+	flat       bool            // Files panel as a flat list instead of a tree
+	collapsed  map[string]bool // collapsed directories in the tree
+	refreshing bool            // a live refresh is running
+	mainH      int             // rows of the main panel on screen (set while rendering)
+	mainLen    int             // lines in the main panel
 }
 
 func (rp *repoState) branches() []gitx.Branch {
@@ -61,13 +66,47 @@ func (rp *repoState) branches() []gitx.Branch {
 func (rp *repoState) count(panel int) int {
 	switch panel {
 	case pFiles:
-		return len(rp.files)
+		return len(rp.fileRows)
 	case pBranches:
 		return len(rp.branches())
 	case pCommits:
 		return len(rp.commits)
 	}
 	return len(rp.stashes)
+}
+
+// setFiles replaces the changed files and rebuilds the Files rows, keeping
+// the cursor on the same file or directory.
+func (rp *repoState) setFiles(files []gitx.File) {
+	keep := ""
+	if n, ok := rp.fileNode(); ok {
+		keep = n.key()
+	}
+	rp.files = files
+	rp.rebuildFiles(keep)
+}
+
+func (rp *repoState) rebuildFiles(keep string) {
+	if rp.collapsed == nil {
+		rp.collapsed = map[string]bool{}
+	}
+	rp.fileRows = buildFileRows(rp.files, rp.flat, rp.collapsed)
+	for i, n := range rp.fileRows {
+		if n.key() == keep {
+			rp.cur[pFiles] = i
+			return
+		}
+	}
+	rp.cur[pFiles] = clamp(rp.cur[pFiles], 0, len(rp.fileRows)-1)
+}
+
+// fileNode is the selected row of the Files panel.
+func (rp *repoState) fileNode() (fileNode, bool) {
+	i := rp.cur[pFiles]
+	if i < 0 || i >= len(rp.fileRows) {
+		return fileNode{}, false
+	}
+	return rp.fileRows[i], true
 }
 
 func loadRepoData(ctx context.Context, dir string) tea.Cmd {
@@ -98,7 +137,8 @@ func (a *App) onRepoData(m repoDataMsg) tea.Cmd {
 	}
 	rp := &a.rp
 	d := m.d
-	rp.info, rp.files, rp.local, rp.remote = d.info, d.files, d.local, d.remote
+	rp.info, rp.local, rp.remote = d.info, d.local, d.remote
+	rp.setFiles(d.files)
 	rp.commits, rp.unpushed, rp.stashes = d.commits, d.unpushed, d.stashes
 	for i := 0; i < 4; i++ {
 		rp.cur[i] = clamp(rp.cur[i], 0, rp.count(i)-1)
@@ -109,54 +149,57 @@ func (a *App) onRepoData(m repoDataMsg) tea.Cmd {
 // mainCmd (re)computes the right-hand pane for the selected item, if it changed.
 func (a *App) mainCmd() tea.Cmd {
 	rp := &a.rp
-	dir, ctx := rp.dir, a.ctx
-	var key string
-	var fn func() string
-	i := rp.cur[rp.focus]
-	switch rp.focus {
-	case pFiles:
-		if len(rp.files) == 0 {
-			key = "files:none"
-			fn = func() string { return "Working tree clean ✓" }
-		} else {
-			f := rp.files[i]
-			key = "f:" + f.Path + ":" + string([]byte{f.X, f.Y})
-			fn = func() string { return gitx.DiffFile(ctx, dir, f) }
-		}
-	case pBranches:
-		bl := rp.branches()
-		if len(bl) == 0 {
-			key = "branches:none"
-			fn = func() string { return "(no branches)" }
-		} else {
-			b := bl[i]
-			key = "b:" + b.Name
-			fn = func() string { return gitx.BranchLog(ctx, dir, b.Name) }
-		}
-	case pCommits:
-		if len(rp.commits) == 0 {
-			key = "commits:none"
-			fn = func() string { return "(no commits)" }
-		} else {
-			c := rp.commits[i]
-			key = "c:" + c.Hash
-			fn = func() string { return gitx.Show(ctx, dir, c.Hash) }
-		}
-	default:
-		if len(rp.stashes) == 0 {
-			key = "stash:none"
-			fn = func() string { return "(no stashes)" }
-		} else {
-			s := rp.stashes[i]
-			key = "s:" + s.Ref + ":" + s.Msg
-			fn = func() string { return gitx.StashShow(ctx, dir, s.Ref) }
-		}
-	}
+	key, fn := a.mainSource()
 	if key == rp.mainKey {
 		return nil
 	}
 	rp.mainKey, rp.main, rp.mainOff = key, "", 0
 	return func() tea.Msg { return mainMsg{key: key, text: fn()} }
+}
+
+// mainSource says what the main panel shows for the current selection: a
+// key identifying it and a function producing the text.
+func (a *App) mainSource() (string, func() string) {
+	rp := &a.rp
+	dir, ctx := rp.dir, a.ctx
+	i := rp.cur[rp.focus]
+	switch rp.focus {
+	case pFiles:
+		n, ok := rp.fileNode()
+		switch {
+		case !ok:
+			return "files:none", func() string { return "Working tree clean ✓" }
+		case n.Dir:
+			var untracked []string
+			for _, f := range n.Files {
+				if f.Untracked() {
+					untracked = append(untracked, f.Path)
+				}
+			}
+			return fmt.Sprintf("d:%s:%d", n.Path, len(n.Files)), func() string { return gitx.DiffDir(ctx, dir, n.Path, untracked) }
+		default:
+			f := n.File
+			return "f:" + f.Path + ":" + string([]byte{f.X, f.Y}), func() string { return gitx.DiffFile(ctx, dir, f) }
+		}
+	case pBranches:
+		bl := rp.branches()
+		if len(bl) == 0 {
+			return "branches:none", func() string { return "(no branches)" }
+		}
+		b := bl[i]
+		return "b:" + b.Name, func() string { return gitx.BranchLog(ctx, dir, b.Name) }
+	case pCommits:
+		if len(rp.commits) == 0 {
+			return "commits:none", func() string { return "(no commits)" }
+		}
+		c := rp.commits[i]
+		return "c:" + c.Hash, func() string { return gitx.Show(ctx, dir, c.Hash) }
+	}
+	if len(rp.stashes) == 0 {
+		return "stash:none", func() string { return "(no stashes)" }
+	}
+	st := rp.stashes[i]
+	return "s:" + st.Ref + ":" + st.Msg, func() string { return gitx.StashShow(ctx, dir, st.Ref) }
 }
 
 func (a *App) move(delta int) tea.Cmd {
@@ -190,6 +233,13 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 		return a.mainKey(s)
 	}
 	act := lookup(scRepo, s)
+	if rp.focus == pFiles && lookup(scFiles, s) == actToggleDir {
+		if n, ok := rp.fileNode(); ok && n.Dir {
+			rp.collapsed[n.Path] = !rp.collapsed[n.Path]
+			rp.rebuildFiles(n.key())
+			return nil
+		}
+	}
 
 	// navigation
 	switch act {
@@ -271,13 +321,9 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 		}
 		return a.do("pull", func() error { return gitx.Pull(ctx, dir, false) })
 	case actPush:
-		up := rp.info.Upstream
-		return a.do("push", func() error { return gitx.Push(ctx, dir, false, up) })
+		return a.push(false)
 	case actForcePush:
-		up := rp.info.Upstream
-		a.confirm("Force push (--force-with-lease)?", func() tea.Cmd {
-			return a.do("force push", func() error { return gitx.Push(ctx, dir, true, up) })
-		})
+		return a.push(true)
 	case actReload:
 		rp.mainKey = ""
 		return loadRepoData(ctx, dir)
@@ -298,19 +344,25 @@ func (a *App) filesKey(s string) (tea.Cmd, bool) {
 	rp := &a.rp
 	dir, ctx := rp.dir, a.ctx
 	has := len(rp.files) > 0
-	var f gitx.File
-	if has {
-		f = rp.files[rp.cur[pFiles]]
-	}
+	n, onRow := rp.fileNode()
+	f := n.File
 	switch lookup(scFiles, s) {
 	case actToggleStage:
-		if !has {
+		if !onRow {
 			return nil, true
 		}
-		if f.Unstaged() {
-			return a.do("stage", func() error { return gitx.Stage(ctx, dir, f.Path) }), true
+		unstaged := f.Unstaged()
+		if n.Dir {
+			_, unstaged = dirStage(n.Files)
 		}
-		return a.do("unstage", func() error { return gitx.Unstage(ctx, dir, f.Path) }), true
+		if unstaged {
+			return a.do("stage", func() error { return gitx.Stage(ctx, dir, n.Path) }), true
+		}
+		return a.do("unstage", func() error { return gitx.Unstage(ctx, dir, n.Path) }), true
+	case actToggleTree:
+		rp.flat = !rp.flat
+		rp.rebuildFiles(n.key())
+		return a.mainCmd(), true
 	case actStageAll:
 		anyUnstaged := false
 		for _, x := range rp.files {
@@ -368,12 +420,25 @@ func (a *App) filesKey(s string) (tea.Cmd, bool) {
 				})
 			}), true
 	case actDiscard:
-		if !has {
-			return nil, true
+		switch {
+		case !onRow:
+		case n.Dir:
+			files := n.Files
+			a.confirm(fmt.Sprintf("Discard all changes in %s/ (%d files)?", n.Path, len(files)), func() tea.Cmd {
+				return a.do("discard", func() error {
+					for _, f := range files {
+						if err := gitx.Discard(ctx, dir, f); err != nil {
+							return err
+						}
+					}
+					return nil
+				})
+			})
+		default:
+			a.confirm("Discard all changes to "+f.Path+"?", func() tea.Cmd {
+				return a.do("discard", func() error { return gitx.Discard(ctx, dir, f) })
+			})
 		}
-		a.confirm("Discard all changes to "+f.Path+"?", func() tea.Cmd {
-			return a.do("discard", func() error { return gitx.Discard(ctx, dir, f) })
-		})
 		return nil, true
 	case actStash:
 		a.ask("Stash message", "wip", func(msg string) tea.Cmd {
@@ -381,7 +446,7 @@ func (a *App) filesKey(s string) (tea.Cmd, bool) {
 		})
 		return nil, true
 	case actEdit:
-		if !has {
+		if !onRow || n.Dir {
 			return nil, true
 		}
 		c := exec.Command("sh", "-c", a.editor()+` "$@"`, "sh", f.Path)
@@ -581,25 +646,8 @@ func (a *App) panelItems(panel int) []rowItem {
 	var items []rowItem
 	switch panel {
 	case pFiles:
-		for _, f := range rp.files {
-			code := string([]byte{f.X, f.Y})
-			var st string
-			switch {
-			case f.Conflict():
-				st = lipgloss.NewStyle().Bold(true).Foreground(cYellow).Render(code)
-			case f.Untracked():
-				st = fg(cRed, code)
-			default:
-				x, y := string(f.X), string(f.Y)
-				if f.X != ' ' {
-					x = fg(cGreen, x)
-				}
-				if f.Y != ' ' {
-					y = fg(cRed, y)
-				}
-				st = x + y
-			}
-			items = append(items, rowItem{plain: code + " " + f.Path, styled: st + " " + f.Path})
+		for _, n := range rp.fileRows {
+			items = append(items, fileRow(n, rp.collapsed[n.Path]))
 		}
 	case pBranches:
 		for _, b := range rp.branches() {
@@ -824,4 +872,116 @@ func (a *App) mainKey(s string) tea.Cmd {
 		a.scrollMain(1 << 30)
 	}
 	return nil
+}
+
+// How often the open repository's working tree is re-read, so new, edited
+// and deleted files show up without leaving the repository.
+const liveRefresh = 2 * time.Second
+
+type (
+	repoTickMsg    struct{}
+	repoRefreshMsg struct {
+		dir   string
+		info  gitx.Info
+		files []gitx.File
+		key   string // main panel source the text belongs to ("" = not refreshed)
+		text  string
+	}
+)
+
+func repoTick() tea.Cmd {
+	return tea.Tick(liveRefresh, func(time.Time) tea.Msg { return repoTickMsg{} })
+}
+
+// onRepoTick re-reads status and changed files of the open repository (and
+// the diff shown for a selected file) while nothing else is going on.
+func (a *App) onRepoTick() tea.Cmd {
+	rp := &a.rp
+	idle := a.scr == scrRepo && !rp.refreshing && a.busy == "" && a.p == nil && a.ed == nil && a.report == nil
+	if !idle {
+		return repoTick()
+	}
+	rp.refreshing = true
+	ctx, dir := a.ctx, rp.dir
+	key, fn := "", func() string { return "" }
+	if rp.focus == pFiles {
+		key, fn = a.mainSource()
+	}
+	return tea.Batch(repoTick(), func() tea.Msg {
+		m := repoRefreshMsg{dir: dir, key: key}
+		m.info, _ = gitx.GetInfo(ctx, dir)
+		m.files, _ = gitx.Files(ctx, dir)
+		if key != "" {
+			m.text = fn()
+		}
+		return m
+	})
+}
+
+func (a *App) onRepoRefresh(m repoRefreshMsg) tea.Cmd {
+	rp := &a.rp
+	if m.dir != rp.dir {
+		return nil
+	}
+	rp.refreshing = false
+	if a.scr != scrRepo {
+		return nil
+	}
+	rp.info = m.info
+	rp.setFiles(m.files)
+	if m.key != "" && m.key == rp.mainKey && m.text != rp.main {
+		rp.main = m.text // same file, new content: keep the scroll position
+	}
+	return a.mainCmd() // the selection itself may have changed (file gone, new status)
+}
+
+// push pushes the current branch. When it has diverged from its upstream it
+// checks whether that is only because pushed commits were rewritten here
+// (squash, reword, amend…): then a force push with lease is offered; if the
+// remote has commits that were never local, it refuses and suggests a pull.
+func (a *App) push(force bool) tea.Cmd {
+	rp := &a.rp
+	dir, ctx := rp.dir, a.ctx
+	info := rp.info
+	up := info.Upstream
+	upName := "the remote"
+	for _, b := range rp.local {
+		if b.Current && b.Upstream != "" {
+			upName = b.Upstream
+		}
+	}
+	doPush := func(force bool) tea.Cmd {
+		label := "push"
+		if force {
+			label = "force push"
+		}
+		return a.doMsg(label, func() (string, error) {
+			err := gitx.Push(ctx, dir, force, up)
+			if err != nil && !force && gitx.PushRejected(err) {
+				return "", fmt.Errorf("rejected: %s has commits you haven't fetched — fetch (f), then pull or force push", upName)
+			}
+			return "", err
+		})
+	}
+	if !up || info.Behind == 0 {
+		if !force {
+			return doPush(false)
+		}
+		a.confirm("Force push "+info.Branch+" (--force-with-lease)?", func() tea.Cmd { return doPush(true) })
+		return nil
+	}
+	diverged := fmt.Sprintf("%s and %s have diverged (↑%d ↓%d)", info.Branch, upName, info.Ahead, info.Behind)
+	return a.after(func() (bool, error) { return gitx.UpstreamSeenLocally(ctx, dir) }, func(seen bool) tea.Cmd {
+		switch {
+		case seen:
+			a.confirm(diverged+" because commits that were already pushed were rewritten here. Force push (--force-with-lease)?",
+				func() tea.Cmd { return doPush(true) })
+		case force:
+			a.confirm("⚠ "+upName+" has commits that were never in your branch; force pushing deletes them from the remote. Force push anyway?",
+				func() tea.Cmd { return doPush(true) })
+		default:
+			a.setToast(diverged+": "+upName+" has commits you don't have — pull first (p / ctrl+p), or F to overwrite them", true)
+		}
+		return nil
+	})
 }
