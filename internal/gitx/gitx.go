@@ -240,39 +240,9 @@ func CommitMsg(ctx context.Context, dir, msg string) error {
 	return err
 }
 
-// AmendNoEdit folds the staged changes into HEAD, keeping its message.
-func AmendNoEdit(ctx context.Context, dir string) error {
-	_, err := run(ctx, kWrite, dir, nil, "commit", "--amend", "--no-edit")
-	return err
-}
-
 // Message returns the full commit message of rev.
 func Message(ctx context.Context, dir, rev string) (string, error) {
 	return run(ctx, kRead, dir, nil, "log", "-1", "--format=%B", rev)
-}
-
-// Reword replaces the subject line of commit hash and keeps its body.
-// HEAD is amended with --only, so staged changes stay staged instead of
-// being folded into the commit; older commits go through an interactive rebase.
-func Reword(ctx context.Context, dir, hash, subject string) error {
-	subject = strings.TrimSpace(subject)
-	if subject == "" || strings.Contains(subject, "\n") {
-		return errors.New("reword: subject must be a single non-empty line")
-	}
-	full, err := Message(ctx, dir, hash)
-	if err != nil {
-		return err
-	}
-	msg := replaceSubject(full, subject)
-	head, err := run(ctx, kRead, dir, nil, "rev-parse", "HEAD")
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(head) == hash {
-		_, err = run(ctx, kWrite, dir, nil, "commit", "--amend", "--only", "--allow-empty", "-m", msg)
-		return err
-	}
-	return RebaseAction(ctx, dir, hash, "reword", msg)
 }
 
 // replaceSubject swaps the first line of a commit message.
@@ -282,42 +252,6 @@ func replaceSubject(msg, subject string) string {
 		return subject + msg[i:]
 	}
 	return subject
-}
-
-func UndoCommit(ctx context.Context, dir string) error {
-	_, err := run(ctx, kWrite, dir, nil, "reset", "--soft", "HEAD~1")
-	return err
-}
-
-func Revert(ctx context.Context, dir, hash string) error {
-	_, err := run(ctx, kWrite, dir, nil, "revert", "--no-edit", hash)
-	return err
-}
-
-// RebaseAction rewrites history non-interactively via `git rebase -i` with a
-// scripted todo editor. action is one of: drop, reword, squash, fixup.
-// squash/fixup meld the commit into the one before it.
-func RebaseAction(ctx context.Context, dir, hash, action, msg string) error {
-	line := 1
-	spec := hash + "^"
-	if action == "squash" || action == "fixup" {
-		line = 2
-		spec = hash + "^^"
-	}
-	args := []string{"rebase", "-i", "--autostash"}
-	if _, err := run(ctx, kRead, dir, nil, "rev-parse", "--verify", "-q", spec); err != nil {
-		args = append(args, "--root")
-	} else {
-		args = append(args, spec)
-	}
-	env := []string{fmt.Sprintf("GIT_SEQUENCE_EDITOR=sed -i.bak '%ds/^pick/%s/'", line, action)}
-	if action == "reword" {
-		env = append(env,
-			"GITNEST_MSG="+msg,
-			`GIT_EDITOR=sh -c 'printf "%s\n" "$GITNEST_MSG" > "$1"' sh`)
-	}
-	_, err := run(ctx, kWrite, dir, env, args...)
-	return err
 }
 
 // ---------------------------------------------------------------- branches
@@ -401,16 +335,6 @@ func DeleteRemoteBranch(ctx context.Context, dir, name string) error {
 
 func RenameBranch(ctx context.Context, dir, old, name string) error {
 	_, err := run(ctx, kWrite, dir, nil, "branch", "-m", old, name)
-	return err
-}
-
-func Merge(ctx context.Context, dir, name string) error {
-	_, err := run(ctx, kWrite, dir, nil, "merge", "--no-edit", name)
-	return err
-}
-
-func RebaseOnto(ctx context.Context, dir, name string) error {
-	_, err := run(ctx, kWrite, dir, nil, "rebase", "--autostash", name)
 	return err
 }
 

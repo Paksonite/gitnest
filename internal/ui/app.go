@@ -40,6 +40,13 @@ type opMsg struct {
 }
 type execDoneMsg struct{ err error }
 
+// checkMsg carries the result of a pre-flight check started by App.check.
+type checkMsg struct {
+	pushed []string
+	err    error
+	next   func(pushed []string) tea.Cmd
+}
+
 // --------------------------------------------------------------------- model
 
 type prompt struct {
@@ -108,6 +115,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case opMsg:
 		return a, a.onOp(m)
+	case checkMsg:
+		a.busy = ""
+		if m.err != nil {
+			a.setToast(m.err.Error(), true)
+			return a, nil
+		}
+		return a, m.next(m.pushed)
 	case execDoneMsg:
 		if m.err != nil {
 			a.setToast(m.err.Error(), true)
@@ -200,6 +214,33 @@ func (a *App) doMsg(label string, fn func() (string, error)) tea.Cmd {
 	}
 }
 
+// check runs a history-rewrite pre-flight check in the background and hands the
+// remote branches that already contain the affected commits to next.
+func (a *App) check(fn func() ([]string, error), next func(pushed []string) tea.Cmd) tea.Cmd {
+	a.busy = "checking…"
+	return func() tea.Msg {
+		pushed, err := fn()
+		return checkMsg{pushed: pushed, err: err, next: next}
+	}
+}
+
+// confirmRewrite asks question (skipped when empty) and, if the commits are
+// already pushed, asks a second time with a force-push warning.
+func (a *App) confirmRewrite(question string, pushed []string, run func() tea.Cmd) tea.Cmd {
+	second := func() tea.Cmd {
+		if len(pushed) == 0 {
+			return run()
+		}
+		a.confirm("⚠ Already pushed to "+strings.Join(pushed, ", ")+". Rewriting will need a force push (F). Continue?", run)
+		return nil
+	}
+	if question == "" {
+		return second()
+	}
+	a.confirm(question, second)
+	return nil
+}
+
 func (a *App) do(label string, fn func() error) tea.Cmd {
 	return a.doMsg(label, func() (string, error) { return "", fn() })
 }
@@ -287,10 +328,12 @@ Repo view  (panels: 1 Files  2 Branches  3 Commits  4 Stash)
   Branches  space checkout  n new  d delete  D force delete  r rename
             M merge into current  R rebase current onto  t local/remote
   Commits   s squash  f fixup  d drop  r reword  t revert  u undo last (soft)
+            (refused across merge commits; pushed commits ask twice)
   Stash     space apply  g pop  d drop
   Global    p pull  ctrl+p pull --rebase  P push  F force push (lease)
             ctrl+f fetch  ctrl+r refresh  L open lazygit  esc/q back
-  Rebase    C continue  X abort   (while a rebase is in progress)
+            z undo last history change (press again to redo)
+  In progress  C continue  S skip  X abort   (rebase, merge, cherry-pick, revert, bisect)
 
 press any key to close`
 
