@@ -517,6 +517,8 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 		return a.moveRepos(len(rs.rows))
 	case actQuit:
 		return tea.Quit
+	case actCdQuit:
+		return a.cdQuit(a.selectedPath())
 	case actClearSearch:
 		if rs.filter != "" {
 			rs.filter = ""
@@ -748,6 +750,7 @@ func (a *App) viewRepos() string {
 
 	head := lipgloss.NewStyle().Bold(true).Foreground(cAccent).Render("gitnest") +
 		fg(cDim, fmt.Sprintf("  %d repos · %d dirty", len(rs.all), dirty))
+	head += a.copiedBadge()
 	if rs.sortMode != sortRecent {
 		head += "  " + fg(cDim, "sort: "+sortNames[rs.sortMode])
 	}

@@ -205,3 +205,50 @@ func TestUpstreamSeenLocally(t *testing.T) {
 		t.Fatalf("after their push: seen=%v err=%v", seen, err)
 	}
 }
+
+func TestTags(t *testing.T) {
+	seed := newRepo(t)
+	commit(t, seed, "a.txt", "a\n", "first")
+	origin := t.TempDir()
+	git(t, origin, "clone", "-q", "--bare", seed, ".")
+	dir := t.TempDir()
+	git(t, dir, "clone", "-q", origin, ".")
+	if err := CreateTag(bg, dir, "v1.0.0", "", "Release 1.0"); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateTag(bg, dir, "light", "HEAD", ""); err != nil {
+		t.Fatal(err)
+	}
+	ts, err := Tags(bg, dir)
+	if err != nil || len(ts) != 2 {
+		t.Fatalf("Tags = %+v %v", ts, err)
+	}
+	byName := map[string]Tag{}
+	for _, tg := range ts {
+		byName[tg.Name] = tg
+	}
+	if !byName["v1.0.0"].Annotated || byName["v1.0.0"].Subject != "Release 1.0" || byName["light"].Annotated {
+		t.Errorf("tags: %+v", ts)
+	}
+	if s := TagInfo(bg, dir, "v1.0.0"); !strings.Contains(stripANSI(s), "Release 1.0") {
+		t.Errorf("TagInfo: %q", s)
+	}
+	if err := PushTag(bg, dir, "v1.0.0"); err != nil {
+		t.Fatal(err)
+	}
+	if got := git(t, origin, "tag", "--list"); got != "v1.0.0" {
+		t.Errorf("remote tags: %q", got)
+	}
+	if err := DeleteRemoteTag(bg, dir, "v1.0.0"); err != nil {
+		t.Fatal(err)
+	}
+	if got := git(t, origin, "tag", "--list"); got != "" {
+		t.Errorf("remote tags after delete: %q", got)
+	}
+	if err := DeleteTag(bg, dir, "light"); err != nil {
+		t.Fatal(err)
+	}
+	if got := git(t, dir, "tag", "--list"); got != "v1.0.0" {
+		t.Errorf("local tags: %q", got)
+	}
+}

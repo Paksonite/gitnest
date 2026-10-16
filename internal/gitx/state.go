@@ -19,6 +19,7 @@ const (
 	StateCherryPicking
 	StateReverting
 	StateBisecting
+	StateApplying // git am (e.g. commits copied from another repository)
 )
 
 func (s State) String() string {
@@ -33,13 +34,15 @@ func (s State) String() string {
 		return "REVERTING"
 	case StateBisecting:
 		return "BISECTING"
+	case StateApplying:
+		return "APPLYING PATCHES"
 	}
 	return ""
 }
 
 // CanSkip reports whether the current step of s can be skipped.
 func (s State) CanSkip() bool {
-	return s == StateRebasing || s == StateCherryPicking || s == StateReverting
+	return s == StateRebasing || s == StateCherryPicking || s == StateReverting || s == StateApplying
 }
 
 // GetState inspects the repository's git dir for an operation in progress.
@@ -59,6 +62,8 @@ func stateIn(gitDir string) State {
 	}
 	// Rebase first: a conflicting rebase step also leaves CHERRY_PICK_HEAD.
 	switch {
+	case exists("rebase-apply/applying"):
+		return StateApplying
 	case exists("rebase-merge"), exists("rebase-apply"):
 		return StateRebasing
 	case exists("MERGE_HEAD"):
@@ -99,6 +104,8 @@ func Continue(ctx context.Context, dir string, s State) error {
 	switch s {
 	case StateRebasing:
 		args = []string{"rebase", "--continue"}
+	case StateApplying:
+		args = []string{"am", "--continue"}
 	case StateMerging:
 		args = []string{"merge", "--continue"}
 	case StateCherryPicking:
@@ -118,6 +125,8 @@ func Abort(ctx context.Context, dir string, s State) error {
 	switch s {
 	case StateRebasing:
 		args = []string{"rebase", "--abort"}
+	case StateApplying:
+		args = []string{"am", "--abort"}
 	case StateMerging:
 		args = []string{"merge", "--abort"}
 	case StateCherryPicking:
@@ -139,6 +148,8 @@ func Skip(ctx context.Context, dir string, s State) error {
 	switch s {
 	case StateRebasing:
 		args = []string{"rebase", "--skip"}
+	case StateApplying:
+		args = []string{"am", "--skip"}
 	case StateCherryPicking:
 		args = []string{"cherry-pick", "--skip"}
 	case StateReverting:

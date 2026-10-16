@@ -32,6 +32,7 @@ type repoData struct {
 	stashes  []gitx.Stash
 	refs     []gitx.RefEntry
 	notMain  map[string]bool
+	tags     []gitx.Tag
 }
 
 type repoState struct {
@@ -41,7 +42,8 @@ type repoState struct {
 	files         []gitx.File
 	local         []gitx.Branch
 	remote        []gitx.Branch
-	showRemote    bool
+	branchTab     int // tabLocal, tabRemote or tabTags
+	tags          []gitx.Tag
 	commits       []gitx.Commit
 	unpushed      map[string]bool
 	stashes       []gitx.Stash
@@ -55,6 +57,7 @@ type repoState struct {
 	collapsed     map[string]bool // collapsed directories in the tree
 	refreshing    bool            // a live refresh is running
 	reflog        bool            // the Commits panel shows the reflog
+	staging       *staging        // line-by-line staging of a file, shown in the main panel
 	jumpToCurrent bool            // select the checked-out branch after the next reload
 	graph         [][]gcell       // commit graph rows, one per commit
 	notMain       map[string]bool // commits of HEAD not on the main line
@@ -64,8 +67,16 @@ type repoState struct {
 	mainLen       int             // lines in the main panel
 }
 
+// Tabs of the Branches panel.
+const (
+	tabLocal = iota
+	tabRemote
+	tabTags
+	branchTabs
+)
+
 func (rp *repoState) branches() []gitx.Branch {
-	if rp.showRemote {
+	if rp.branchTab == tabRemote {
 		return rp.remote
 	}
 	return rp.local
@@ -76,6 +87,9 @@ func (rp *repoState) count(panel int) int {
 	case pFiles:
 		return len(rp.fileRows)
 	case pBranches:
+		if rp.branchTab == tabTags {
+			return len(rp.tags)
+		}
 		return len(rp.branches())
 	case pCommits:
 		if rp.reflog {
@@ -139,6 +153,7 @@ func loadRepoData(ctx context.Context, dir string) tea.Cmd {
 		par(func() { d.stashes, _ = gitx.Stashes(ctx, dir) })
 		par(func() { d.refs, _ = gitx.Reflog(ctx, dir, 300) })
 		par(func() { d.notMain = gitx.NotOnMain(ctx, dir, 1000) })
+		par(func() { d.tags, _ = gitx.Tags(ctx, dir) })
 		wg.Wait()
 		return repoDataMsg{dir: dir, d: d}
 	}
@@ -152,12 +167,12 @@ func (a *App) onRepoData(m repoDataMsg) tea.Cmd {
 	d := m.d
 	rp.info, rp.local, rp.remote = d.info, currentFirst(d.local), d.remote
 	if rp.jumpToCurrent { // after a checkout: show the branch now checked out, on top
-		rp.jumpToCurrent, rp.showRemote = false, false
+		rp.jumpToCurrent, rp.branchTab = false, tabLocal
 		rp.cur[pBranches], rp.off[pBranches] = 0, 0
 	}
 	rp.setFiles(d.files)
 	rp.commits, rp.unpushed, rp.stashes, rp.refs = d.commits, d.unpushed, d.stashes, d.refs
-	rp.notMain, rp.graph = d.notMain, buildGraph(d.commits)
+	rp.notMain, rp.graph, rp.tags = d.notMain, buildGraph(d.commits), d.tags
 	for i := 0; i < 4; i++ {
 		rp.cur[i] = clamp(rp.cur[i], 0, rp.count(i)-1)
 	}
@@ -200,6 +215,13 @@ func (a *App) mainSource() (string, func() string) {
 			return "f:" + f.Path + ":" + string([]byte{f.X, f.Y}), func() string { return gitx.DiffFile(ctx, dir, f) }
 		}
 	case pBranches:
+		if rp.branchTab == tabTags {
+			if len(rp.tags) == 0 {
+				return "tags:none", func() string { return "(no tags — n creates one at HEAD)" }
+			}
+			tg := rp.tags[i]
+			return "t:" + tg.Name + ":" + tg.Short, func() string { return gitx.TagInfo(ctx, dir, tg.Name) }
+		}
 		bl := rp.branches()
 		if len(bl) == 0 {
 			return "branches:none", func() string { return "(no branches)" }
@@ -257,6 +279,9 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 	s := k.String()
 	half := clamp((a.h-3)/2, 3, 100)
 
+	if rp.staging != nil {
+		return a.stagingKey(s)
+	}
 	if rp.mainFocus {
 		return a.mainKey(s)
 	}
@@ -266,6 +291,8 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 			rp.collapsed[n.Path] = !rp.collapsed[n.Path]
 			rp.rebuildFiles(n.key())
 			return nil
+		} else if ok {
+			return a.openStaging(n.File) // enter on a file: stage it line by line
 		}
 	}
 
@@ -357,6 +384,8 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 		return loadRepoData(ctx, dir)
 	case actUndo:
 		return a.undoLast()
+	case actCdQuit:
+		return a.cdQuit(rp.dir)
 	case actLazygit:
 		if _, err := exec.LookPath("lazygit"); err != nil {
 			a.setToast("lazygit not found in PATH", true)
@@ -486,6 +515,11 @@ func (a *App) filesKey(s string) (tea.Cmd, bool) {
 
 func (a *App) branchesKey(s string) (tea.Cmd, bool) {
 	rp := &a.rp
+	if rp.branchTab == tabTags {
+		if act := lookup(scBranches, s); act != actToggleRemote && act != actPrevTab {
+			return a.tagsKey(s)
+		}
+	}
 	dir, ctx := rp.dir, a.ctx
 	bl := rp.branches()
 	has := len(bl) > 0
@@ -493,9 +527,13 @@ func (a *App) branchesKey(s string) (tea.Cmd, bool) {
 	if has {
 		b = bl[rp.cur[pBranches]]
 	}
-	switch lookup(scBranches, s) {
-	case actToggleRemote:
-		rp.showRemote = !rp.showRemote
+	switch act := lookup(scBranches, s); act {
+	case actToggleRemote, actPrevTab:
+		step := 1
+		if act == actPrevTab {
+			step = branchTabs - 1
+		}
+		rp.branchTab = (rp.branchTab + step) % branchTabs
 		rp.cur[pBranches], rp.off[pBranches] = 0, 0
 		return a.mainCmd(), true
 	case actCheckout:
@@ -590,12 +628,31 @@ func (a *App) commitsKey(s string) (tea.Cmd, bool) {
 	if rp.reflog {
 		return a.reflogKey(s)
 	}
-	if lookup(scCommits, s) == actToggleReflog {
+	switch lookup(scCommits, s) {
+	case actToggleReflog:
 		return a.toggleReflog(), true
+	case actPaste:
+		return a.paste(), true
+	case actClearCopied:
+		a.copied = nil
+		a.setToast("copied commits cleared", false)
+		return nil, true
 	}
 	dir, ctx := rp.dir, a.ctx
 	if len(rp.commits) == 0 {
 		return nil, false
+	}
+	switch lookup(scCommits, s) {
+	case actCopy:
+		a.copyCommit(rp.cur[pCommits])
+		return a.move(1), true
+	case actRebasePlan:
+		a.openPlanner(rp.cur[pCommits])
+		return nil, true
+	case actMoveDown:
+		return a.moveCommit(rp.cur[pCommits], 1), true
+	case actMoveUp:
+		return a.moveCommit(rp.cur[pCommits], -1), true
 	}
 	idx := rp.cur[pCommits]
 	c := rp.commits[idx]
@@ -686,6 +743,12 @@ func (a *App) panelItems(panel int) []rowItem {
 			items = append(items, fileRow(n, rp.collapsed[n.Path]))
 		}
 	case pBranches:
+		if rp.branchTab == tabTags {
+			for _, tg := range rp.tags {
+				items = append(items, tagRow(tg))
+			}
+			break
+		}
 		for _, b := range rp.branches() {
 			mark := "  "
 			glyph := branchGlyph(b.Remote)
@@ -717,7 +780,7 @@ func (a *App) panelItems(panel int) []rowItem {
 				if i < len(rp.graph) {
 					g = rp.graph[i]
 				}
-				items = append(items, commitRow(c, st, g))
+				items = append(items, commitRow(c, st, g, a.isCopied(c.Hash)))
 			}
 		}
 	default:
@@ -733,6 +796,9 @@ func (a *App) panelItems(panel int) []rowItem {
 
 func (a *App) repoHints() string {
 	rp := &a.rp
+	if rp.staging != nil {
+		return hints(scStaging)
+	}
 	if rp.mainFocus {
 		return hints(scMain)
 	}
@@ -742,6 +808,9 @@ func (a *App) repoHints() string {
 	panel := [4]scope{scFiles, scBranches, scCommits, scStash}[rp.focus]
 	if panel == scCommits && rp.reflog {
 		panel = scReflog
+	}
+	if panel == scBranches && rp.branchTab == tabTags {
+		return hints(scTags) + "  ·  ] tabs  ·  " + hints(scRepo, scGlobal)
 	}
 	return hints(panel) + "  ·  " + hints(scRepo, scGlobal)
 }
@@ -755,6 +824,7 @@ func (a *App) viewRepo() string {
 	if st := rp.info.State; st != gitx.StateNone {
 		head += "  " + lipgloss.NewStyle().Bold(true).Foreground(cYellow).Render(st.String()+" — "+stateKeys(st))
 	}
+	head += a.copiedBadge()
 
 	leftW := clamp(a.w*2/5, 34, 64)
 	if a.w < 80 {
@@ -762,11 +832,8 @@ func (a *App) viewRepo() string {
 	}
 	mainW := a.w - leftW
 
-	branchTab := 0
-	if rp.showRemote {
-		branchTab = 1
-	}
-	branchTitle := tabsTitle("[2]", []string{fmt.Sprintf("Local (%d)", len(rp.local)), fmt.Sprintf("Remote (%d)", len(rp.remote))}, branchTab, rp.focus == pBranches)
+	branchTitle := tabsTitle("[2]", []string{fmt.Sprintf("Local (%d)", len(rp.local)), fmt.Sprintf("Remote (%d)", len(rp.remote)),
+		fmt.Sprintf("Tags (%d)", len(rp.tags))}, rp.branchTab, rp.focus == pBranches)
 	titles := [4]string{
 		fmt.Sprintf("[1] Files (%d)", len(rp.files)),
 		branchTitle,
@@ -807,7 +874,10 @@ func (a *App) viewRepo() string {
 		mainTitle += "  (j/k scroll · esc back)"
 	}
 	mainLines = mainLines[rp.mainOff:]
-	body := lipgloss.JoinHorizontal(lipgloss.Top, left, panel(mainTitle, mainLines, mainW, mh, rp.mainFocus))
+	if rp.staging != nil {
+		mainTitle, mainLines = a.stagingLines(mh-3, mainW-2)
+	}
+	body := lipgloss.JoinHorizontal(lipgloss.Top, left, panel(mainTitle, mainLines, mainW, mh, rp.mainFocus || rp.staging != nil))
 
 	return strings.Join([]string{fit(head, a.w), body, a.footer(a.repoHints())}, "\n")
 }
@@ -944,7 +1014,7 @@ func repoTick() tea.Cmd {
 // the diff shown for a selected file) while nothing else is going on.
 func (a *App) onRepoTick() tea.Cmd {
 	rp := &a.rp
-	idle := a.scr == scrRepo && !rp.refreshing && a.busy == "" && a.p == nil && a.ed == nil && a.report == nil
+	idle := a.scr == scrRepo && !rp.refreshing && a.busy == "" && a.p == nil && a.ed == nil && a.report == nil && rp.staging == nil
 	if !idle {
 		return repoTick()
 	}
@@ -1056,4 +1126,55 @@ func currentFirst(bs []gitx.Branch) []gitx.Branch {
 		}
 	}
 	return out
+}
+
+func tagRow(tg gitx.Tag) rowItem {
+	glyph := "⚑ "
+	if nerdIcons {
+		glyph = nfTag + " "
+	}
+	plain := glyph + tg.Name + " " + tg.Short + " " + tg.Subject
+	styled := fg(cYellow, glyph) + bold(tg.Name) + " " + fg(cDim, tg.Short) + " " + tg.Subject
+	return rowItem{plain: plain, styled: styled}
+}
+
+// tagsKey handles the Tags tab of the Branches panel.
+func (a *App) tagsKey(s string) (tea.Cmd, bool) {
+	rp := &a.rp
+	dir, ctx := rp.dir, a.ctx
+	act := lookup(scTags, s)
+	if act == actNewTag {
+		a.ask("New tag at HEAD — name", "", func(name string) tea.Cmd {
+			a.ask("Message for "+name+" (empty: lightweight tag)", "", func(msg string) tea.Cmd {
+				return a.do("tag "+name, func() error { return gitx.CreateTag(ctx, dir, name, "", msg) })
+			})
+			a.p.allowEmpty = true
+			return nil
+		})
+		return nil, true
+	}
+	if len(rp.tags) == 0 {
+		return nil, act != actNone
+	}
+	tg := rp.tags[rp.cur[pBranches]]
+	switch act {
+	case actCheckoutTag:
+		a.confirm("Check out tag "+tg.Name+" (detached HEAD)?", func() tea.Cmd {
+			return a.do("checkout "+tg.Name, func() error { return gitx.CheckoutDetached(ctx, dir, "refs/tags/"+tg.Name) })
+		})
+		return nil, true
+	case actPushTag:
+		return a.do("push tag "+tg.Name, func() error { return gitx.PushTag(ctx, dir, tg.Name) }), true
+	case actDeleteTag:
+		a.confirm("Delete local tag "+tg.Name+"?", func() tea.Cmd {
+			return a.do("delete tag", func() error { return gitx.DeleteTag(ctx, dir, tg.Name) })
+		})
+		return nil, true
+	case actDeleteRemoteTag:
+		a.confirm("Delete tag "+tg.Name+" on the remote?", func() tea.Cmd {
+			return a.do("delete remote tag", func() error { return gitx.DeleteRemoteTag(ctx, dir, tg.Name) })
+		})
+		return nil, true
+	}
+	return nil, false
 }

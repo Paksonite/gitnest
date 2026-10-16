@@ -745,6 +745,87 @@ func RenameBranch(ctx context.Context, dir, old, name string) error {
 	return err
 }
 
+// -------------------------------------------------------------------- tags
+
+type Tag struct {
+	Name, Short, Subject, Rel string
+	Annotated                 bool
+}
+
+const tagFormat = "%(refname:short)%1f%(objectname:short)%1f%(contents:subject)%1f%(creatordate:relative)%1f%(objecttype)"
+
+// Tags lists tags, newest first.
+func Tags(ctx context.Context, dir string) ([]Tag, error) {
+	out, err := run(ctx, kRead, dir, nil, "for-each-ref", "--sort=-creatordate", "--format="+tagFormat, "refs/tags")
+	if err != nil {
+		return nil, err
+	}
+	return parseTags(out), nil
+}
+
+func parseTags(out string) []Tag {
+	var ts []Tag
+	for _, l := range strings.Split(out, "\n") {
+		f := strings.Split(l, "\x1f")
+		if len(f) < 5 {
+			continue
+		}
+		ts = append(ts, Tag{Name: f[0], Short: f[1], Subject: f[2], Rel: f[3], Annotated: f[4] == "tag"})
+	}
+	return ts
+}
+
+// CreateTag tags rev; with a message the tag is annotated.
+func CreateTag(ctx context.Context, dir, name, rev, msg string) error {
+	args := []string{"tag"}
+	if msg != "" {
+		args = append(args, "-a", "-m", msg)
+	}
+	args = append(args, "--", name)
+	if rev != "" {
+		args = append(args, rev)
+	}
+	_, err := run(ctx, kWrite, dir, nil, args...)
+	return err
+}
+
+func DeleteTag(ctx context.Context, dir, name string) error {
+	_, err := run(ctx, kWrite, dir, nil, "tag", "-d", "--", name)
+	return err
+}
+
+// defaultRemote is origin, or the first remote.
+func defaultRemote(ctx context.Context, dir string) string {
+	if o, err := run(ctx, kRead, dir, nil, "remote"); err == nil {
+		f := strings.Fields(o)
+		for _, r := range f {
+			if r == "origin" {
+				return r
+			}
+		}
+		if len(f) > 0 {
+			return f[0]
+		}
+	}
+	return "origin"
+}
+
+func PushTag(ctx context.Context, dir, name string) error {
+	_, err := run(ctx, kNet, dir, nil, "push", defaultRemote(ctx, dir), "refs/tags/"+name)
+	return err
+}
+
+func DeleteRemoteTag(ctx context.Context, dir, name string) error {
+	_, err := run(ctx, kNet, dir, nil, "push", defaultRemote(ctx, dir), "--delete", "refs/tags/"+name)
+	return err
+}
+
+// TagInfo shows a tag: its annotation (if any) and the tagged commit.
+func TagInfo(ctx context.Context, dir, name string) string {
+	out, _ := run(ctx, kRead, dir, nil, colored("show", "--stat", "refs/tags/"+name)...)
+	return limitLines(out, 5000)
+}
+
 // ------------------------------------------------------------ remote sync
 
 func Fetch(ctx context.Context, dir string) error {

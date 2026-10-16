@@ -38,3 +38,31 @@ func TestCompletionCommand(t *testing.T) {
 		t.Error("missing shell accepted")
 	}
 }
+
+func TestCutCdFile(t *testing.T) {
+	f, rest, err := cutCdFile([]string{"--cd-file", "/tmp/x", "repo"})
+	if err != nil || f != "/tmp/x" || len(rest) != 1 || rest[0] != "repo" {
+		t.Errorf("got %q %v %v", f, rest, err)
+	}
+	if f, rest, _ := cutCdFile([]string{"--cd-file=/tmp/y"}); f != "/tmp/y" || len(rest) != 0 {
+		t.Errorf("= form: %q %v", f, rest)
+	}
+	if _, _, err := cutCdFile([]string{"--cd-file"}); err == nil {
+		t.Error("missing path accepted")
+	}
+}
+
+func TestShellScriptParses(t *testing.T) {
+	zsh, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("zsh not installed")
+	}
+	f := filepath.Join(t.TempDir(), "gn.zsh")
+	os.WriteFile(f, []byte(zshShell), 0o644)
+	if out, err := exec.Command(zsh, "-n", f).CombinedOutput(); err != nil {
+		t.Fatalf("zsh -n: %v\n%s", err, out)
+	}
+	if shellCmd([]string{"bash"}) == nil {
+		t.Error("bash accepted")
+	}
+}

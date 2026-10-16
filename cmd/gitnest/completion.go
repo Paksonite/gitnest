@@ -22,6 +22,7 @@ _gitnest() {
     'help:show usage'
     'theme:list, export or check colour themes'
     'completion:print a shell completion script'
+    'shell:print the gn shell function (cd into a repository)'
   )
   roots_cmds=(
     'list:list the scanned directories'
@@ -69,7 +70,7 @@ _gitnest() {
         fi
       fi
       ;;
-    completion)
+    completion|shell)
       (( CURRENT == 3 )) && compadd zsh
       ;;
   esac

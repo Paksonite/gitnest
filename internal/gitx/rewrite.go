@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -229,6 +230,176 @@ func RebaseOnto(ctx context.Context, dir, name string) error {
 	}
 	_, err := run(ctx, kWrite, dir, nil, "rebase", "--autostash", name)
 	return err
+}
+
+// ------------------------------------------------------- interactive rebase
+
+// PlanStep is one line of an interactive rebase plan.
+type PlanStep struct {
+	Hash    string
+	Action  string // pick, reword, edit, squash, fixup, drop
+	Message string // new message for reword
+}
+
+// ErrStopped reports that a plan with "edit" stopped at a commit; continue
+// the rebase when done.
+var ErrStopped = errors.New("stopped for editing")
+
+// RebasePlan rewrites the commits from steps[0] (the oldest) up to HEAD as
+// planned: in the given order, each with its action. steps must list
+// exactly those commits. Reword messages are applied with an exec step
+// right after the pick, so no editor is needed. Returns ErrStopped when an
+// edit step paused the rebase.
+func RebasePlan(ctx context.Context, dir string, steps []PlanStep) error {
+	if len(steps) == 0 {
+		return errors.New("empty plan")
+	}
+	switch steps[0].Action {
+	case ActionSquash, ActionFixup:
+		return errors.New("the first commit has nothing to " + steps[0].Action + " into")
+	}
+	// Check the range (merges, operation in progress) from the oldest commit.
+	oldest := ""
+	want, err := run(ctx, kRead, dir, nil, "rev-list", "--reverse", "HEAD")
+	if err != nil {
+		return err
+	}
+	all := strings.Fields(want)
+	inPlan := map[string]bool{}
+	for _, st := range steps {
+		h, err := resolve(ctx, dir, st.Hash)
+		if err != nil {
+			return err
+		}
+		inPlan[h] = true
+	}
+	for i, h := range all {
+		if inPlan[h] {
+			oldest = h
+			if len(all)-i != len(steps) {
+				return fmt.Errorf("the plan must list every commit from %s to HEAD", short(h))
+			}
+			for _, x := range all[i:] {
+				if !inPlan[x] {
+					return fmt.Errorf("the plan must list every commit from %s to HEAD", short(h))
+				}
+			}
+			break
+		}
+	}
+	if oldest == "" {
+		return errors.New("the planned commits are not on the current branch")
+	}
+	if _, err := CheckRewrite(ctx, dir, oldest, ActionDrop); err != nil {
+		return err
+	}
+
+	tmp, err := os.MkdirTemp("", "gitnest-plan")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	var todo strings.Builder
+	edits := false
+	for i, st := range steps {
+		switch st.Action {
+		case "pick", ActionDrop, "edit", ActionSquash, ActionFixup:
+			fmt.Fprintf(&todo, "%s %s\n", st.Action, st.Hash)
+			edits = edits || st.Action == "edit"
+		case ActionReword:
+			msg := CleanMessage(st.Message)
+			if msg == "" {
+				return fmt.Errorf("reword %s: the message is empty", short(st.Hash))
+			}
+			f := filepath.Join(tmp, fmt.Sprintf("msg-%d", i))
+			if err := os.WriteFile(f, []byte(msg+"\n"), 0o600); err != nil {
+				return err
+			}
+			fmt.Fprintf(&todo, "pick %s\nexec git commit --amend --only --allow-empty --no-verify -q -F '%s'\n", st.Hash, f)
+		default:
+			return fmt.Errorf("unknown plan action %q", st.Action)
+		}
+	}
+	todoFile := filepath.Join(tmp, "todo")
+	if err := os.WriteFile(todoFile, []byte(todo.String()), 0o600); err != nil {
+		return err
+	}
+	args := []string{"rebase", "-i", "--autostash"}
+	if _, err := resolve(ctx, dir, oldest+"^"); err != nil {
+		args = append(args, "--root")
+	} else {
+		args = append(args, oldest+"^")
+	}
+	if err := savePoint(ctx, dir, fmt.Sprintf("rebase plan (%d commits)", len(steps))); err != nil {
+		return err
+	}
+	env := []string{"GIT_SEQUENCE_EDITOR=cp '" + todoFile + "'"}
+	if _, err := run(ctx, kWrite, dir, env, args...); err != nil {
+		return err
+	}
+	if edits {
+		if st, _ := GetState(ctx, dir); st == StateRebasing {
+			return ErrStopped
+		}
+	}
+	return nil
+}
+
+// ------------------------------------------------------------- cherry-pick
+
+// CherryPick applies commits from repository src onto the current branch of
+// dst, oldest first. Within one repository (or another worktree of it) this
+// is git cherry-pick; across repositories the commits travel as patches
+// (format-patch + am -3), keeping authors, dates and messages. Conflicts
+// leave a cherry-pick or am in progress, which the usual continue / skip /
+// abort keys handle. An undo point is recorded first.
+func CherryPick(ctx context.Context, dst, src string, hashes []string) error {
+	if len(hashes) == 0 {
+		return errors.New("nothing to cherry-pick")
+	}
+	if err := requireNoOperation(ctx, dst); err != nil {
+		return err
+	}
+	if err := savePoint(ctx, dst, fmt.Sprintf("cherry-pick %d commit(s)", len(hashes))); err != nil {
+		return err
+	}
+	if sameRepository(dst, src) {
+		_, err := run(ctx, kWrite, dst, nil, append([]string{"cherry-pick", "--allow-empty"}, hashes...)...)
+		return err
+	}
+	tmp, err := os.MkdirTemp("", "gitnest-patches")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	var patches []string
+	for i, h := range hashes {
+		parents, err := run(ctx, kRead, src, nil, "rev-list", "--parents", "-n", "1", h)
+		if err != nil {
+			return err
+		}
+		if len(strings.Fields(parents)) > 2 {
+			return fmt.Errorf("%s is a merge commit; merges can't be copied between repositories", short(h))
+		}
+		out, err := run(ctx, kRead, src, nil, "format-patch", "-k", "--binary", "--no-signature",
+			"--start-number", strconv.Itoa(i+1), "-o", tmp, "-1", h)
+		if err != nil {
+			return err
+		}
+		patches = append(patches, strings.Fields(out)...)
+	}
+	_, err = run(ctx, kWrite, dst, nil, append([]string{"am", "-3", "-k", "--keep-cr"}, patches...)...)
+	return err
+}
+
+// sameRepository reports whether two worktrees share one repository.
+func sameRepository(a, b string) bool {
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	_, ca, ok1 := gitDirs(a)
+	_, cb, ok2 := gitDirs(b)
+	return ok1 && ok2 && ca == cb
 }
 
 // ------------------------------------------------------------- undo points

@@ -25,6 +25,9 @@ const (
 	scEditor                // commit message editor
 	scPicker                // theme chooser
 	scReflog                // Commits panel showing the reflog
+	scTags                  // Branches panel, Tags tab
+	scPlan                  // interactive rebase planner
+	scStaging               // line-by-line staging of a file
 	scopes
 )
 
@@ -43,6 +46,9 @@ var scopeTitles = [scopes]string{
 	scEditor:   "Commit message editor",
 	scPicker:   "Theme chooser (T)",
 	scReflog:   "Reflog (] in the Commits panel)",
+	scTags:     "Tags (third tab of the Branches panel)",
+	scPlan:     "Interactive rebase (i in the Commits panel)",
+	scStaging:  "Staging lines (enter on a file)",
 }
 
 type action int
@@ -55,6 +61,7 @@ const (
 	actThemes
 	actErrorDetails
 	actQuit
+	actCdQuit
 
 	// movement (shared by several scopes)
 	actUp
@@ -120,10 +127,19 @@ const (
 	actStashStaged
 	actEdit
 	actToggleDir
+	actRange
+	actHunkMode
+	actSwitchSide
 	actToggleTree
 
 	// branches
 	actToggleRemote
+	actPrevTab
+	actNewTag
+	actDeleteTag
+	actPushTag
+	actDeleteRemoteTag
+	actCheckoutTag
 	actCheckout
 	actNewBranch
 	actDeleteBranch
@@ -143,6 +159,14 @@ const (
 	actRevert
 	actUndoCommit
 	actToggleReflog
+	actCopy
+	actRebasePlan
+	actMoveUp
+	actMoveDown
+	actPick
+	actEditStep
+	actPaste
+	actClearCopied
 	actCheckoutEntry
 	actResetHere
 
@@ -204,6 +228,7 @@ var keymap = [scopes][]binding{
 		b(actPullMany, "pull --ff-only marked (or selected) repositories", "pull", "p"),
 		b(actRescan, "rescan the roots for new and removed repositories", "rescan", "R"),
 		b(actRefreshList, "refresh the status of every repository", "refresh", "r"),
+		b(actCdQuit, "quit and cd into the repository (gn shell function)", "", "o"),
 		b(actQuit, "quit", "quit", "q"),
 	},
 	scFilter: {
@@ -239,6 +264,7 @@ var keymap = [scopes][]binding{
 		b(actUndo, "undo the last history change (again to redo)", "undo", "z"),
 		b(actReload, "reload", "", "ctrl+r"),
 		b(actLazygit, "open in lazygit", "", "L"),
+		b(actCdQuit, "quit and cd into this repository (gn shell function)", "", "o"),
 	},
 	scState: {
 		b(actContinue, "continue after resolving conflicts", "continue", "C"),
@@ -255,7 +281,7 @@ var keymap = [scopes][]binding{
 		b(actStash, "stash all changes", "stash", "s"),
 		b(actStashStaged, "stash staged changes only", "", "S"),
 		b(actEdit, "edit the file", "edit", "e"),
-		b(actToggleDir, "collapse / expand a directory (on files: focus the diff)", "", "enter"),
+		b(actToggleDir, "on a directory: collapse / expand; on a file: stage it line by line", "lines", "enter"),
 		b(actToggleTree, "show files as a tree or a flat list", "tree", "`"),
 	},
 	scBranches: {
@@ -269,7 +295,8 @@ var keymap = [scopes][]binding{
 		b(actFastForward, "fast-forward to upstream without checkout", "fast-forward", "f"),
 		b(actMerge, "merge into the current branch", "merge", "M"),
 		b(actRebase, "rebase the current branch onto it", "rebase", "R"),
-		b(actToggleRemote, "show local / remote branches", "local/remote", "t", "[", "]"),
+		b(actToggleRemote, "next tab: Local, Remote, Tags", "tabs", "]", "t"),
+		b(actPrevTab, "previous tab", "", "["),
 	},
 	scCommits: {
 		b(actSquash, "squash into the parent (both messages)", "squash", "s"),
@@ -278,7 +305,46 @@ var keymap = [scopes][]binding{
 		b(actReword, "reword (full message editor)", "reword", "r"),
 		b(actRevert, "revert the commit", "revert", "t"),
 		b(actUndoCommit, "undo the last commit, keep changes staged", "undo last", "u"),
+		b(actRebasePlan, "interactive rebase from this commit to HEAD (plan, reorder)", "rebase -i", "i"),
+		b(actMoveDown, "move the commit down (older)", "", "ctrl+j"),
+		b(actMoveUp, "move the commit up (newer)", "", "ctrl+k"),
+		b(actCopy, "copy the commit for cherry-pick (again: uncopy)", "copy", "c"),
+		b(actPaste, "paste copied commits onto this branch (also from another repository)", "paste", "v"),
+		b(actClearCopied, "forget the copied commits", "", "C"),
 		b(actToggleReflog, "show HEAD's reflog (every move, with a graph of what changed)", "reflog", "]", "["),
+	},
+	scStaging: {
+		b(actToggleStage, "stage (or, on the staged side, unstage) the line, range or hunk", "stage", " "),
+		b(actDown, "next change line (next hunk in hunk mode)", "", "down", "j"),
+		b(actUp, "previous change line", "", "up", "k"),
+		b(actPageDown, "half page down", "", "ctrl+d", "pgdown"),
+		b(actPageUp, "half page up", "", "ctrl+u", "pgup"),
+		b(actRange, "start / end a range selection", "range", "v"),
+		b(actHunkMode, "select whole hunks / single lines", "hunk", "a"),
+		b(actSwitchSide, "switch between unstaged and staged changes", "staged/unstaged", "tab"),
+		b(actDiscard, "discard the selected unstaged lines", "discard", "d"),
+		b(actBack, "back to the files", "back", "esc", "q"),
+	},
+	scPlan: {
+		b(actUp, "previous commit", "", "up", "k"),
+		b(actDown, "next commit", "", "down", "j"),
+		b(actMoveUp, "move up (newer)", "", "ctrl+k", "K"),
+		b(actMoveDown, "move down (older)", "move", "ctrl+j", "J"),
+		b(actPick, "pick", "pick", "p"),
+		b(actReword, "reword (opens the editor)", "reword", "r"),
+		b(actEditStep, "edit: stop there to change the commit", "edit", "e"),
+		b(actSquash, "squash into the commit below", "squash", "s"),
+		b(actFixup, "fixup into the commit below", "fixup", "f"),
+		b(actDrop, "drop", "drop", "d"),
+		b(actSave, "run the plan", "run", "enter"),
+		b(actCancel, "cancel", "cancel", "esc", "q"),
+	},
+	scTags: {
+		b(actNewTag, "new tag at HEAD (with a message: annotated)", "new", "n"),
+		b(actCheckoutTag, "check out the tag (detached HEAD)", "checkout", " "),
+		b(actPushTag, "push the tag", "push", "P"),
+		b(actDeleteTag, "delete the local tag", "delete", "d"),
+		b(actDeleteRemoteTag, "delete the tag on the remote", "", "D"),
 	},
 	scReflog: {
 		b(actToggleReflog, "back to the commits", "commits", "[", "]"),
@@ -352,7 +418,7 @@ func hints(scs ...scope) string {
 
 // helpLines renders every scope's bindings for the help overlay.
 func helpLines() []string {
-	order := []scope{scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
+	order := []scope{scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scStaging, scPlan, scTags, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
 	var out []string
 	for _, sc := range order {
 		if len(out) > 0 {

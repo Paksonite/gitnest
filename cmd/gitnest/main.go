@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Paksonite/gitnest/internal/config"
 	"github.com/Paksonite/gitnest/internal/gitx"
@@ -31,6 +32,7 @@ Usage:
   gitnest scan            print every repository found
   gitnest theme           list colour themes (also: theme export <name>, theme check <name|file>)
   gitnest completion zsh  print the zsh completion script
+  gitnest shell zsh       print the gn function: gitnest, then cd into the repo you leave with o
   gitnest version         print version information
   gitnest help            show this help
 `
@@ -43,6 +45,10 @@ func main() {
 }
 
 func run(args []string) error {
+	cdFile, args, err := cutCdFile(args)
+	if err != nil {
+		return err
+	}
 	if len(args) > 0 {
 		switch args[0] {
 		case "help", "-h", "--help":
@@ -61,6 +67,8 @@ func run(args []string) error {
 			return completionCmd(args[1:])
 		case "theme", "themes":
 			return themeCmd(args[1:])
+		case "shell":
+			return shellCmd(args[1:])
 		}
 		if len(args) > 1 {
 			return fmt.Errorf("unexpected arguments: %v (see `gitnest help`)", args[1:])
@@ -77,7 +85,28 @@ func run(args []string) error {
 			return err
 		}
 	}
-	return ui.Run(cfg, !existed, startDir)
+	return ui.Run(cfg, !existed, startDir, cdFile)
+}
+
+// cutCdFile removes "--cd-file <path>" (used by the gn shell function) from args.
+func cutCdFile(args []string) (string, []string, error) {
+	var rest []string
+	cdFile := ""
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "--cd-file":
+			if i+1 >= len(args) {
+				return "", nil, fmt.Errorf("--cd-file needs a path")
+			}
+			cdFile = args[i+1]
+			i++
+		case strings.HasPrefix(a, "--cd-file="):
+			cdFile = strings.TrimPrefix(a, "--cd-file=")
+		default:
+			rest = append(rest, a)
+		}
+	}
+	return cdFile, rest, nil
 }
 
 func initConfig(args []string) error {

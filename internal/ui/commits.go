@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"fmt"
 	"hash/fnv"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -75,7 +77,7 @@ const (
 
 // commitRow is a Commits panel row: hash, author initials, the graph, the
 // subject and refs.
-func commitRow(c gitx.Commit, st hashState, g []gcell) rowItem {
+func commitRow(c gitx.Commit, st hashState, g []gcell, copied bool) rowItem {
 	hc := cGreen
 	switch st {
 	case hashPushed:
@@ -89,8 +91,12 @@ func commitRow(c gitx.Commit, st hashState, g []gcell) rowItem {
 	}
 	ini := initials(c.Author)
 	gp, gs := graphText(g)
-	plain := c.Short + " " + ini + " " + gp + " " + c.Subject + refs
-	styled := fg(hc, c.Short) + " " +
+	mark := " "
+	if copied {
+		mark = "▍"
+	}
+	plain := mark + c.Short + " " + ini + " " + gp + " " + c.Subject + refs
+	styled := fg(cAccent, mark) + fg(hc, c.Short) + " " +
 		lipgloss.NewStyle().Bold(true).Foreground(authorColor(c.Author)).Render(ini) + " " +
 		gs + " " + c.Subject + fg(cCyan, refs)
 	return rowItem{plain: plain, styled: styled}
@@ -142,4 +148,84 @@ func (a *App) reflogKey(s string) (tea.Cmd, bool) {
 		return nil, true
 	}
 	return nil, false
+}
+
+// clipboard holds commits copied for cherry-picking; it survives switching
+// repositories, so commits can be pasted into another one.
+type clipboard struct {
+	repo, name string
+	commits    []copiedCommit
+}
+
+type copiedCommit struct {
+	hash, short, subject string
+	order                int // position in the source log: higher is older
+}
+
+func (a *App) isCopied(hash string) bool {
+	if a.copied == nil || a.copied.repo != a.rp.dir {
+		return false
+	}
+	for _, c := range a.copied.commits {
+		if c.hash == hash {
+			return true
+		}
+	}
+	return false
+}
+
+// copyCommit toggles commit i of the open repository in the clipboard.
+// Copying in another repository starts a new clipboard.
+func (a *App) copyCommit(i int) {
+	rp := &a.rp
+	c := rp.commits[i]
+	if a.copied == nil || a.copied.repo != rp.dir {
+		a.copied = &clipboard{repo: rp.dir, name: rp.name}
+	}
+	for k, x := range a.copied.commits {
+		if x.hash == c.Hash {
+			a.copied.commits = append(a.copied.commits[:k], a.copied.commits[k+1:]...)
+			if len(a.copied.commits) == 0 {
+				a.copied = nil
+			}
+			return
+		}
+	}
+	a.copied.commits = append(a.copied.commits, copiedCommit{hash: c.Hash, short: c.Short, subject: c.Subject, order: i})
+}
+
+func (a *App) copiedBadge() string {
+	if a.copied == nil {
+		return ""
+	}
+	return "  " + fg(cAccent, fmt.Sprintf("⎘ %d copied from %s · v pastes", len(a.copied.commits), a.copied.name))
+}
+
+// paste cherry-picks the copied commits, oldest first, onto the current
+// branch of the open repository.
+func (a *App) paste() tea.Cmd {
+	cb := a.copied
+	if cb == nil || len(cb.commits) == 0 {
+		a.setToast("nothing copied — c copies the selected commit", false)
+		return nil
+	}
+	rp := &a.rp
+	dir, ctx, src := rp.dir, a.ctx, cb.repo
+	cs := append([]copiedCommit(nil), cb.commits...)
+	sort.Slice(cs, func(i, j int) bool { return cs[i].order > cs[j].order })
+	hashes := make([]string, len(cs))
+	for i, c := range cs {
+		hashes[i] = c.hash
+	}
+	how := ""
+	if src != dir {
+		how = " (as patches from " + cb.name + ")"
+	}
+	a.confirm(fmt.Sprintf("Cherry-pick %d commit(s) onto %s%s?", len(hashes), rp.info.Branch, how), func() tea.Cmd {
+		a.copied = nil
+		return a.doUndoable(fmt.Sprintf("cherry-pick %d", len(hashes)), func() error {
+			return gitx.CherryPick(ctx, dir, src, hashes)
+		})
+	})
+	return nil
 }

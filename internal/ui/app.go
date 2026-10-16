@@ -4,6 +4,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -58,10 +59,11 @@ type checkMsg struct {
 // --------------------------------------------------------------------- model
 
 type prompt struct {
-	title   string
-	input   []rune
-	confirm bool
-	onOK    func(string) tea.Cmd
+	title      string
+	input      []rune
+	confirm    bool
+	allowEmpty bool // enter with no text is an answer too
+	onOK       func(string) tea.Cmd
 }
 
 type App struct {
@@ -85,6 +87,9 @@ type App struct {
 	theme     theme.Theme // active theme
 	dark      bool        // the dark theme slot is in use
 	themeWarn string      // problem loading themes, shown at start
+	cdFile    string      // gn shell function: write the repository to cd into here
+	copied    *clipboard  // commits copied for cherry-pick
+	plan      *planner    // interactive rebase being planned
 	lastErr   *report     // details of the last failed operation, shown with "!"
 	toast     string
 	toastErr  bool
@@ -92,10 +97,12 @@ type App struct {
 }
 
 // Run starts the TUI. startDir, if non-empty, opens that repository directly.
-func Run(cfg config.Config, noConfig bool, startDir string) error {
+// cdFile, when set, is where "o" writes the chosen repository for the gn
+// shell function to cd into.
+func Run(cfg config.Config, noConfig bool, startDir, cdFile string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	a := &App{ctx: ctx, cfg: cfg, st: state.Load(), noConfig: noConfig, startDir: startDir,
+	a := &App{ctx: ctx, cfg: cfg, st: state.Load(), noConfig: noConfig, startDir: startDir, cdFile: cdFile,
 		scanner: scan.NewScanner(scan.FromConfig(cfg))}
 	a.loadThemes()
 	setIcons(cfg.Icons)
@@ -153,6 +160,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.onStatus(m)
 	case repoTickMsg:
 		return a, a.onRepoTick()
+	case stagingMsg:
+		return a, a.onStaging(m)
 	case repoRefreshMsg:
 		return a, a.onRepoRefresh(m)
 	case tea.FocusMsg:
@@ -227,6 +236,9 @@ func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 	if a.picker != nil {
 		return a.pickerKey(k)
 	}
+	if a.plan != nil {
+		return a.plannerKey(k)
+	}
 	if a.scr == scrRepos && a.rs.filtering {
 		return a.reposKey(k) // every key belongs to the search query, "?" too
 	}
@@ -268,7 +280,7 @@ func (a *App) promptKey(k tea.KeyMsg) tea.Cmd {
 	switch k.Type {
 	case tea.KeyEnter:
 		v := strings.TrimSpace(string(p.input))
-		if v == "" {
+		if v == "" && !p.allowEmpty {
 			return nil
 		}
 		a.p = nil
@@ -427,6 +439,8 @@ func (a *App) View() string {
 		return a.viewReport()
 	case a.picker != nil:
 		return a.viewPicker()
+	case a.plan != nil:
+		return a.viewPlanner()
 	case a.scr == scrRepos:
 		return a.viewRepos()
 	}
@@ -460,4 +474,20 @@ func (a *App) footer(hints string) string {
 		t = fg(cGreen, a.toast)
 	}
 	return fit(t, a.w) + "\n" + fit(fg(cDim, hints), a.w)
+}
+
+// cdQuit leaves gitnest so the gn shell function cds into path.
+func (a *App) cdQuit(path string) tea.Cmd {
+	if path == "" {
+		return nil
+	}
+	if a.cdFile == "" {
+		a.setToast(`o needs the gn shell function: add  eval "$(gitnest shell zsh)"  to ~/.zshrc and start with gn`, true)
+		return nil
+	}
+	if err := os.WriteFile(a.cdFile, []byte(path+"\n"), 0o600); err != nil {
+		a.setToast("writing "+a.cdFile+": "+err.Error(), true)
+		return nil
+	}
+	return tea.Quit
 }

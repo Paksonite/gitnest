@@ -305,3 +305,74 @@ func TestOperationsRecordUndoPoints(t *testing.T) {
 		t.Errorf("undo commit point = %+v", p)
 	}
 }
+
+func plan(h map[string]string, spec ...string) []PlanStep {
+	var steps []PlanStep
+	for _, s := range spec {
+		action, name, _ := strings.Cut(s, " ")
+		steps = append(steps, PlanStep{Hash: h[name], Action: action})
+	}
+	return steps
+}
+
+func TestRebasePlan(t *testing.T) {
+	dir, h := linearRepo(t) // a b c d
+	steps := plan(h, "pick b", "pick d", "reword c", "fixup a")
+	steps[0], steps[1] = PlanStep{Hash: h["a"], Action: "pick"}, PlanStep{Hash: h["c"], Action: ActionReword, Message: "c, reworded\n\nbody"}
+	steps[2], steps[3] = PlanStep{Hash: h["b"], Action: ActionDrop}, PlanStep{Hash: h["d"], Action: "pick"}
+	// a, then c (reworded), drop b, then d
+	if err := RebasePlan(bg, dir, steps); err != nil {
+		t.Fatal(err)
+	}
+	if got := subjects(t, dir); got != "d c, reworded a" {
+		t.Errorf("history: %q", got)
+	}
+	if got := git(t, dir, "log", "-1", "--format=%B", "HEAD~1"); got != "c, reworded\n\nbody" {
+		t.Errorf("reworded message: %q", got)
+	}
+	if p, _ := LastUndo(bg, dir); p == nil || p.Head != h["d"] {
+		t.Errorf("undo point: %+v", p)
+	}
+}
+
+func TestRebasePlanReorderSquashEdit(t *testing.T) {
+	dir, h := linearRepo(t)
+	// move d below c (swap), squash b into a
+	if err := RebasePlan(bg, dir, plan(h, "pick a", "squash b", "pick d", "pick c")); err != nil {
+		t.Fatal(err)
+	}
+	if got := subjects(t, dir); got != "c d a" {
+		t.Errorf("history: %q", got)
+	}
+	dir2, h2 := linearRepo(t)
+	if err := RebasePlan(bg, dir2, plan(h2, "pick b", "edit c", "pick d")); err != ErrStopped {
+		t.Fatalf("edit: err = %v", err)
+	}
+	mustState(t, dir2, StateRebasing)
+	if err := Continue(bg, dir2, StateRebasing); err != nil {
+		t.Fatal(err)
+	}
+	mustState(t, dir2, StateNone)
+}
+
+func TestRebasePlanRefusals(t *testing.T) {
+	dir, h := linearRepo(t)
+	cases := map[string][]PlanStep{
+		"nothing to":       plan(h, "fixup c", "pick d"),
+		"every commit":     plan(h, "pick b", "pick d"), // c missing
+		"unknown plan":     plan(h, "frobnicate d"),
+		"message is empty": {{Hash: h["d"], Action: ActionReword}},
+	}
+	for want, steps := range cases {
+		if err := RebasePlan(bg, dir, steps); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v", want, err)
+		}
+	}
+	if got := git(t, dir, "rev-parse", "HEAD"); got != h["d"] {
+		t.Errorf("HEAD moved")
+	}
+	mdir, mh := mergeRepo(t)
+	if err := RebasePlan(bg, mdir, plan(mh, "pick m1", "pick merge", "pick m2")); err == nil {
+		t.Error("a plan across a merge was accepted")
+	}
+}
