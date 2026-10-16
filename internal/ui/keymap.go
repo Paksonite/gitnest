@@ -213,7 +213,7 @@ var keymap = [scopes][]binding{
 	},
 	scList: {
 		b(actOpen, "open the repository", "open", "enter"),
-		b(actSearch, "search by name (also host, path; @text = branch)", "search", "/"),
+		b(actSearch, "new search by name (also host, path; @text = branch)", "search", "/"),
 		b(actClearSearch, "clear the search", "", "esc"),
 		b(actUp, "move up", "", "up", "k"),
 		b(actDown, "move down", "", "down", "j"),
