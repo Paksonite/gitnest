@@ -26,6 +26,9 @@ Usage:
   gitnest                 open the repository list
   gitnest <path>          open the repository containing <path>
   gitnest init [--force]  write a default config to %s
+  gitnest roots           list the directories scanned for repositories
+  gitnest roots add <dir> scan <dir> (and rm <dir> to stop)
+  gitnest scan            print every repository found
   gitnest version         print version information
   gitnest help            show this help
 `
@@ -48,6 +51,10 @@ func run(args []string) error {
 			return nil
 		case "init":
 			return initConfig(args[1:])
+		case "roots":
+			return rootsCmd(args[1:])
+		case "scan":
+			return scanCmd(args[1:])
 		}
 		if len(args) > 1 {
 			return fmt.Errorf("unexpected arguments: %v (see `gitnest help`)", args[1:])

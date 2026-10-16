@@ -23,9 +23,9 @@ const (
 // ----------------------------------------------------------------- messages
 
 type reposMsg struct {
-	repos     []scan.Repo
-	scanned   bool
-	fromCache bool
+	repos  []scan.Repo
+	paths  []string // repository paths when the list came from a scan or its cache
+	cached bool     // paths came from the scan cache; a rescan should follow
 }
 type previewMsg struct{ path, text string }
 type repoDataMsg struct {
@@ -58,6 +58,7 @@ type prompt struct {
 
 type App struct {
 	ctx      context.Context // canceled when the UI exits; kills running git commands
+	scanner  *scan.Scanner
 	cfg      config.Config
 	st       *state.State
 	noConfig bool
@@ -80,19 +81,21 @@ func Run(cfg config.Config, noConfig bool, startDir string) error {
 	applyTheme(cfg)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	a := &App{ctx: ctx, cfg: cfg, st: state.Load(), noConfig: noConfig, startDir: startDir}
+	a := &App{ctx: ctx, cfg: cfg, st: state.Load(), noConfig: noConfig, startDir: startDir,
+		scanner: scan.NewScanner(scan.FromConfig(cfg))}
 	a.rs.marked = map[string]bool{}
+	a.rs.isNew = map[string]bool{}
 	_, err := tea.NewProgram(a, tea.WithAltScreen()).Run()
 	return err
 }
 
 func (a *App) Init() tea.Cmd {
-	cmds := []tea.Cmd{a.loadRepos(false)}
+	cmds := []tea.Cmd{a.loadRepos(), a.rescanTick(), a.statusTick()}
 	if a.startDir != "" {
 		cmds = append(cmds, a.openDir(a.startDir))
 	}
 	if a.noConfig {
-		a.setToast("no config yet — run `gitnest init` to create "+config.Path(), false)
+		a.setToast("no config yet — choose directories with: gitnest roots add ~/repos", false)
 	}
 	return tea.Batch(cmds...)
 }
@@ -103,6 +106,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.w, a.h = m.Width, m.Height
 	case reposMsg:
 		return a, a.onRepos(m)
+	case scanMsg:
+		return a, a.onScan(m)
+	case statusMsg:
+		return a, a.onStatus(m)
+	case rescanTickMsg:
+		return a, a.onRescanTick()
+	case statusTickMsg:
+		return a, a.onStatusTick()
 	case previewMsg:
 		if m.path == a.rs.previewPath {
 			a.rs.preview = m.text
@@ -316,7 +327,7 @@ func (a *App) viewPrompt() string {
 const helpText = `gitnest — keys
 
 Repository list
-  enter open repo       / search          d dirty only
+  enter open repo       / search          d dirty only   ✦ new since start
   space mark            f fetch (marked or all)
   p pull --ff-only (marked or selected)
   R rescan roots        r refresh status  q quit

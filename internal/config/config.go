@@ -2,6 +2,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,24 +16,37 @@ type Theme struct {
 }
 
 type Config struct {
-	Roots      []string `yaml:"roots"`
-	Depth      int      `yaml:"depth"`
-	Exclude    []string `yaml:"exclude"`
-	SkipHidden bool     `yaml:"skip_hidden"`
-	Jobs       int      `yaml:"jobs"`
-	Editor     string   `yaml:"editor"`
-	Theme      Theme    `yaml:"theme"`
+	Roots          []string `yaml:"roots"`
+	Depth          int      `yaml:"depth"`
+	Exclude        []string `yaml:"exclude"`
+	SkipHidden     bool     `yaml:"skip_hidden"`
+	Nested         bool     `yaml:"nested"`
+	FollowSymlinks bool     `yaml:"follow_symlinks"`
+	RescanInterval int      `yaml:"rescan_interval"` // seconds, 0 disables
+	StatusInterval int      `yaml:"status_interval"` // seconds, 0 disables
+	Jobs           int      `yaml:"jobs"`
+	Editor         string   `yaml:"editor"`
+	Theme          Theme    `yaml:"theme"`
 }
 
 const template = `# gitnest configuration
-# Directories scanned for git repositories.
-roots:
-%s# How many directory levels below each root to search.
+# Directories scanned for git repositories. Manage them with:
+#   gitnest roots add ~/repos    gitnest roots rm ~/repos    gitnest roots
+roots: %s
+# How many directory levels below each root to search.
 depth: 4
 # Directory names that are never descended into.
 exclude: [node_modules, vendor, .terraform, .venv, Library, .Trash]
 # Skip directories starting with "." (the roots themselves are always scanned).
 skip_hidden: true
+# Also look for repositories inside other repositories (submodules excluded).
+nested: false
+# Follow symlinked directories while scanning.
+follow_symlinks: false
+# Seconds between background scans for new or removed repositories (0 = off).
+rescan_interval: 60
+# Seconds between status refreshes of the repositories on screen (0 = off).
+status_interval: 15
 # Parallel git processes used for scanning, fetch and pull.
 jobs: 8
 # Editor used by "e" (empty = $VISUAL, then $EDITOR, then vi).
@@ -53,17 +67,31 @@ func Dir() string {
 // Path returns the config file path.
 func Path() string { return filepath.Join(Dir(), "config.yaml") }
 
-func detectRoots() []string {
+// rootCandidates are common project directories under $HOME. The home
+// directory itself is never used: scanning it is slow and on macOS triggers
+// privacy prompts for Desktop, Documents and Downloads.
+var rootCandidates = []string{"code", "dev", "Developer", "projects", "Projects", "src", "work", "workspace", "repos", "git"}
+
+// DetectRoots returns the candidate project directories that exist.
+func DetectRoots() []string {
 	h, _ := os.UserHomeDir()
 	var roots []string
-	for _, n := range []string{"code", "dev", "Developer", "projects", "src", "work", "repos", "git"} {
+	seen := map[string]bool{}
+	for _, n := range rootCandidates {
 		p := filepath.Join(h, n)
-		if st, err := os.Stat(p); err == nil && st.IsDir() {
+		st, err := os.Stat(p)
+		if err != nil || !st.IsDir() {
+			continue
+		}
+		// APFS is case-insensitive by default: Projects and projects are one dir.
+		key := strings.ToLower(p)
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			key = strings.ToLower(real)
+		}
+		if !seen[key] {
+			seen[key] = true
 			roots = append(roots, p)
 		}
-	}
-	if len(roots) == 0 {
-		roots = []string{h}
 	}
 	return roots
 }
@@ -71,25 +99,37 @@ func detectRoots() []string {
 // Default returns the built-in configuration.
 func Default() Config {
 	return Config{
-		Roots:      detectRoots(),
-		Depth:      4,
-		Exclude:    []string{"node_modules", "vendor", ".terraform", ".venv", "Library", ".Trash"},
-		SkipHidden: true,
-		Jobs:       8,
-		Theme:      Theme{Accent: "#cba6f7"},
+		Roots:          DetectRoots(),
+		Depth:          4,
+		Exclude:        []string{"node_modules", "vendor", ".terraform", ".venv", "Library", ".Trash"},
+		SkipHidden:     true,
+		RescanInterval: 60,
+		StatusInterval: 15,
+		Jobs:           8,
+		Theme:          Theme{Accent: "#cba6f7"},
 	}
 }
 
-func expand(p string) string {
+// Expand turns "~" and "~/x" into absolute paths under $HOME and cleans the result.
+func Expand(p string) string {
 	if p == "~" || strings.HasPrefix(p, "~/") {
 		h, _ := os.UserHomeDir()
-		return filepath.Join(h, strings.TrimPrefix(p, "~"))
+		p = filepath.Join(h, strings.TrimPrefix(p, "~"))
+	}
+	return filepath.Clean(p)
+}
+
+// Abbrev is the inverse of Expand: paths under $HOME are written with "~".
+func Abbrev(p string) string {
+	h, _ := os.UserHomeDir()
+	if h != "" && (p == h || strings.HasPrefix(p, h+string(filepath.Separator))) {
+		return "~" + strings.TrimPrefix(p, h)
 	}
 	return p
 }
 
 // Load reads the config file. The bool reports whether a file existed;
-// when it did not, defaults are returned.
+// when it did not, defaults (with detected roots) are returned.
 func Load() (Config, bool, error) {
 	cfg := Default()
 	b, err := os.ReadFile(Path())
@@ -99,6 +139,7 @@ func Load() (Config, bool, error) {
 		}
 		return cfg, false, err
 	}
+	cfg.Roots = nil // an existing file is authoritative, even with no roots
 	if err := yaml.Unmarshal(b, &cfg); err != nil {
 		return cfg, true, fmt.Errorf("%s: %w", Path(), err)
 	}
@@ -108,11 +149,14 @@ func Load() (Config, bool, error) {
 	if cfg.Jobs <= 0 {
 		cfg.Jobs = 8
 	}
-	if len(cfg.Roots) == 0 {
-		cfg.Roots = detectRoots()
+	if cfg.RescanInterval < 0 {
+		cfg.RescanInterval = 0
+	}
+	if cfg.StatusInterval < 0 {
+		cfg.StatusInterval = 0
 	}
 	for i, r := range cfg.Roots {
-		cfg.Roots[i] = expand(r)
+		cfg.Roots[i] = Expand(r)
 	}
 	return cfg, true, nil
 }
@@ -124,12 +168,64 @@ func Init(force bool) (string, error) {
 	if _, err := os.Stat(path); err == nil && !force {
 		return path, os.ErrExist
 	}
+	return path, writeTemplate(DetectRoots())
+}
+
+func writeTemplate(roots []string) error {
 	if err := os.MkdirAll(Dir(), 0o755); err != nil {
-		return path, err
+		return err
 	}
-	var roots strings.Builder
-	for _, r := range detectRoots() {
-		fmt.Fprintf(&roots, "  - %q\n", r)
+	list := "[]"
+	if len(roots) > 0 {
+		var b strings.Builder
+		for _, r := range roots {
+			fmt.Fprintf(&b, "\n  - %q", Abbrev(r))
+		}
+		list = b.String()
 	}
-	return path, os.WriteFile(path, []byte(fmt.Sprintf(template, roots.String())), 0o644)
+	return os.WriteFile(Path(), []byte(fmt.Sprintf(template, list)), 0o644)
+}
+
+// SetRoots replaces the roots in the config file, keeping everything else
+// (including comments). It creates the file from the template if needed.
+func SetRoots(roots []string) error {
+	b, err := os.ReadFile(Path())
+	if os.IsNotExist(err) {
+		return writeTemplate(roots)
+	}
+	if err != nil {
+		return err
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		return fmt.Errorf("%s: %w", Path(), err)
+	}
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return fmt.Errorf("%s: expected a YAML mapping", Path())
+	}
+	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+	for _, r := range roots {
+		seq.Content = append(seq.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: Abbrev(r), Style: yaml.DoubleQuotedStyle})
+	}
+	m := doc.Content[0]
+	found := false
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == "roots" {
+			old := m.Content[i+1]
+			seq.LineComment, seq.FootComment = old.LineComment, old.FootComment
+			m.Content[i+1] = seq
+			found = true
+			break
+		}
+	}
+	if !found {
+		m.Content = append([]*yaml.Node{{Kind: yaml.ScalarNode, Tag: "!!str", Value: "roots"}, seq}, m.Content...)
+	}
+	var out bytes.Buffer
+	enc := yaml.NewEncoder(&out)
+	enc.SetIndent(2)
+	if err := enc.Encode(&doc); err != nil {
+		return err
+	}
+	return os.WriteFile(Path(), out.Bytes(), 0o644)
 }

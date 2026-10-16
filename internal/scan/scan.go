@@ -3,62 +3,13 @@ package scan
 
 import (
 	"context"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 
 	"github.com/Paksonite/gitnest/internal/gitx"
 )
-
-// Find walks the roots (up to depth levels) and returns repository directories.
-// It does not descend into repositories it finds.
-func Find(roots []string, depth int, exclude []string, skipHidden bool) []string {
-	ex := map[string]bool{}
-	for _, e := range exclude {
-		ex[e] = true
-	}
-	seen := map[string]bool{}
-	var out []string
-	sep := string(filepath.Separator)
-	for _, root := range roots {
-		root = filepath.Clean(root)
-		base := strings.Count(root, sep)
-		_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-			if err != nil {
-				if d != nil && d.IsDir() {
-					return fs.SkipDir
-				}
-				return nil
-			}
-			if !d.IsDir() {
-				return nil
-			}
-			if p != root {
-				name := d.Name()
-				if ex[name] || (skipHidden && strings.HasPrefix(name, ".")) {
-					return fs.SkipDir
-				}
-				if strings.Count(p, sep)-base > depth {
-					return fs.SkipDir
-				}
-			}
-			if _, e := os.Stat(filepath.Join(p, ".git")); e == nil {
-				if !seen[p] {
-					seen[p] = true
-					out = append(out, p)
-				}
-				return fs.SkipDir
-			}
-			return nil
-		})
-	}
-	sort.Strings(out)
-	return out
-}
 
 type Repo struct {
 	Path string
@@ -86,8 +37,16 @@ func ForEach(n, jobs int, fn func(i int)) {
 	wg.Wait()
 }
 
-// Gather collects status for every path and sorts: recently used, then newest commit.
+// Gather collects status for every path and sorts the result with Sort.
 func Gather(ctx context.Context, paths []string, jobs int, recent map[string]int64) []Repo {
+	out := Status(ctx, paths, jobs, recent)
+	Sort(out)
+	return out
+}
+
+// Status collects status for every path in parallel, keeping the input order.
+// Paths that are no longer repositories are left out.
+func Status(ctx context.Context, paths []string, jobs int, recent map[string]int64) []Repo {
 	res := make([]Repo, len(paths))
 	ok := make([]bool, len(paths))
 	ForEach(len(paths), jobs, func(i int) {
@@ -104,8 +63,13 @@ func Gather(ctx context.Context, paths []string, jobs int, recent map[string]int
 			out = append(out, res[i])
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		a, b := out[i], out[j]
+	return out
+}
+
+// Sort orders repos: recently opened in gitnest first, then newest commit, then name.
+func Sort(repos []Repo) {
+	sort.SliceStable(repos, func(i, j int) bool {
+		a, b := repos[i], repos[j]
 		if a.Used != b.Used {
 			return a.Used > b.Used
 		}
@@ -114,7 +78,6 @@ func Gather(ctx context.Context, paths []string, jobs int, recent map[string]int
 		}
 		return a.Name < b.Name
 	})
-	return out
 }
 
 // RunAll runs fn on every path in parallel and returns how many calls failed.

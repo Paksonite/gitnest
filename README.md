@@ -39,8 +39,9 @@ make install   # installs to ~/.local/bin
 ## Usage
 
 ```sh
-gitnest init     # write ~/.config/gitnest/config.yaml, then edit `roots`
+gitnest roots add ~/repos   # directories to scan (also: gitnest roots, gitnest roots rm <dir>)
 gitnest          # repository list
+gitnest scan     # print every repository found
 gitnest .        # open the repository you are in
 gitnest version
 ```
@@ -55,11 +56,23 @@ roots:            # directories scanned for repositories
 depth: 4          # how deep below each root to look
 exclude: [node_modules, vendor, .terraform, .venv, Library, .Trash]
 skip_hidden: true
+nested: false     # also find repositories inside repositories (not submodules)
+follow_symlinks: false
+rescan_interval: 60   # seconds between background scans for new clones (0 = off)
+status_interval: 15   # seconds between status refreshes of visible rows (0 = off)
 jobs: 8           # parallel git processes
 editor: ""        # empty = $VISUAL, then $EDITOR, then vi
 theme:
   accent: "#cba6f7"
 ```
+
+Without a config file gitnest scans the usual project directories that exist
+(`~/code`, `~/dev`, `~/Developer`, `~/projects`, `~/src`, `~/work`,
+`~/workspace`, `~/repos`, `~/git`), never your whole home directory.
+
+New clones are picked up automatically: background scans only re-read
+directories whose modification time changed, so they stay cheap. Press `R` for
+a full rescan.
 
 ## Releasing
 
