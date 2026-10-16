@@ -592,11 +592,6 @@ func (a *App) viewRepo() string {
 	}
 	mainW := a.w - leftW
 
-	const collapsed = 3
-	focH := bodyH - 3*collapsed
-	if focH < 5 {
-		focH = 5
-	}
 	branchTitle := "[2] Branches (local)"
 	if rp.showRemote {
 		branchTitle = "[2] Branches (remote)"
@@ -607,20 +602,16 @@ func (a *App) viewRepo() string {
 		fmt.Sprintf("[3] Commits (%d)", len(rp.commits)),
 		fmt.Sprintf("[4] Stash (%d)", len(rp.stashes)),
 	}
+	heights := panelHeights(bodyH, rp.focus, [4]int{rp.count(0), rp.count(1), rp.count(2), rp.count(3)})
 	panels := make([]string, 4)
 	for i := 0; i < 4; i++ {
-		h := collapsed
-		if i == rp.focus {
-			h = focH
-		}
+		lh := heights[i] - 3 // borders and the title row
 		var lines []string
-		if h > collapsed {
-			items := a.panelItems(i)
-			lh := h - 3
+		if lh > 0 {
 			rp.off[i] = scrollTo(rp.cur[i], rp.off[i], lh)
-			lines = renderRows(items, rp.cur[i], rp.off[i], lh, leftW-2, true)
+			lines = renderRows(a.panelItems(i), rp.cur[i], rp.off[i], lh, leftW-2, i == rp.focus)
 		}
-		panels[i] = panel(titles[i], lines, leftW, h, i == rp.focus)
+		panels[i] = panel(titles[i], lines, leftW, heights[i], i == rp.focus)
 	}
 	left := lipgloss.JoinVertical(lipgloss.Left, panels...)
 
@@ -676,4 +667,39 @@ func (a *App) undoLast() tea.Cmd {
 		})
 	})
 	return nil
+}
+
+// panelHeights splits the left column between the four panels the way
+// lazygit does: every panel shows its items, the focused one gets the most
+// room, and panels with few items give their unused rows away.
+func panelHeights(total, focus int, counts [4]int) [4]int {
+	const minH = 3 // border + title, no rows
+	var h [4]int
+	for i := range h {
+		h[i] = minH
+	}
+	if total < 4*minH+4 { // tiny terminal: only the focused panel shows rows
+		h[focus] = clamp(total-3*minH, minH, 1<<30)
+		return h
+	}
+	rest := total - 4*minH
+	h[focus] += rest * 45 / 100 // the focused panel always gets a good share
+	rest -= h[focus] - minH
+	// Hand out the remaining rows one at a time to the other panels that
+	// still have items to show, never making one taller than the focused one.
+	for rest > 0 {
+		gave := false
+		for i := range h {
+			if rest > 0 && i != focus && h[i]-minH < counts[i] && h[i] < h[focus] {
+				h[i]++
+				rest--
+				gave = true
+			}
+		}
+		if !gave {
+			break
+		}
+	}
+	h[focus] += rest // nobody else needs them
+	return h
 }

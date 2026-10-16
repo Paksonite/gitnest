@@ -154,3 +154,35 @@ func TestSequencerState(t *testing.T) {
 		t.Errorf("revert: %v", got)
 	}
 }
+
+func TestRemoteHost(t *testing.T) {
+	cases := map[string]string{
+		"git@gitea.devops.ps.oktawave.com:Oktawave-GCP/org-core-dns.git": "gitea.devops.ps.oktawave.com",
+		"ssh://git@forgejo.int.waveops.pl/Ansible/role.git":              "forgejo.int.waveops.pl",
+		"ssh://git@Host.Example:2222/x.git":                              "host.example",
+		"https://github.com/GoogleCloudPlatform/cloud-foundation-fabric": "github.com",
+		"https://user:pw@gitlab.com/a/b.git":                             "gitlab.com",
+		"/srv/git/x.git":                                                 "",
+		"../other":                                                       "",
+		"file:///srv/git/x.git":                                          "",
+		"":                                                               "",
+	}
+	for url, want := range cases {
+		if got := RemoteHost(url); got != want {
+			t.Errorf("RemoteHost(%q) = %q, want %q", url, got, want)
+		}
+	}
+}
+
+func TestPickRemote(t *testing.T) {
+	out := "remote.upstream.url https://a/x\nremote.origin.url git@b:x\n"
+	if got := pickRemote(out); got != "git@b:x" {
+		t.Errorf("got %q", got)
+	}
+	if got := pickRemote("remote.upstream.url https://a/x\n"); got != "https://a/x" {
+		t.Errorf("fallback: %q", got)
+	}
+	if got := pickRemote(""); got != "" {
+		t.Errorf("empty: %q", got)
+	}
+}
