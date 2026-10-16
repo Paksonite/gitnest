@@ -122,8 +122,14 @@ func TestBranchTabsAndTags(t *testing.T) {
 
 func TestCdQuit(t *testing.T) {
 	a := testApp("/r/one")
-	if cmd := a.cdQuit("/r/one"); cmd != nil || !strings.Contains(a.toast, "gitnest shell zsh") {
-		t.Errorf("without gn: cmd=%v toast=%q", cmd != nil, a.toast)
+	for shell, want := range map[string]string{
+		"/bin/zsh":      `eval "$(gitnest shell zsh)"  to ~/.zshrc`,
+		"/usr/bin/bash": `eval "$(gitnest shell bash)"  to ~/.bashrc`,
+	} {
+		t.Setenv("SHELL", shell)
+		if cmd := a.cdQuit("/r/one"); cmd != nil || !strings.Contains(a.toast, want) {
+			t.Errorf("without gn in %s: cmd=%v toast=%q", shell, cmd != nil, a.toast)
+		}
 	}
 	a.cdFile = filepath.Join(t.TempDir(), "cd")
 	a.reposKey(key("o"))

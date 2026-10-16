@@ -7,7 +7,8 @@ import (
 
 // zshCompletion completes subcommands, directories for `gitnest <path>` and
 // `roots add`, and the configured roots for `roots rm`. It works both from a
-// file named _gitnest on $fpath and when evaluated directly:
+// file named _gitnest on $fpath and when evaluated directly, before or
+// after compinit:
 //
 //	eval "$(gitnest completion zsh)"
 const zshCompletion = `#compdef gitnest
@@ -83,8 +84,20 @@ _gitnest() {
 
 if [[ ${funcstack[1]} == _gitnest ]]; then
   _gitnest "$@"
-else
+elif (( $+functions[compdef] )); then
   compdef _gitnest gitnest
+else
+  # compinit hasn't run yet: the eval comes before it in ~/.zshrc (e.g.
+  # above oh-my-zsh). Register at the first prompt, when it has.
+  _gitnest_compdef() {
+    add-zsh-hook -d precmd _gitnest_compdef
+    if (( $+functions[compdef] )); then
+      compdef _gitnest gitnest
+      if (( $+functions[gn] )); then compdef gn=gitnest; fi
+    fi
+  }
+  autoload -Uz add-zsh-hook
+  add-zsh-hook precmd _gitnest_compdef
 fi
 `
 
