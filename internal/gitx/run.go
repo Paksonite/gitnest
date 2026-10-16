@@ -8,8 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -145,6 +147,37 @@ func run(ctx context.Context, k kind, dir string, env []string, args ...string) 
 		return out.String(), ge
 	}
 	return out.String(), nil
+}
+
+// colorConfig holds extra "-c key=value" settings for coloured output, set
+// from the colour theme (see SetColors).
+var colorConfig atomic.Value // []string
+
+// SetColors makes diffs, logs and status use the given git colours, e.g.
+// {"color.diff.new": "#a6e3a1"}. Empty values are skipped; nil restores
+// the user's own git colours.
+func SetColors(colors map[string]string) {
+	var args []string
+	keys := make([]string, 0, len(colors))
+	for k := range colors {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if colors[k] != "" {
+			args = append(args, "-c", k+"="+colors[k])
+		}
+	}
+	colorConfig.Store(args)
+}
+
+// colored prefixes a git command with forced colour and the theme's colours.
+func colored(args ...string) []string {
+	out := []string{"-c", "color.ui=always"}
+	if extra, _ := colorConfig.Load().([]string); len(extra) > 0 {
+		out = append(out, extra...)
+	}
+	return append(out, args...)
 }
 
 func firstLines(s string, n int) string {

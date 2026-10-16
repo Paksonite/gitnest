@@ -29,6 +29,7 @@ Usage:
   gitnest roots           list the directories scanned for repositories
   gitnest roots add <dir> scan <dir> (and rm <dir> to stop)
   gitnest scan            print every repository found
+  gitnest theme           list colour themes (also: theme export <name>, theme check <name|file>)
   gitnest completion zsh  print the zsh completion script
   gitnest version         print version information
   gitnest help            show this help
@@ -58,6 +59,8 @@ func run(args []string) error {
 			return scanCmd(args[1:])
 		case "completion":
 			return completionCmd(args[1:])
+		case "theme", "themes":
+			return themeCmd(args[1:])
 		}
 		if len(args) > 1 {
 			return fmt.Errorf("unexpected arguments: %v (see `gitnest help`)", args[1:])

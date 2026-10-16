@@ -264,16 +264,16 @@ func parseFiles(out string) []File {
 func DiffFile(ctx context.Context, dir string, f File) string {
 	var b strings.Builder
 	if f.Untracked() {
-		out, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "diff", "--no-index", "--", "/dev/null", f.Path)
+		out, _ := run(ctx, kRead, dir, nil, colored("diff", "--no-index", "--", "/dev/null", f.Path)...)
 		return limitLines(out, 5000)
 	}
 	if f.Staged() {
-		if o, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "diff", "--cached", "--", f.Path); o != "" {
+		if o, _ := run(ctx, kRead, dir, nil, colored("diff", "--cached", "--", f.Path)...); o != "" {
 			b.WriteString("── staged ──\n" + o)
 		}
 	}
 	if f.Unstaged() {
-		if o, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "diff", "--", f.Path); o != "" {
+		if o, _ := run(ctx, kRead, dir, nil, colored("diff", "--", f.Path)...); o != "" {
 			b.WriteString("── unstaged ──\n" + o)
 		}
 	}
@@ -287,10 +287,10 @@ func DiffFile(ctx context.Context, dir string, f File) string {
 // lists its untracked files.
 func DiffDir(ctx context.Context, dir, path string, untracked []string) string {
 	var b strings.Builder
-	if o, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "diff", "--cached", "--", path); o != "" {
+	if o, _ := run(ctx, kRead, dir, nil, colored("diff", "--cached", "--", path)...); o != "" {
 		b.WriteString("── staged ──\n" + o)
 	}
-	if o, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "diff", "--", path); o != "" {
+	if o, _ := run(ctx, kRead, dir, nil, colored("diff", "--", path)...); o != "" {
 		b.WriteString("── unstaged ──\n" + o)
 	}
 	if len(untracked) > 0 {
@@ -383,7 +383,7 @@ func Unpushed(ctx context.Context, dir string) map[string]bool {
 }
 
 func Show(ctx context.Context, dir, hash string) string {
-	out, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "show", "--stat", "--patch", hash)
+	out, _ := run(ctx, kRead, dir, nil, colored("show", "--stat", "--patch", hash)...)
 	return limitLines(out, 5000)
 }
 
@@ -449,7 +449,7 @@ func Branches(ctx context.Context, dir string) (local, remote []Branch, err erro
 }
 
 func BranchLog(ctx context.Context, dir, name string) string {
-	out, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "log", "--graph", "--oneline", "--decorate", "-n", "60", name)
+	out, _ := run(ctx, kRead, dir, nil, colored("log", "--graph", "--oneline", "--decorate", "-n", "60", name)...)
 	return out
 }
 
@@ -681,7 +681,7 @@ func StashDrop(ctx context.Context, dir, ref string) error {
 }
 
 func StashShow(ctx context.Context, dir, ref string) string {
-	out, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "stash", "show", "-p", ref)
+	out, _ := run(ctx, kRead, dir, nil, colored("stash", "show", "-p", ref)...)
 	return limitLines(out, 5000)
 }
 
@@ -690,10 +690,10 @@ func StashShow(ctx context.Context, dir, ref string) string {
 // Preview is the right-hand pane of the repository list.
 func Preview(ctx context.Context, dir string) string {
 	var b strings.Builder
-	o, _ := run(ctx, kRead, dir, nil, "-c", "color.ui=always", "status", "-sb")
+	o, _ := run(ctx, kRead, dir, nil, colored("status", "-sb")...)
 	b.WriteString(o)
 	b.WriteString("\n")
-	o, _ = run(ctx, kRead, dir, nil, "-c", "color.ui=always", "log", "--oneline", "--decorate", "-n", "15")
+	o, _ = run(ctx, kRead, dir, nil, colored("log", "--oneline", "--decorate", "-n", "15")...)
 	b.WriteString(o)
 	return b.String()
 }

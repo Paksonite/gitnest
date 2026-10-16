@@ -23,6 +23,7 @@ const (
 	scMain                  // the focused diff/log panel
 	scOverlay               // report / help overlay
 	scEditor                // commit message editor
+	scPicker                // theme chooser
 	scopes
 )
 
@@ -39,6 +40,7 @@ var scopeTitles = [scopes]string{
 	scMain:     "Diff panel (after enter)",
 	scOverlay:  "Help and reports",
 	scEditor:   "Commit message editor",
+	scPicker:   "Theme chooser (T)",
 }
 
 type action int
@@ -48,6 +50,7 @@ const (
 
 	// global
 	actHelp
+	actThemes
 	actErrorDetails
 	actQuit
 
@@ -164,8 +167,17 @@ func b(act action, help, hint string, keys ...string) binding {
 }
 
 var keymap = [scopes][]binding{
+	scPicker: {
+		b(actUp, "previous theme (previewed at once)", "", "up", "k"),
+		b(actDown, "next theme (previewed at once)", "", "down", "j"),
+		b(actTop, "first theme", "", "home", "g"),
+		b(actBottom, "last theme", "", "end", "G"),
+		b(actSave, "use and save the theme", "save", "enter"),
+		b(actCancel, "keep the previous theme", "cancel", "esc", "q"),
+	},
 	scGlobal: {
 		b(actHelp, "show all keys", "help", "?"),
+		b(actThemes, "choose the colour theme (live preview)", "", "T"),
 		b(actErrorDetails, "full output of the last failed git command", "", "!"),
 		b(actQuit, "quit", "", "ctrl+c"),
 	},
@@ -328,7 +340,7 @@ func hints(scs ...scope) string {
 
 // helpLines renders every scope's bindings for the help overlay.
 func helpLines() []string {
-	order := []scope{scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scState, scMain, scEditor, scOverlay, scGlobal}
+	order := []scope{scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
 	var out []string
 	for _, sc := range order {
 		if len(out) > 0 {

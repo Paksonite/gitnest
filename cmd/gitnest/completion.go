@@ -20,6 +20,7 @@ _gitnest() {
     'init:write a default config file'
     'version:print version information'
     'help:show usage'
+    'theme:list, export or check colour themes'
     'completion:print a shell completion script'
   )
   roots_cmds=(
@@ -52,6 +53,21 @@ _gitnest() {
       ;;
     init)
       _arguments '--force[overwrite an existing config file]'
+      ;;
+    theme|themes)
+      if (( CURRENT == 3 )); then
+        local -a theme_cmds
+        theme_cmds=('list:list themes' 'export:print a theme as a template' 'check:check a theme for readability')
+        _describe -t commands 'theme command' theme_cmds
+      elif (( CURRENT == 4 )); then
+        local -a names
+        names=(${(f)"$(gitnest theme list 2>/dev/null | awk 'NF && $1 != "mode:" {print $1}')"})
+        if [[ ${words[3]} == check ]]; then
+          _alternative 'themes:theme:(( ${names} ))' 'files:theme file:_files -g "*.y(a|)ml"'
+        else
+          compadd -a names
+        fi
+      fi
       ;;
     completion)
       (( CURRENT == 3 )) && compadd zsh

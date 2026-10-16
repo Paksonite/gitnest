@@ -10,6 +10,7 @@ import (
 
 	"github.com/Paksonite/gitnest/internal/gitx"
 	"github.com/Paksonite/gitnest/internal/scan"
+	"github.com/Paksonite/gitnest/internal/theme"
 )
 
 // checkFrame fails when a rendered frame is wider or taller than the window.
@@ -74,6 +75,10 @@ func TestViewsFitAnyWindow(t *testing.T) {
 		a.report = nil
 		a.openEditor("Commit", "subject\n\nbody", func(string) tea.Cmd { return nil })
 		checkFrame(t, "editor", a, a.View())
+		a.ed = nil
+		a.themes, _ = theme.Load(t.TempDir())
+		a.openPicker()
+		checkFrame(t, "themes", a, a.View())
 	}
 }
 
