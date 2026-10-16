@@ -146,8 +146,15 @@ func (a *App) loadThemes() {
 	}
 }
 
+// Init starts a single App on its own (the program runs a Shell, see panes.go).
 func (a *App) Init() tea.Cmd {
-	cmds := []tea.Cmd{a.loadRepos(), a.rescanTick(), a.statusTick(), repoTick()}
+	return tea.Batch(a.startCmds(), a.rescanTick(), a.statusTick())
+}
+
+// startCmds loads the repository list, starts the live refresh, opens the
+// start directory and shows start-up notes.
+func (a *App) startCmds() tea.Cmd {
+	cmds := []tea.Cmd{a.loadRepos(), repoTick()}
 	if a.startDir != "" {
 		cmds = append(cmds, a.openDir(a.startDir))
 	}

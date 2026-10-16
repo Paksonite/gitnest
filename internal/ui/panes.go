@@ -103,17 +103,7 @@ func mapCmd(cmd tea.Cmd, f func(tea.Msg) tea.Msg) tea.Cmd {
 
 func (s *Shell) Init() tea.Cmd {
 	a := s.panes[0].app
-	cmds := []tea.Cmd{a.loadRepos(), repoTick()}
-	if a.startDir != "" {
-		cmds = append(cmds, a.openDir(a.startDir))
-	}
-	if a.noConfig {
-		a.setToast("no config yet — choose directories with: gitnest roots add ~/repos", false)
-	}
-	if a.themeWarn != "" {
-		a.setToast(a.themeWarn, true)
-	}
-	return tea.Batch(wrap(0, tea.Batch(cmds...)), shellRescanTick(a), shellStatusTick(a))
+	return tea.Batch(wrap(s.panes[0].id, a.startCmds()), shellRescanTick(a), shellStatusTick(a))
 }
 
 // broadcast lists the messages about the shared repository list: every
