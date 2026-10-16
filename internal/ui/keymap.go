@@ -25,6 +25,7 @@ const (
 	scEditor                // commit message editor
 	scPicker                // theme chooser
 	scReflog                // Commits panel showing the reflog
+	scTags                  // Branches panel, Tags tab
 	scopes
 )
 
@@ -43,6 +44,7 @@ var scopeTitles = [scopes]string{
 	scEditor:   "Commit message editor",
 	scPicker:   "Theme chooser (T)",
 	scReflog:   "Reflog (] in the Commits panel)",
+	scTags:     "Tags (third tab of the Branches panel)",
 }
 
 type action int
@@ -124,6 +126,12 @@ const (
 
 	// branches
 	actToggleRemote
+	actPrevTab
+	actNewTag
+	actDeleteTag
+	actPushTag
+	actDeleteRemoteTag
+	actCheckoutTag
 	actCheckout
 	actNewBranch
 	actDeleteBranch
@@ -269,7 +277,8 @@ var keymap = [scopes][]binding{
 		b(actFastForward, "fast-forward to upstream without checkout", "fast-forward", "f"),
 		b(actMerge, "merge into the current branch", "merge", "M"),
 		b(actRebase, "rebase the current branch onto it", "rebase", "R"),
-		b(actToggleRemote, "show local / remote branches", "local/remote", "t", "[", "]"),
+		b(actToggleRemote, "next tab: Local, Remote, Tags", "tabs", "]", "t"),
+		b(actPrevTab, "previous tab", "", "["),
 	},
 	scCommits: {
 		b(actSquash, "squash into the parent (both messages)", "squash", "s"),
@@ -279,6 +288,13 @@ var keymap = [scopes][]binding{
 		b(actRevert, "revert the commit", "revert", "t"),
 		b(actUndoCommit, "undo the last commit, keep changes staged", "undo last", "u"),
 		b(actToggleReflog, "show HEAD's reflog (every move, with a graph of what changed)", "reflog", "]", "["),
+	},
+	scTags: {
+		b(actNewTag, "new tag at HEAD (with a message: annotated)", "new", "n"),
+		b(actCheckoutTag, "check out the tag (detached HEAD)", "checkout", " "),
+		b(actPushTag, "push the tag", "push", "P"),
+		b(actDeleteTag, "delete the local tag", "delete", "d"),
+		b(actDeleteRemoteTag, "delete the tag on the remote", "", "D"),
 	},
 	scReflog: {
 		b(actToggleReflog, "back to the commits", "commits", "[", "]"),
@@ -352,7 +368,7 @@ func hints(scs ...scope) string {
 
 // helpLines renders every scope's bindings for the help overlay.
 func helpLines() []string {
-	order := []scope{scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
+	order := []scope{scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scTags, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
 	var out []string
 	for _, sc := range order {
 		if len(out) > 0 {

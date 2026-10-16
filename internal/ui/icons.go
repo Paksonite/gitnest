@@ -58,6 +58,7 @@ const (
 	nfDot          = ""
 	nfBranchIcon   = ""
 	nfRemoteBranch = "" // cloud
+	nfTag          = "\uf02b"
 )
 
 var nfByExt = map[string]string{

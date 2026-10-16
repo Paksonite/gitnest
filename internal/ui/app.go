@@ -58,10 +58,11 @@ type checkMsg struct {
 // --------------------------------------------------------------------- model
 
 type prompt struct {
-	title   string
-	input   []rune
-	confirm bool
-	onOK    func(string) tea.Cmd
+	title      string
+	input      []rune
+	confirm    bool
+	allowEmpty bool // enter with no text is an answer too
+	onOK       func(string) tea.Cmd
 }
 
 type App struct {
@@ -268,7 +269,7 @@ func (a *App) promptKey(k tea.KeyMsg) tea.Cmd {
 	switch k.Type {
 	case tea.KeyEnter:
 		v := strings.TrimSpace(string(p.input))
-		if v == "" {
+		if v == "" && !p.allowEmpty {
 			return nil
 		}
 		a.p = nil

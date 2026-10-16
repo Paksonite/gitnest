@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/Paksonite/gitnest/internal/gitx"
 )
 
@@ -84,3 +86,36 @@ func TestCheckoutPutsBranchOnTop(t *testing.T) {
 		t.Errorf("first=%s cur=%d jump=%v", a.rp.local[0].Name, a.rp.cur[pBranches], a.rp.jumpToCurrent)
 	}
 }
+
+func TestBranchTabsAndTags(t *testing.T) {
+	a := testApp()
+	a.scr = scrRepo
+	a.rp.focus = pBranches
+	a.rp.local = []gitx.Branch{{Name: "main", Current: true}}
+	a.rp.remote = []gitx.Branch{{Name: "origin/main", Remote: true}, {Name: "origin/x", Remote: true}}
+	a.rp.tags = []gitx.Tag{{Name: "v1.0.0", Short: "abc", Subject: "Release"}}
+	for want, tab := range []int{tabRemote, tabTags, tabLocal} {
+		a.repoKey(key("]"))
+		if a.rp.branchTab != tab {
+			t.Fatalf("step %d: tab %d, want %d", want, a.rp.branchTab, tab)
+		}
+	}
+	a.repoKey(key("["))
+	if a.rp.branchTab != tabTags || a.rp.count(pBranches) != 1 {
+		t.Fatalf("tags tab: %d count %d", a.rp.branchTab, a.rp.count(pBranches))
+	}
+	if !strings.Contains(a.repoHints(), "push") || !strings.Contains(stripStyles(a.panelItems(pBranches)[0].plain), "v1.0.0") {
+		t.Errorf("hints %q / rows %+v", a.repoHints(), a.panelItems(pBranches))
+	}
+	a.repoKey(key("n"))
+	if a.p == nil || !strings.Contains(a.p.title, "New tag") {
+		t.Fatal("n should ask for a tag name")
+	}
+	a.p.input = []rune("v2")
+	a.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if a.p == nil || !a.p.allowEmpty {
+		t.Fatal("the message prompt should accept an empty answer (lightweight tag)")
+	}
+}
+
+func stripStyles(s string) string { return s }
