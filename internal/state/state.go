@@ -18,6 +18,10 @@ func dir(env, fallback string) string {
 
 func statePath() string { return filepath.Join(dir("XDG_STATE_HOME", ".local/state"), "recent.json") }
 
+// StatusCachePath holds the last known status of every repository, shown
+// at startup until fresh status arrives.
+func StatusCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "status.json") }
+
 // ScanCachePath is where the repository scanner keeps its directory listings.
 func ScanCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "scan.json") }
 

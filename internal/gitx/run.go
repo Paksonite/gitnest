@@ -98,7 +98,8 @@ func baseEnv(k kind) []string {
 		e = append(e, "GIT_OPTIONAL_LOCKS=0")
 	}
 	if os.Getenv("GIT_SSH_COMMAND") == "" {
-		e = append(e, "GIT_SSH_COMMAND=ssh -o BatchMode=yes")
+		// No password prompts, and an unreachable host fails in seconds, not minutes.
+		e = append(e, "GIT_SSH_COMMAND=ssh -o BatchMode=yes -o ConnectTimeout=10")
 	}
 	return e
 }
