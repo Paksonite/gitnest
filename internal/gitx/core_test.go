@@ -2,6 +2,7 @@ package gitx
 
 import (
 	"os"
+	"regexp"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -233,3 +234,100 @@ func TestThemeColorsReachGit(t *testing.T) {
 		t.Error("colours not reset")
 	}
 }
+
+func TestCommitKindsAndGraph(t *testing.T) {
+	dir, _ := mergeRepo(t) // base, side s1, main m1, merge, m2
+	h := commit(t, dir, "f.txt", "f\n", "fixup! m2")
+	git(t, dir, "revert", "--no-edit", h)
+	cs, err := Log(bg, dir, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]CommitKind{}
+	for _, c := range cs {
+		kinds[c.Subject] = c.Kind()
+		if c.Graph == "" {
+			t.Errorf("%s has no graph", c.Subject)
+		}
+	}
+	want := map[string]CommitKind{"base": KindRoot, "merge side": KindMerge, "fixup! m2": KindFixup, "m2": KindCommit}
+	for subj, k := range want {
+		if kinds[subj] != k {
+			t.Errorf("%s: kind %d, want %d", subj, kinds[subj], k)
+		}
+	}
+	if kinds[`Revert "fixup! m2"`] != KindRevert {
+		t.Errorf("revert kind: %v", kinds)
+	}
+	var sideGraph string
+	for _, c := range cs {
+		if c.Subject == "s1" {
+			sideGraph = c.Graph
+		}
+	}
+	if !strings.Contains(sideGraph, "|") {
+		t.Errorf("side branch commit graph %q should show the parallel line", sideGraph)
+	}
+}
+
+func TestReflogKindsAndChanges(t *testing.T) {
+	dir := newRepo(t)
+	commit(t, dir, "a.txt", "a\n", "first")
+	commit(t, dir, "b.txt", "b\n", "second")
+	git(t, dir, "commit", "-q", "--amend", "-m", "second, amended")
+	git(t, dir, "checkout", "-q", "-b", "other")
+	git(t, dir, "reset", "-q", "--hard", "HEAD~1")
+
+	es, err := Reflog(bg, dir, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kinds []RefKind
+	for _, e := range es {
+		kinds = append(kinds, e.Kind())
+	}
+	want := []RefKind{RefReset, RefCheckout, RefAmend, RefCommit, RefInitial}
+	if len(kinds) != len(want) {
+		t.Fatalf("entries %+v", es)
+	}
+	for i := range want {
+		if kinds[i] != want[i] {
+			t.Errorf("entry %d (%s): kind %d, want %d", i, es[i].Action, kinds[i], want[i])
+		}
+	}
+	if es[2].Message != "second, amended" || es[0].Selector != "HEAD@{0}" {
+		t.Errorf("entries: %+v", es[:3])
+	}
+
+	// The amend replaced "second" with "second, amended": both sides show.
+	ch := ReflogChanges(bg, dir, es[2], es[3].Hash)
+	plain := ansiRe.ReplaceAllString(ch, "")
+	if !strings.Contains(plain, "< ") || !strings.Contains(plain, "second") || !strings.Contains(plain, "> ") || !strings.Contains(plain, "second, amended") {
+		t.Errorf("changes:\n%s", plain)
+	}
+	if ch := ReflogChanges(bg, dir, es[1], es[2].Hash); !strings.Contains(ch, "same commit") {
+		t.Errorf("checkout without moving:\n%s", ch)
+	}
+}
+
+func TestResetHardIsUndoable(t *testing.T) {
+	dir, h := linearRepo(t)
+	if err := ResetHard(bg, dir, h["b"], "reset to b"); err != nil {
+		t.Fatal(err)
+	}
+	if got := git(t, dir, "rev-parse", "HEAD"); got != h["b"] {
+		t.Fatalf("HEAD %s", got)
+	}
+	if err := Undo(bg, dir); err != nil {
+		t.Fatal(err)
+	}
+	if got := git(t, dir, "rev-parse", "HEAD"); got != h["d"] {
+		t.Errorf("after undo HEAD %s, want %s", got, h["d"])
+	}
+	writeFile(t, dir, "a.txt", "dirty\n")
+	if err := ResetHard(bg, dir, h["a"], "reset"); err == nil {
+		t.Error("reset with uncommitted changes accepted")
+	}
+}
+
+var ansiRe = regexp.MustCompile("\x1b\\[[0-9;]*m")

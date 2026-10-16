@@ -30,6 +30,7 @@ type repoData struct {
 	commits  []gitx.Commit
 	unpushed map[string]bool
 	stashes  []gitx.Stash
+	refs     []gitx.RefEntry
 }
 
 type repoState struct {
@@ -52,6 +53,9 @@ type repoState struct {
 	flat       bool            // Files panel as a flat list instead of a tree
 	collapsed  map[string]bool // collapsed directories in the tree
 	refreshing bool            // a live refresh is running
+	reflog     bool            // the Commits panel shows the reflog
+	refs       []gitx.RefEntry // HEAD's reflog, newest first
+	otherCur   int             // cursor of the commits/reflog list not shown
 	mainH      int             // rows of the main panel on screen (set while rendering)
 	mainLen    int             // lines in the main panel
 }
@@ -70,6 +74,9 @@ func (rp *repoState) count(panel int) int {
 	case pBranches:
 		return len(rp.branches())
 	case pCommits:
+		if rp.reflog {
+			return len(rp.refs)
+		}
 		return len(rp.commits)
 	}
 	return len(rp.stashes)
@@ -126,6 +133,7 @@ func loadRepoData(ctx context.Context, dir string) tea.Cmd {
 		par(func() { d.commits, _ = gitx.Log(ctx, dir, 300) })
 		par(func() { d.unpushed = gitx.Unpushed(ctx, dir) })
 		par(func() { d.stashes, _ = gitx.Stashes(ctx, dir) })
+		par(func() { d.refs, _ = gitx.Reflog(ctx, dir, 300) })
 		wg.Wait()
 		return repoDataMsg{dir: dir, d: d}
 	}
@@ -139,7 +147,7 @@ func (a *App) onRepoData(m repoDataMsg) tea.Cmd {
 	d := m.d
 	rp.info, rp.local, rp.remote = d.info, d.local, d.remote
 	rp.setFiles(d.files)
-	rp.commits, rp.unpushed, rp.stashes = d.commits, d.unpushed, d.stashes
+	rp.commits, rp.unpushed, rp.stashes, rp.refs = d.commits, d.unpushed, d.stashes, d.refs
 	for i := 0; i < 4; i++ {
 		rp.cur[i] = clamp(rp.cur[i], 0, rp.count(i)-1)
 	}
@@ -189,6 +197,16 @@ func (a *App) mainSource() (string, func() string) {
 		b := bl[i]
 		return "b:" + b.Name, func() string { return gitx.BranchLog(ctx, dir, b.Name) }
 	case pCommits:
+		if rp.reflog {
+			if len(rp.refs) == 0 {
+				return "reflog:none", func() string { return "(empty reflog)" }
+			}
+			e, prev := rp.refs[i], ""
+			if i+1 < len(rp.refs) {
+				prev = rp.refs[i+1].Hash
+			}
+			return "r:" + e.Selector + ":" + e.Hash, func() string { return gitx.ReflogChanges(ctx, dir, e, prev) }
+		}
 		if len(rp.commits) == 0 {
 			return "commits:none", func() string { return "(no commits)" }
 		}
@@ -557,6 +575,12 @@ func (a *App) branchesKey(s string) (tea.Cmd, bool) {
 
 func (a *App) commitsKey(s string) (tea.Cmd, bool) {
 	rp := &a.rp
+	if rp.reflog {
+		return a.reflogKey(s)
+	}
+	if lookup(scCommits, s) == actToggleReflog {
+		return a.toggleReflog(), true
+	}
 	dir, ctx := rp.dir, a.ctx
 	if len(rp.commits) == 0 {
 		return nil, false
@@ -663,19 +687,14 @@ func (a *App) panelItems(panel int) []rowItem {
 			})
 		}
 	case pCommits:
-		for _, c := range rp.commits {
-			hc := cYellow
-			if rp.unpushed[c.Hash] {
-				hc = cRed
+		if rp.reflog {
+			for _, e := range rp.refs {
+				items = append(items, refRow(e))
 			}
-			refs := ""
-			if c.Refs != "" {
-				refs = " (" + c.Refs + ")"
+		} else {
+			for _, c := range rp.commits {
+				items = append(items, commitRow(c, rp.unpushed[c.Hash]))
 			}
-			items = append(items, rowItem{
-				plain:  c.Short + " " + c.Subject + refs,
-				styled: fg(hc, c.Short) + " " + c.Subject + fg(cCyan, refs),
-			})
 		}
 	default:
 		for _, s := range rp.stashes {
@@ -697,6 +716,9 @@ func (a *App) repoHints() string {
 		return stateKeys(st) + "  ·  resolve conflicts in Files (e edit, space stage)  ·  " + hints(scGlobal)
 	}
 	panel := [4]scope{scFiles, scBranches, scCommits, scStash}[rp.focus]
+	if panel == scCommits && rp.reflog {
+		panel = scReflog
+	}
 	return hints(panel) + "  ·  " + hints(scRepo, scGlobal)
 }
 
@@ -723,7 +745,7 @@ func (a *App) viewRepo() string {
 	titles := [4]string{
 		fmt.Sprintf("[1] Files (%d)", len(rp.files)),
 		branchTitle,
-		fmt.Sprintf("[3] Commits (%d)", len(rp.commits)),
+		commitsTitle(rp),
 		fmt.Sprintf("[4] Stash (%d)", len(rp.stashes)),
 	}
 	heights := panelHeights(bodyH, rp.focus, [4]int{rp.count(0), rp.count(1), rp.count(2), rp.count(3)})
@@ -984,4 +1006,11 @@ func (a *App) push(force bool) tea.Cmd {
 		}
 		return nil
 	})
+}
+
+func commitsTitle(rp *repoState) string {
+	if rp.reflog {
+		return fmt.Sprintf("[3] Reflog (%d) · ] commits", len(rp.refs))
+	}
+	return fmt.Sprintf("[3] Commits (%d) · ] reflog", len(rp.commits))
 }

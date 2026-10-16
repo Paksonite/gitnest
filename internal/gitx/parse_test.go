@@ -68,13 +68,16 @@ func TestParseFiles(t *testing.T) {
 }
 
 func TestParseLog(t *testing.T) {
-	out := "h1\x1fs1\x1fAnn\x1f2 days ago\x1fsubject one\x1fHEAD -> main\x1fp1 p2\n" +
-		"h2\x1fs2\x1fBob\x1f3 days ago\x1fsubject two\x1f\x1fp3\n" +
+	out := "*   \x1eh1\x1fs1\x1fAnn\x1f2 days ago\x1fsubject one\x1fHEAD -> main\x1fp1 p2\n" +
+		"|\\  \n" +
+		"| * \x1eh2\x1fs2\x1fBob\x1f3 days ago\x1fsubject two\x1f\x1fp3\n" +
+		"* \x1eh3\x1fs3\x1fBob\x1f4 days ago\x1finitial\x1f\x1f\n" +
 		"garbage\n"
 	got := parseLog(out)
 	want := []Commit{
-		{Hash: "h1", Short: "s1", Author: "Ann", Rel: "2 days ago", Subject: "subject one", Refs: "HEAD -> main", Merge: true},
-		{Hash: "h2", Short: "s2", Author: "Bob", Rel: "3 days ago", Subject: "subject two"},
+		{Hash: "h1", Short: "s1", Author: "Ann", Rel: "2 days ago", Subject: "subject one", Refs: "HEAD -> main", Merge: true, Graph: "*   "},
+		{Hash: "h2", Short: "s2", Author: "Bob", Rel: "3 days ago", Subject: "subject two", Graph: "| * "},
+		{Hash: "h3", Short: "s3", Author: "Bob", Rel: "4 days ago", Subject: "initial", Root: true, Graph: "* "},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v\nwant %+v", got, want)
