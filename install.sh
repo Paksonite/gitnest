@@ -68,15 +68,41 @@ fi
 
 tar -xzf "$tmp/$asset" -C "$tmp"
 mkdir -p "$dir"
+dir=$(cd "$dir" && pwd -P) # always report an absolute path
 cp "$tmp/gitnest" "$dir/gitnest.new"
 chmod 755 "$dir/gitnest.new"
 mv "$dir/gitnest.new" "$dir/gitnest"
 
-say "Installed $dir/gitnest"
-"$dir/gitnest" version
+bin="$dir/gitnest"
+say "Installed $bin"
+"$bin" version
+
+# How to run it: by name when $dir is on PATH (and no other gitnest comes
+# first), otherwise by its absolute path until PATH is fixed.
+run=gitnest
 case ":$PATH:" in
-*":$dir:"*) ;;
-*) say "Note: $dir is not on your PATH; add it, e.g.  export PATH=\"$dir:\$PATH\"" ;;
+*":$dir:"*)
+  found=$(command -v gitnest 2>/dev/null || true)
+  if [ -n "$found" ] && [ "$found" != "$bin" ]; then
+    say "Note: $found comes first on your PATH; remove it or put $dir before it."
+    run=$bin
+  fi
+  ;;
+*)
+  run=$bin
+  # shellcheck disable=SC2088 # shown to the user, not expanded
+  case ${SHELL:-} in
+  */zsh) rc="~/.zshrc" ;;
+  */bash) rc="~/.bashrc" ;;
+  *) rc="your shell's startup file" ;;
+  esac
+  say ""
+  say "$dir is not on your PATH. Add this line to $rc and open a new terminal:"
+  say "  export PATH=\"$dir:\$PATH\""
+  ;;
 esac
 command -v git >/dev/null 2>&1 || say "Note: gitnest needs git — install it first."
-say "Next: gitnest roots add ~/repos && gitnest doctor"
+say ""
+say "Next:"
+say "  $run roots add ~/repos"
+say "  $run doctor"
