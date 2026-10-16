@@ -16,7 +16,7 @@ tag and push — all from the keyboard.
 - **History editing you can undo.** Squash, fixup, reword, drop, reorder or
   plan a whole interactive rebase; every rewrite can be undone with `z`, and
   rewriting pushed commits warns you first.
-- **Work across repositories.** Up to four gitnests side by side in one
+- **Work across repositories.** Several gitnests side by side in one
   terminal (`ctrl+n`), copy commits from one repository into another, fetch
   or pull many repositories at once.
 - **Fits your terminal.** Ten built-in themes plus your own, light and dark
@@ -241,20 +241,29 @@ haven't seen. Every history change records an undo point: `z` goes back,
 ## Several repositories side by side
 
 Work on related repositories at the same time — say IAM in one, the
-resources in another and a shared module in a third — with up to four
-gitnests in one terminal:
+resources in another and a shared module in a third — with as many gitnests
+in one terminal as fit:
 
 | Key | |
 |---|---|
 | `ctrl+n` | open another pane next to the current one; pick its repository from the list |
-| `ctrl+o` / `alt+→` / `alt+←` | move between panes |
+| `ctrl+←` `ctrl+→` `ctrl+↑` `ctrl+↓` | move to the pane in that direction (`alt+arrows` work too) |
+| `ctrl+g` | layout: grid (2×2 for four, 3×2 for six…), side by side, stacked |
 | `ctrl+w` | close the pane (the last one quits); `q` on a pane's list closes it too |
 
 Each pane is a complete gitnest with its own repository, panels, search and
-editor; the focused one has the coloured border, and every title shows the
-pane's repository and branch. Panes sit side by side, in a 2×2 grid when
-there are more, or — in a small window — as tabs above the focused pane.
-Commits copied with `c` in one pane can be pasted with `v` in another.
+editor. The active pane has a heavy border in the accent colour and its title
+(`● 2 · repo · branch`) on an accent background; the others are thin and
+dimmed. When panes would get too small for the window, gitnest falls back to
+another layout and finally to tabs above the active pane. The layout is
+remembered. Commits copied with `c` in one pane can be pasted with `v` in
+another.
+
+> **macOS:** by default `ctrl+←/→/↑/↓` switch Spaces and open Mission
+> Control, so the terminal never sees them. Either turn those shortcuts off in
+> System Settings → Keyboard → Keyboard Shortcuts → Mission Control, or use
+> `alt+arrows` (in iTerm2 set Profiles → Keys → Left/Right Option key to
+> "Esc+").
 
 ## Configuration
 

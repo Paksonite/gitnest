@@ -9,24 +9,33 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Shell holds up to maxPanes independent gitnests ("panes") side by side in
-// one terminal. Every pane is a full App with its own screen, selection,
-// open repository, prompts and editor; the config, themes, scanner and the
-// commit clipboard are shared. ctrl+n opens a pane, ctrl+w closes one,
-// ctrl+o (or alt+→ / alt+←) moves the focus.
+// Shell holds several independent gitnests ("panes") in one terminal. Every
+// pane is a full App with its own screen, selection, open repository,
+// prompts and editor; the config, themes, scanner and the commit clipboard
+// are shared. ctrl+n opens a pane, ctrl+w closes one, ctrl+arrows (or
+// alt+arrows) move the focus and ctrl+g changes the layout.
 type Shell struct {
 	panes  []*pane
 	focus  int
 	nextID int
 	w, h   int
+	mode   int // paneGrid, paneColumns or paneRows
 }
+
+// Pane arrangements, cycled with ctrl+g.
+const (
+	paneGrid    = iota // a near-square grid: 2×2 for four, 3×2 for six…
+	paneColumns        // all side by side
+	paneRows           // all stacked
+	paneModes
+)
+
+var paneModeNames = [paneModes]string{"grid", "side by side", "stacked"}
 
 type pane struct {
 	id  int
 	app *App
 }
-
-const maxPanes = 4
 
 // paneMsg delivers a message to the pane whose command produced it.
 type paneMsg struct {
@@ -42,7 +51,13 @@ type (
 )
 
 func newShell(first *App) *Shell {
-	return &Shell{panes: []*pane{{id: 0, app: first}}, nextID: 1}
+	mode := paneGrid
+	for i, name := range paneModeNames {
+		if first.st != nil && first.st.PaneLayout == name {
+			mode = i
+		}
+	}
+	return &Shell{panes: []*pane{{id: 0, app: first}}, nextID: 1, mode: mode}
 }
 
 func (s *Shell) focused() *pane { return s.panes[s.focus] }
@@ -192,11 +207,29 @@ func (s *Shell) onKey(k tea.KeyMsg) tea.Cmd {
 			}
 			s.close(f)
 			return nil
-		case actNextPane:
-			s.focus = (s.focus + 1) % len(s.panes)
+		case actPaneLeft:
+			s.focusTowards(-1, 0)
 			return nil
-		case actPrevPane:
-			s.focus = (s.focus + len(s.panes) - 1) % len(s.panes)
+		case actPaneRight:
+			s.focusTowards(1, 0)
+			return nil
+		case actPaneUp:
+			s.focusTowards(0, -1)
+			return nil
+		case actPaneDown:
+			s.focusTowards(0, 1)
+			return nil
+		case actPaneLayout:
+			s.mode = (s.mode + 1) % paneModes
+			if f.app.st != nil {
+				f.app.st.SetPaneLayout(paneModeNames[s.mode])
+			}
+			s.resize()
+			msg := "panes: " + paneModeNames[s.mode] + " (ctrl+g changes)"
+			if shown := s.shownLayout(); shown != paneModeNames[s.mode] {
+				msg = "panes: " + paneModeNames[s.mode] + " doesn't fit this window, showing " + shown
+			}
+			f.app.setToast(msg, false)
 			return nil
 		}
 	}
@@ -206,17 +239,13 @@ func (s *Shell) onKey(k tea.KeyMsg) tea.Cmd {
 // open adds a pane next to the focused one, on the repository list.
 func (s *Shell) open() tea.Cmd {
 	src := s.focused().app
-	if len(s.panes) >= maxPanes {
-		src.setToast(fmt.Sprintf("at most %d panes", maxPanes), true)
-		return nil
-	}
 	a := src.sibling()
 	p := &pane{id: s.nextID, app: a}
 	s.nextID++
 	s.panes = append(s.panes[:s.focus+1], append([]*pane{p}, s.panes[s.focus+1:]...)...)
 	s.focus++
 	s.resize()
-	a.setToast("new pane: pick a repository (ctrl+w closes it, ctrl+o switches)", false)
+	a.setToast("new pane: pick a repository (ctrl+arrows switch, ctrl+w closes, ctrl+g layout)", false)
 	return wrap(p.id, tea.Batch(a.previewCmd(), repoTick()))
 }
 
@@ -259,10 +288,13 @@ func (a *App) visibleStatusCmd() tea.Cmd {
 
 type rect struct{ x, y, w, h int }
 
-// layout places n panes in a w×h window: side by side when they fit, a 2×2
-// grid (the third pane spanning the bottom row) otherwise, and when even
-// that would be too small, tabs (only the focused pane, a tab bar above).
-func layout(n, w, h int) (rects []rect, tabs bool) {
+// layout places n panes in a w×h window in the given arrangement, falling
+// back to the others when panes would be too small, and to tabs (only the
+// focused pane, a tab bar above it) when nothing fits.
+func layout(mode, n, w, h int) (rects []rect, tabs bool) {
+	if n <= 1 {
+		return []rect{{0, 0, w, h}}, false
+	}
 	fits := func(rs []rect) bool {
 		for _, r := range rs {
 			if r.w-2 < minWidth || r.h-2 < minHeight {
@@ -271,28 +303,41 @@ func layout(n, w, h int) (rects []rect, tabs bool) {
 		}
 		return true
 	}
-	cols := func(k, y, height int) []rect {
-		var out []rect
-		x := 0
+	// split cuts length into k parts that add up exactly.
+	split := func(length, k int) (pos, size []int) {
+		at := 0
 		for i := 0; i < k; i++ {
-			cw := (w - x) / (k - i)
-			out = append(out, rect{x, y, cw, height})
-			x += cw
+			sz := (length - at) / (k - i)
+			pos, size = append(pos, at), append(size, sz)
+			at += sz
+		}
+		return pos, size
+	}
+	// table lays out rows of up to cols panes; a short last row stretches.
+	table := func(cols int) []rect {
+		nrows := (n + cols - 1) / cols
+		ys, hs := split(h, nrows)
+		var out []rect
+		for r := 0; r < nrows; r++ {
+			k := min(cols, n-r*cols)
+			xs, ws := split(w, k)
+			for c := 0; c < k; c++ {
+				out = append(out, rect{xs[c], ys[r], ws[c], hs[r]})
+			}
 		}
 		return out
 	}
-	if n <= 1 {
-		return []rect{{0, 0, w, h}}, false
+	gridCols := 1
+	for gridCols*gridCols < n {
+		gridCols++
 	}
-	var tries [][]rect
-	tries = append(tries, cols(n, 0, h)) // all side by side
-	if n == 2 {
-		tries = append(tries, []rect{{0, 0, w, h / 2}, {0, h / 2, w, h - h/2}})
-	}
-	if n >= 3 {
-		top := cols(2, 0, h/2)
-		bottom := cols(n-2, h/2, h-h/2)
-		tries = append(tries, append(top, bottom...))
+	grid, columns, rows := table(gridCols), table(n), table(1)
+	tries := [][]rect{grid, columns, rows}
+	switch mode {
+	case paneColumns:
+		tries = [][]rect{columns, grid, rows}
+	case paneRows:
+		tries = [][]rect{rows, grid, columns}
 	}
 	for _, t := range tries {
 		if fits(t) {
@@ -302,11 +347,78 @@ func layout(n, w, h int) (rects []rect, tabs bool) {
 	return []rect{{0, 1, w, h - 1}}, true
 }
 
+// shownLayout names the arrangement actually on screen, which can differ
+// from the chosen one when panes would not fit.
+func (s *Shell) shownLayout() string {
+	rects, tabs := layout(s.mode, len(s.panes), s.w, s.h)
+	switch {
+	case tabs:
+		return "tabs"
+	case len(rects) < 2:
+		return paneModeNames[s.mode]
+	}
+	rowsAt := map[int]bool{}
+	for _, r := range rects {
+		rowsAt[r.y] = true
+	}
+	switch {
+	case len(rowsAt) == 1:
+		return paneModeNames[paneColumns]
+	case len(rowsAt) == len(rects):
+		return paneModeNames[paneRows]
+	}
+	return paneModeNames[paneGrid]
+}
+
+// focusTowards moves the focus to the nearest pane in a direction (dx, dy
+// in -1, 0, 1). With tabs, left/up and right/down go to the previous and
+// next pane.
+func (s *Shell) focusTowards(dx, dy int) {
+	n := len(s.panes)
+	if n < 2 {
+		return
+	}
+	rects, tabs := layout(s.mode, n, s.w, s.h)
+	if tabs || len(rects) != n {
+		s.focus = (s.focus + n + dx + dy) % n
+		return
+	}
+	cur := rects[s.focus]
+	cx, cy := 2*cur.x+cur.w, 2*cur.y+cur.h // doubled centres stay integers
+	best, bestDist := -1, 0
+	for i, r := range rects {
+		if i == s.focus {
+			continue
+		}
+		ddx, ddy := 2*r.x+r.w-cx, 2*r.y+r.h-cy
+		if (dx != 0 && ddx*dx <= 0) || (dy != 0 && ddy*dy <= 0) {
+			continue // not in that direction
+		}
+		along, across := abs(ddx), abs(ddy)
+		if dy != 0 {
+			along, across = abs(ddy), abs(ddx)
+		}
+		if dist := along + 2*across; best < 0 || dist < bestDist { // prefer panes in line
+			best, bestDist = i, dist
+		}
+	}
+	if best >= 0 {
+		s.focus = best
+	}
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
 func (s *Shell) resize() {
 	if s.w == 0 || s.h == 0 {
 		return
 	}
-	rects, tabs := layout(len(s.panes), s.w, s.h)
+	rects, tabs := layout(s.mode, len(s.panes), s.w, s.h)
 	for i, p := range s.panes {
 		r := rects[0]
 		if !tabs && i < len(rects) {
@@ -337,7 +449,7 @@ func (s *Shell) View() string {
 	if len(s.panes) == 1 {
 		return s.panes[0].app.View()
 	}
-	rects, tabs := layout(len(s.panes), s.w, s.h)
+	rects, tabs := layout(s.mode, len(s.panes), s.w, s.h)
 	if tabs {
 		var parts []string
 		for i, p := range s.panes {
@@ -348,7 +460,7 @@ func (s *Shell) View() string {
 				parts = append(parts, fg(cDim, t))
 			}
 		}
-		bar := fit(strings.Join(parts, fg(cDim, "│"))+fg(cDim, "  ctrl+o switches"), s.w)
+		bar := fit(strings.Join(parts, fg(cDim, "│"))+fg(cDim, "  ctrl+←/→ switch"), s.w)
 		return bar + "\n" + s.focused().app.View()
 	}
 	// Render each pane framed, then lay the frames out row by row.
@@ -382,16 +494,22 @@ func (s *Shell) View() string {
 // frame draws content inside a w×h rounded border with title in the top
 // edge; the focused pane's border is in the accent colour.
 func frame(content string, w, h int, title string, focused bool) string {
+	inner := w - 2
+	border := lipgloss.RoundedBorder()
 	col := cBorder
 	ts := lipgloss.NewStyle().Foreground(cDim)
-	if focused {
+	marker := " "
+	if focused { // a heavy border and the title on the accent colour
+		border = lipgloss.ThickBorder()
 		col = cAccent
-		ts = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+		ts = lipgloss.NewStyle().Bold(true).Foreground(cAccent).Reverse(true)
+		marker = "●"
 	}
 	b := lipgloss.NewStyle().Foreground(col)
-	inner := w - 2
-	t := fit(" "+title+" ", max(0, min(inner-2, lipgloss.Width(" "+title+" "))))
-	top := b.Render("╭─") + ts.Render(t) + b.Render(strings.Repeat("─", max(0, inner-1-lipgloss.Width(t)))+"╮")
+	label := " " + marker + " " + title + " "
+	t := fit(label, max(0, min(inner-2, lipgloss.Width(label))))
+	top := b.Render(border.TopLeft+border.Top) + ts.Render(t) +
+		b.Render(strings.Repeat(border.Top, max(0, inner-1-lipgloss.Width(t)))+border.TopRight)
 	lines := strings.Split(content, "\n")
 	out := []string{top}
 	for i := 0; i < h-2; i++ {
@@ -399,8 +517,8 @@ func frame(content string, w, h int, title string, focused bool) string {
 		if i < len(lines) {
 			l = lines[i]
 		}
-		out = append(out, b.Render("│")+fit(l, inner)+b.Render("│"))
+		out = append(out, b.Render(border.Left)+fit(l, inner)+b.Render(border.Right))
 	}
-	out = append(out, b.Render("╰"+strings.Repeat("─", max(0, inner))+"╯"))
+	out = append(out, b.Render(border.BottomLeft+strings.Repeat(border.Bottom, max(0, inner))+border.BottomRight))
 	return strings.Join(out, "\n")
 }

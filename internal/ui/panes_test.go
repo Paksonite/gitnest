@@ -14,37 +14,50 @@ import (
 	"github.com/Paksonite/gitnest/internal/scan"
 )
 
+// shape describes a layout as panes per row, e.g. "2+2" for a 2×2 grid.
+func shape(rects []rect) string {
+	var rows []string
+	count := map[int]int{}
+	var ys []int
+	for _, r := range rects {
+		if count[r.y] == 0 {
+			ys = append(ys, r.y)
+		}
+		count[r.y]++
+	}
+	for _, y := range ys {
+		rows = append(rows, fmt.Sprint(count[y]))
+	}
+	return strings.Join(rows, "+")
+}
+
 func TestLayout(t *testing.T) {
 	cases := []struct {
-		n, w, h int
-		want    string // "cols", "rows", "grid", "tabs", "full"
+		mode, n, w, h int
+		want          string // panes per row, or "tabs"
 	}{
-		{1, 80, 24, "full"},
-		{2, 200, 50, "cols"},
-		{2, 100, 60, "rows"},
-		{2, 80, 24, "tabs"},
-		{3, 300, 50, "cols"},
-		{3, 150, 60, "grid"},
-		{4, 300, 40, "cols"},
-		{4, 120, 60, "grid"},
-		{4, 100, 30, "tabs"},
+		{paneGrid, 1, 80, 24, "1"},
+		{paneGrid, 2, 200, 50, "2"},
+		{paneGrid, 3, 160, 60, "2+1"},
+		{paneGrid, 4, 220, 60, "2+2"},
+		{paneGrid, 4, 400, 40, "2+2"},
+		{paneGrid, 6, 240, 60, "3+3"},
+		{paneGrid, 9, 240, 60, "3+3+3"},
+		{paneGrid, 4, 100, 30, "tabs"},
+		{paneGrid, 4, 400, 20, "4"}, // too low for two rows: side by side
+		{paneColumns, 3, 300, 50, "3"},
+		{paneColumns, 4, 200, 60, "2+2"}, // too narrow for four columns: grid
+		{paneRows, 2, 100, 60, "1+1"},
+		{paneRows, 3, 120, 36, "2+1"}, // too low for three rows: grid
 	}
 	for _, c := range cases {
-		rects, tabs := layout(c.n, c.w, c.h)
-		got := "full"
-		switch {
-		case tabs:
+		rects, tabs := layout(c.mode, c.n, c.w, c.h)
+		got := shape(rects)
+		if tabs {
 			got = "tabs"
-		case c.n == 1:
-		case rects[0].y == rects[len(rects)-1].y:
-			got = "cols"
-		case rects[0].w == c.w:
-			got = "rows"
-		default:
-			got = "grid"
 		}
 		if got != c.want {
-			t.Errorf("%d panes in %dx%d: %s, want %s (%+v)", c.n, c.w, c.h, got, c.want, rects)
+			t.Errorf("%s, %d panes in %dx%d: %s, want %s", paneModeNames[c.mode], c.n, c.w, c.h, got, c.want)
 		}
 		if tabs || c.n == 1 {
 			continue
@@ -59,6 +72,29 @@ func TestLayout(t *testing.T) {
 		if area != c.w*c.h || len(rects) != c.n {
 			t.Errorf("%d panes in %dx%d: %d rects cover %d of %d cells", c.n, c.w, c.h, len(rects), area, c.w*c.h)
 		}
+	}
+}
+
+func TestFocusTowards(t *testing.T) {
+	s := shellOf(t, 220, 60, "/r/a")
+	for i := 0; i < 3; i++ {
+		press(t, s, "ctrl+n")
+	}
+	// 2×2: 0 1 / 2 3; the new panes went after the focused one each time.
+	s.focus = 0
+	steps := []struct {
+		key  string
+		want int
+	}{{"ctrl+right", 1}, {"ctrl+down", 3}, {"ctrl+left", 2}, {"ctrl+up", 0}, {"ctrl+up", 0}, {"alt+right", 1}}
+	for _, st := range steps {
+		press(t, s, st.key)
+		if s.focus != st.want {
+			t.Fatalf("%s: focus %d, want %d", st.key, s.focus, st.want)
+		}
+	}
+	press(t, s, "ctrl+g") // side by side would need 4×52 columns: falls back to the grid
+	if s.mode != paneColumns || !strings.Contains(s.focused().app.toast, "doesn't fit this window, showing grid") {
+		t.Errorf("ctrl+g: mode %d toast %q", s.mode, s.focused().app.toast)
 	}
 }
 
@@ -87,9 +123,9 @@ func TestPanesOpenFocusClose(t *testing.T) {
 	if s.focused().app.sh != s.panes[0].app.sh {
 		t.Error("panes must share the clipboard")
 	}
-	press(t, s, "ctrl+o")
+	press(t, s, "ctrl+left")
 	if s.focus != 0 {
-		t.Errorf("ctrl+o: focus %d", s.focus)
+		t.Errorf("ctrl+left: focus %d", s.focus)
 	}
 	// While typing a search, ctrl+n moves in the results instead.
 	press(t, s, "/", "ctrl+n")
@@ -97,18 +133,20 @@ func TestPanesOpenFocusClose(t *testing.T) {
 		t.Errorf("ctrl+n while searching opened a pane: %d", len(s.panes))
 	}
 	press(t, s, "esc")
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 5; i++ { // no limit on the number of panes
 		press(t, s, "ctrl+n")
 	}
-	if len(s.panes) != maxPanes || !strings.Contains(s.focused().app.toast, "at most 4") {
-		t.Errorf("max panes: %d, toast %q", len(s.panes), s.focused().app.toast)
+	if len(s.panes) != 7 {
+		t.Errorf("panes: %d", len(s.panes))
 	}
 	// q on the list closes just that pane while there are several.
 	press(t, s, "q")
-	if len(s.panes) != 3 {
+	if len(s.panes) != 6 {
 		t.Errorf("q: %d panes", len(s.panes))
 	}
-	press(t, s, "ctrl+w", "ctrl+w")
+	for len(s.panes) > 1 {
+		press(t, s, "ctrl+w")
+	}
 	if len(s.panes) != 1 {
 		t.Errorf("ctrl+w: %d panes", len(s.panes))
 	}
@@ -146,7 +184,7 @@ func TestPanesRouting(t *testing.T) {
 
 func TestPanesFitAnyWindow(t *testing.T) {
 	sizes := [][2]int{{40, 10}, {80, 24}, {120, 40}, {160, 50}, {220, 60}, {300, 80}}
-	for n := 1; n <= 4; n++ {
+	for n := 1; n <= 6; n++ {
 		for _, sz := range sizes {
 			s := shellOf(t, sz[0], sz[1], "/r/a", "/r/b", "/r/c")
 			for len(s.panes) < n {
@@ -191,7 +229,7 @@ func TestE2EPanes(t *testing.T) {
 	}
 
 	// Commit in app (pane 1).
-	press(t, s, "ctrl+o")
+	press(t, s, "ctrl+left")
 	os.WriteFile(filepath.Join(app, "feature.txt"), []byte("feature\n"), 0o644)
 	drive(t, s, wrap(s.panes[0].id, s.panes[0].app.onRepoTick()))
 	press(t, s, "a", "c", "type:Add feature", "enter")
@@ -199,7 +237,7 @@ func TestE2EPanes(t *testing.T) {
 		t.Fatalf("commit in app: %q", got)
 	}
 	// Copy it, paste into lib (pane 2).
-	press(t, s, "3", "c", "ctrl+o", "3", "v")
+	press(t, s, "3", "c", "ctrl+right", "3", "v")
 	if p := s.panes[1].app.p; p == nil || !strings.Contains(p.title, "as patches from app") {
 		t.Fatalf("paste prompt in pane 2: %+v", p)
 	}

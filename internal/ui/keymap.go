@@ -62,8 +62,11 @@ const (
 	actHelp
 	actNewPane
 	actClosePane
-	actNextPane
-	actPrevPane
+	actPaneLeft
+	actPaneRight
+	actPaneUp
+	actPaneDown
+	actPaneLayout
 	actThemes
 	actErrorDetails
 	actQuit
@@ -320,10 +323,13 @@ var keymap = [scopes][]binding{
 		b(actToggleReflog, "show HEAD's reflog (every move, with a graph of what changed)", "reflog", "]", "["),
 	},
 	scPanes: {
-		b(actNewPane, "open another pane next to this one (up to 4), starting on the list", "pane", "ctrl+n"),
+		b(actNewPane, "open another pane next to this one, starting on the list", "pane", "ctrl+n"),
 		b(actClosePane, "close this pane (the last one quits)", "", "ctrl+w"),
-		b(actNextPane, "focus the next pane", "", "ctrl+o", "alt+right"),
-		b(actPrevPane, "focus the previous pane", "", "alt+left"),
+		b(actPaneLeft, "focus the pane on the left", "", "ctrl+left", "alt+left"),
+		b(actPaneRight, "focus the pane on the right", "", "ctrl+right", "alt+right"),
+		b(actPaneUp, "focus the pane above", "", "ctrl+up", "alt+up"),
+		b(actPaneDown, "focus the pane below", "", "ctrl+down", "alt+down"),
+		b(actPaneLayout, "pane layout: grid, side by side, stacked", "", "ctrl+g"),
 	},
 	scStaging: {
 		b(actToggleStage, "stage (or, on the staged side, unstage) the line, range or hunk", "stage", " "),

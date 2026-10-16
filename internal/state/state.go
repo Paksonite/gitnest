@@ -26,8 +26,15 @@ func StatusCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cac
 func ScanCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "scan.json") }
 
 type State struct {
-	Recent   map[string]int64 `json:"recent"`
-	ListTree bool             `json:"list_tree"` // repository list grouped by directory
+	Recent     map[string]int64 `json:"recent"`
+	ListTree   bool             `json:"list_tree"`   // repository list grouped by directory
+	PaneLayout string           `json:"pane_layout"` // grid, side by side or stacked
+}
+
+// SetPaneLayout remembers how panes are arranged.
+func (s *State) SetPaneLayout(name string) {
+	s.PaneLayout = name
+	_ = s.save()
 }
 
 // SetListTree remembers the repository list layout for the next start.
