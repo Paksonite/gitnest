@@ -70,6 +70,7 @@ type App struct {
 	rp   repoState
 
 	p        *prompt
+	report   *report // failures of the last bulk operation
 	help     bool
 	toast    string
 	toastErr bool
@@ -126,6 +127,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case opMsg:
 		return a, a.onOp(m)
+	case bulkMsg:
+		return a, a.onBulk(m)
 	case checkMsg:
 		a.busy = ""
 		if m.err != nil {
@@ -153,9 +156,15 @@ func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 	if a.p != nil {
 		return a.promptKey(k)
 	}
+	if a.report != nil {
+		return a.reportKey(k)
+	}
 	if a.help {
 		a.help = false
 		return nil
+	}
+	if a.scr == scrRepos && a.rs.filtering {
+		return a.reposKey(k) // every key belongs to the search query, "?" too
 	}
 	if s == "?" {
 		a.help = true
@@ -301,6 +310,8 @@ func (a *App) View() string {
 	switch {
 	case a.p != nil:
 		return a.viewPrompt()
+	case a.report != nil:
+		return a.viewReport()
 	case a.help:
 		return a.viewHelp()
 	case a.scr == scrRepos:
@@ -327,10 +338,12 @@ func (a *App) viewPrompt() string {
 const helpText = `gitnest — keys
 
 Repository list
-  enter open repo       / search          d dirty only   ✦ new since start
-  space mark            f fetch (marked or all)
-  p pull --ff-only (marked or selected)
+  enter open repo       / search          s sort (recent, name, commit, status)
+  d dirty only          space mark        ✦ new since start   ! conflict or operation in progress
+  f fetch (marked or all)                 p pull --ff-only (marked or selected)
   R rescan roots        r refresh status  q quit
+  Search    type to filter by name (also host and path; @text = branch)
+            enter open  tab keep filter  esc clear  ↑/↓ ctrl+n/p move
 
 Repo view  (panels: 1 Files  2 Branches  3 Commits  4 Stash)
   tab / h l / 1-4 switch panel      j k move      J K / pgup pgdn scroll diff

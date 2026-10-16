@@ -2,7 +2,6 @@ package ui
 
 import (
 	"strings"
-	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -18,6 +17,7 @@ var (
 	cCyan   = lipgloss.Color("#89dceb")
 	cText   = lipgloss.Color("#cdd6f4")
 	cSel    = lipgloss.Color("#45475a")
+	cSelDim = lipgloss.Color("#313244")
 )
 
 func applyTheme(cfg config.Config) {
@@ -70,35 +70,24 @@ func scrollTo(cur, off, h int) int {
 	return off
 }
 
-// fuzzy reports whether every space-separated term of needle is a subsequence of hay.
-func fuzzy(hay, needle string) bool {
-	hay = strings.ToLower(hay)
-	for _, term := range strings.Fields(strings.ToLower(needle)) {
-		i := 0
-		for _, r := range term {
-			j := strings.IndexRune(hay[i:], r)
-			if j < 0 {
-				return false
-			}
-			i += j + utf8.RuneLen(r)
-		}
-	}
-	return true
-}
-
 func expandTabs(s string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(s, "\t", "    "), "\r", "")
 }
 
 type rowItem struct{ plain, styled string }
 
+// renderRows draws list rows. The selected row is highlighted strongly in the
+// focused panel and faintly elsewhere, so every panel shows its selection.
 func renderRows(items []rowItem, cur, off, h, w int, focused bool) []string {
 	var out []string
 	for i := off; i < len(items) && i < off+h; i++ {
 		it := items[i]
-		if i == cur && focused {
+		switch {
+		case i == cur && focused:
 			out = append(out, lipgloss.NewStyle().Bold(true).Background(cSel).Foreground(cText).Render(fit(it.plain, w)))
-		} else {
+		case i == cur:
+			out = append(out, lipgloss.NewStyle().Background(cSelDim).Foreground(cText).Render(fit(it.plain, w)))
+		default:
 			out = append(out, fit(it.styled, w))
 		}
 	}

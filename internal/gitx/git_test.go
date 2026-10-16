@@ -336,3 +336,36 @@ func TestRepoLockSerializesWrites(t *testing.T) {
 	}
 	again()
 }
+
+func TestBranches(t *testing.T) {
+	dir := newRepo(t)
+	commit(t, dir, "a.txt", "a\n", "first")
+	git(t, dir, "branch", "feature/x")
+	remote := t.TempDir()
+	git(t, remote, "init", "-q", "--bare")
+	git(t, dir, "remote", "add", "origin", remote)
+	git(t, dir, "push", "-q", "-u", "origin", "main")
+	commit(t, dir, "b.txt", "b\n", "second")
+
+	local, remotes, err := Branches(bg, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(local) != 2 {
+		t.Fatalf("local = %+v", local)
+	}
+	byName := map[string]Branch{}
+	for _, b := range local {
+		byName[b.Name] = b
+	}
+	main, feat := byName["main"], byName["feature/x"]
+	if !main.Current || main.Upstream != "origin/main" || main.Track != "[ahead 1]" || main.Subject != "second" {
+		t.Errorf("main = %+v", main)
+	}
+	if feat.Current || feat.Upstream != "" || feat.Subject != "first" {
+		t.Errorf("feature/x = %+v", feat)
+	}
+	if len(remotes) != 1 || remotes[0].Name != "origin/main" || !remotes[0].Remote {
+		t.Errorf("remote = %+v", remotes)
+	}
+}

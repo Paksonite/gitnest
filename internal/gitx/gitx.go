@@ -29,6 +29,7 @@ type Info struct {
 	LastUnix  int64
 	LastRel   string
 	State     State
+	RemoteURL string // origin's URL, or the first remote's; empty without remotes
 }
 
 func GetInfo(ctx context.Context, dir string) (Info, error) {
@@ -45,6 +46,9 @@ func GetInfo(ctx context.Context, dir string) (Info, error) {
 		}
 	}
 	in.State, _ = GetState(ctx, dir)
+	if o, err := run(ctx, kRead, dir, nil, "config", "--get-regexp", `^remote\..*\.url$`); err == nil {
+		in.RemoteURL = pickRemote(o)
+	}
 	return in, nil
 }
 
@@ -68,6 +72,53 @@ func parseStatusV2(out string) Info {
 		}
 	}
 	return in
+}
+
+// pickRemote chooses origin's URL from `git config --get-regexp remote.*.url`
+// output, falling back to the first remote listed.
+func pickRemote(out string) string {
+	first := ""
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		key, url, ok := strings.Cut(l, " ")
+		if !ok {
+			continue
+		}
+		if key == "remote.origin.url" {
+			return url
+		}
+		if first == "" {
+			first = url
+		}
+	}
+	return first
+}
+
+// RemoteHost extracts the host from a git remote URL: https://host/x,
+// ssh://user@host:port/x, user@host:x (scp-like). Local paths give "".
+func RemoteHost(url string) string {
+	if i := strings.Index(url, "://"); i >= 0 {
+		rest := url[i+3:]
+		if url[:i] == "file" {
+			return ""
+		}
+		rest, _, _ = strings.Cut(rest, "/")
+		if j := strings.LastIndex(rest, "@"); j >= 0 {
+			rest = rest[j+1:]
+		}
+		host, _, _ := strings.Cut(rest, ":")
+		return strings.ToLower(host)
+	}
+	if strings.HasPrefix(url, "/") || strings.HasPrefix(url, ".") {
+		return ""
+	}
+	before, _, ok := strings.Cut(url, ":")
+	if !ok || strings.Contains(before, "/") {
+		return ""
+	}
+	if j := strings.LastIndex(before, "@"); j >= 0 {
+		before = before[j+1:]
+	}
+	return strings.ToLower(before)
 }
 
 // Sync returns a compact plain-text summary like "↑1 ↓2 ~3".
@@ -261,7 +312,8 @@ type Branch struct {
 	Current, Remote                     bool
 }
 
-const branchFormat = "%(HEAD)%x1f%(refname:short)%x1f%(upstream:short)%x1f%(upstream:track)%x1f%(committerdate:relative)%x1f%(subject)"
+// for-each-ref spells the unit separator %1f (git log uses %x1f).
+const branchFormat = "%(HEAD)%1f%(refname:short)%1f%(upstream:short)%1f%(upstream:track)%1f%(committerdate:relative)%1f%(subject)"
 
 func parseBranches(out string, remote bool) []Branch {
 	var bs []Branch

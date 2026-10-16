@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -27,7 +28,10 @@ type reposState struct {
 	loading     bool // initial load or full status refresh running
 	scanning    bool // background scan for new/removed repositories running
 	marked      map[string]bool
-	isNew       map[string]bool // found by a rescan, not opened yet
+	isNew       map[string]bool   // found by a rescan, not opened yet
+	label       map[string]string // tells apart clones that share a name, e.g. "forgejo"
+	hl          map[string][]int  // name runes matched by the filter
+	sortMode    int
 	preview     string
 	previewPath string
 }
@@ -174,6 +178,7 @@ func (a *App) onStatus(m statusMsg) tea.Cmd {
 	for _, p := range m.asked {
 		asked[p] = true
 	}
+	before := len(rs.all)
 	out := rs.all[:0]
 	for _, r := range rs.all {
 		if nr, ok := got[r.Path]; ok {
@@ -189,10 +194,11 @@ func (a *App) onStatus(m statusMsg) tea.Cmd {
 		}
 	}
 	rs.all = out
-	if m.added {
-		scan.Sort(rs.all)
+	// A plain refresh updates rows in place: indexes in rs.view stay valid
+	// and rows don't jump around under the cursor.
+	if m.added || len(out) != before || rs.dirtyOnly {
+		a.rebuildView(keep)
 	}
-	a.rebuildView(keep)
 	return nil
 }
 
@@ -233,18 +239,88 @@ func (a *App) onStatusTick() tea.Cmd {
 	return tea.Batch(cmd, a.statusTick())
 }
 
+// Sort modes for the repository list, cycled with "s".
+const (
+	sortRecent = iota // opened in gitnest recently, then newest commit
+	sortName
+	sortCommit // newest commit first
+	sortStatus // operations in progress, conflicts, changes, unpushed first
+	sortModes
+)
+
+var sortNames = [sortModes]string{"recent", "name", "last commit", "status"}
+
+func lessRepo(mode int, a, b scan.Repo) bool {
+	switch mode {
+	case sortName:
+		if x, y := strings.ToLower(a.Name), strings.ToLower(b.Name); x != y {
+			return x < y
+		}
+		return a.Path < b.Path
+	case sortCommit:
+		if a.LastUnix != b.LastUnix {
+			return a.LastUnix > b.LastUnix
+		}
+	case sortStatus:
+		if x, y := attention(a), attention(b); x != y {
+			return x > y
+		}
+	}
+	if a.Used != b.Used {
+		return a.Used > b.Used
+	}
+	if a.LastUnix != b.LastUnix {
+		return a.LastUnix > b.LastUnix
+	}
+	return a.Name < b.Name
+}
+
+// attention ranks how much a repository needs looking at.
+func attention(r scan.Repo) int {
+	n := 0
+	if r.State != gitx.StateNone {
+		n += 8
+	}
+	if r.Conflicts {
+		n += 4
+	}
+	if r.Changes > 0 {
+		n += 2
+	}
+	if r.Ahead > 0 || r.Behind > 0 {
+		n++
+	}
+	return n
+}
+
+// rebuildView filters and orders the list. With a filter, rows are ranked by
+// match quality; otherwise (and for ties) by the sort mode.
 func (a *App) rebuildView(keep string) {
 	rs := &a.rs
-	rs.view = rs.view[:0]
+	rs.label = disambiguate(rs.all)
+	rs.hl = map[string][]int{}
+	terms := strings.Fields(rs.filter)
+	type cand struct{ idx, score int }
+	var cs []cand
 	for i, r := range rs.all {
 		if rs.dirtyOnly && r.Changes == 0 {
 			continue
 		}
-		hay := r.Name + " " + r.Branch + " " + filepath.Base(filepath.Dir(r.Path))
-		if rs.filter != "" && !fuzzy(hay, rs.filter) {
+		score, ok := a.matchRepo(r, terms)
+		if !ok {
 			continue
 		}
-		rs.view = append(rs.view, i)
+		cs = append(cs, cand{i, score})
+	}
+	sort.SliceStable(cs, func(x, y int) bool {
+		if cs[x].score != cs[y].score {
+			return cs[x].score > cs[y].score
+		}
+		return lessRepo(rs.sortMode, rs.all[cs[x].idx], rs.all[cs[y].idx])
+	})
+	rs.view = rs.view[:0]
+	for _, c := range cs {
+		rs.view = append(rs.view, c.idx)
 	}
 	rs.cur = clamp(rs.cur, 0, len(rs.view)-1)
 	if keep != "" {
@@ -255,6 +331,87 @@ func (a *App) rebuildView(keep string) {
 			}
 		}
 	}
+}
+
+// matchRepo scores r against the filter terms; every term must match. A term
+// matches the name (highlighted), or else the clone label, remote host and
+// parent directories at a lower score; "@term" matches the current branch.
+func (a *App) matchRepo(r scan.Repo, terms []string) (int, bool) {
+	total := 0
+	var namePos []int
+	for _, t := range terms {
+		if strings.HasPrefix(t, "@") {
+			if t == "@" {
+				continue
+			}
+			sc, _, ok := fuzzyMatch(r.Branch, t[1:])
+			if !ok {
+				return 0, false
+			}
+			total += sc / 2
+			continue
+		}
+		if sc, pos, ok := fuzzyMatch(r.Name, t); ok {
+			total += sc
+			namePos = append(namePos, pos...)
+			continue
+		}
+		where := a.rs.label[r.Path] + " " + gitx.RemoteHost(r.RemoteURL) + " " + config.Abbrev(filepath.Dir(r.Path))
+		sc, _, ok := fuzzyMatch(where, t)
+		if !ok {
+			return 0, false
+		}
+		total += sc / 3
+	}
+	if len(namePos) > 0 {
+		a.rs.hl[r.Path] = namePos
+	}
+	return total, true
+}
+
+// disambiguate labels repositories that share a name with something that
+// tells them apart: the remote host's first label ("forgejo" vs "gitea"),
+// the full host, the parent directory, or the parent path.
+func disambiguate(repos []scan.Repo) map[string]string {
+	groups := map[string][]scan.Repo{}
+	for _, r := range repos {
+		k := strings.ToLower(r.Name)
+		groups[k] = append(groups[k], r)
+	}
+	strategies := []func(scan.Repo) string{
+		func(r scan.Repo) string {
+			h, _, _ := strings.Cut(gitx.RemoteHost(r.RemoteURL), ".")
+			return h
+		},
+		func(r scan.Repo) string { return gitx.RemoteHost(r.RemoteURL) },
+		func(r scan.Repo) string { return filepath.Base(filepath.Dir(r.Path)) },
+		func(r scan.Repo) string { return config.Abbrev(filepath.Dir(r.Path)) },
+	}
+	out := map[string]string{}
+	for _, g := range groups {
+		if len(g) < 2 {
+			continue
+		}
+		for _, label := range strategies {
+			seen := map[string]bool{}
+			ok := true
+			for _, r := range g {
+				l := label(r)
+				if l == "" || seen[l] {
+					ok = false
+					break
+				}
+				seen[l] = true
+			}
+			if ok {
+				for _, r := range g {
+					out[r.Path] = label(r)
+				}
+				break
+			}
+		}
+	}
+	return out
 }
 
 func (a *App) selectedPath() string {
@@ -312,51 +469,22 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 	s := k.String()
 
 	if rs.filtering {
-		refilter := func() tea.Cmd {
-			a.rebuildView("")
-			rs.cur = 0
-			return a.previewCmd()
-		}
-		switch k.Type {
-		case tea.KeyEsc:
-			rs.filtering, rs.filter = false, ""
-			return refilter()
-		case tea.KeyEnter:
-			rs.filtering = false
-			return nil
-		case tea.KeyBackspace:
-			if r := []rune(rs.filter); len(r) > 0 {
-				rs.filter = string(r[:len(r)-1])
-			}
-			return refilter()
-		case tea.KeyRunes:
-			rs.filter += string(k.Runes)
-			return refilter()
-		case tea.KeySpace:
-			rs.filter += " "
-			return refilter()
-		}
+		return a.filterKey(k)
 	}
 
 	switch s {
-	case "up":
+	case "up", "k":
 		return a.moveRepos(-1)
-	case "down":
+	case "down", "j":
 		return a.moveRepos(1)
-	case "pgup":
+	case "pgup", "ctrl+u":
 		return a.moveRepos(-10)
-	case "pgdown":
+	case "pgdown", "ctrl+d":
 		return a.moveRepos(10)
-	case "home":
+	case "home", "g":
 		return a.moveRepos(-len(rs.view))
-	case "end":
+	case "end", "G":
 		return a.moveRepos(len(rs.view))
-	}
-	if rs.filtering {
-		return nil
-	}
-
-	switch s {
 	case "q":
 		return tea.Quit
 	case "esc":
@@ -365,10 +493,6 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 			a.rebuildView(a.selectedPath())
 			return a.previewCmd()
 		}
-	case "k":
-		return a.moveRepos(-1)
-	case "j":
-		return a.moveRepos(1)
 	case "/":
 		rs.filtering = true
 	case "enter":
@@ -378,6 +502,11 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 	case "d":
 		rs.dirtyOnly = !rs.dirtyOnly
 		a.rebuildView(a.selectedPath())
+		return a.previewCmd()
+	case "s":
+		rs.sortMode = (rs.sortMode + 1) % sortModes
+		a.rebuildView(a.selectedPath())
+		a.setToast("sorted by "+sortNames[rs.sortMode], false)
 		return a.previewCmd()
 	case " ":
 		if p := a.selectedPath(); p != "" {
@@ -394,12 +523,7 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 	case "r":
 		return a.gather(a.paths())
 	case "f":
-		ps := a.targets(a.paths)
-		jobs := a.cfg.Jobs
-		return a.doMsg(fmt.Sprintf("fetching %d repos", len(ps)), func() (string, error) {
-			failed := scan.RunAll(ps, jobs, func(p string) error { return gitx.Fetch(ctx, p) })
-			return fmt.Sprintf("fetched %d repos, %d failed", len(ps), failed), nil
-		})
+		return a.bulk("fetch", "fetched", a.targets(a.paths), func(p string) error { return gitx.Fetch(ctx, p) })
 	case "p":
 		ps := a.targets(func() []string {
 			if p := a.selectedPath(); p != "" {
@@ -407,11 +531,64 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 			}
 			return nil
 		})
-		jobs := a.cfg.Jobs
-		return a.doMsg(fmt.Sprintf("pulling %d repos", len(ps)), func() (string, error) {
-			failed := scan.RunAll(ps, jobs, func(p string) error { return gitx.Pull(ctx, p, false) })
-			return fmt.Sprintf("pulled %d repos, %d failed", len(ps), failed), nil
-		})
+		return a.bulk("pull", "pulled", ps, func(p string) error { return gitx.Pull(ctx, p, false) })
+	}
+	return nil
+}
+
+// filterKey edits the search query. Every printable key, including j, k, q
+// and ?, goes into the query; enter opens the selected repository, tab keeps
+// the filter and returns to navigation, esc clears it.
+func (a *App) filterKey(k tea.KeyMsg) tea.Cmd {
+	rs := &a.rs
+	refilter := func() tea.Cmd {
+		a.rebuildView("")
+		rs.cur = 0
+		return a.previewCmd()
+	}
+	switch k.String() {
+	case "esc":
+		rs.filtering, rs.filter = false, ""
+		a.rebuildView(a.selectedPath())
+		return a.previewCmd()
+	case "enter":
+		rs.filtering = false
+		if p := a.selectedPath(); p != "" {
+			return a.openDir(p)
+		}
+		return nil
+	case "tab":
+		rs.filtering = false
+		return nil
+	case "up", "ctrl+p", "ctrl+k":
+		return a.moveRepos(-1)
+	case "down", "ctrl+n", "ctrl+j":
+		return a.moveRepos(1)
+	case "backspace":
+		if r := []rune(rs.filter); len(r) > 0 {
+			rs.filter = string(r[:len(r)-1])
+			return refilter()
+		}
+		return nil
+	case "ctrl+u":
+		rs.filter = ""
+		return refilter()
+	case "ctrl+w":
+		f := strings.TrimRight(rs.filter, " ")
+		if i := strings.LastIndex(f, " "); i >= 0 {
+			rs.filter = f[:i+1]
+		} else {
+			rs.filter = ""
+		}
+		return refilter()
+	}
+	switch k.Type {
+	case tea.KeyRunes:
+		rs.filter += string(k.Runes)
+		return refilter()
+	case tea.KeySpace:
+		rs.filter += " "
+		return refilter()
 	}
 	return nil
 }
@@ -436,29 +613,70 @@ func syncStyled(i gitx.Info) string {
 	return strings.Join(parts, " ")
 }
 
-func repoRow(r scan.Repo, marked, isNew bool, nameW int) rowItem {
+// relTime is a compact age: 45s, 12m, 5h, 3d, 6w, 4mo, 2y.
+func relTime(unix int64, now time.Time) string {
+	if unix == 0 {
+		return "—"
+	}
+	d := now.Sub(time.Unix(unix, 0))
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	case d < 14*24*time.Hour:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	case d < 60*24*time.Hour:
+		return fmt.Sprintf("%dw", int(d.Hours()/24/7))
+	case d < 365*24*time.Hour:
+		return fmt.Sprintf("%dmo", int(d.Hours()/24/30))
+	}
+	return fmt.Sprintf("%dy", int(d.Hours()/24/365))
+}
+
+type rowOpts struct {
+	marked, isNew bool
+	label         string // clone label, shown after the name
+	hl            []int  // name runes matched by the filter
+	nameW         int
+	now           time.Time
+}
+
+func repoRow(r scan.Repo, o rowOpts) rowItem {
 	sel, dirty := " ", " "
-	if marked {
+	if o.marked {
 		sel = "✓"
 	}
-	if r.Changes > 0 {
+	switch {
+	case r.State != gitx.StateNone || r.Conflicts:
+		dirty = "!"
+	case r.Changes > 0:
 		dirty = "●"
 	}
-	rel := r.LastRel
-	if rel == "" {
-		rel = "no commits"
+	suffix, styledSuffix := "", ""
+	if o.label != "" {
+		suffix += " · " + o.label
+		styledSuffix += fg(cDim, " · "+o.label)
 	}
-	name := fit(r.Name, nameW)
-	styledName := bold(name)
-	if isNew {
-		name = fit(r.Name+" ✦", nameW)
-		styledName = fit(bold(r.Name)+fg(cAccent, " ✦"), nameW)
+	if o.isNew {
+		suffix += " ✦"
+		styledSuffix += fg(cAccent, " ✦")
 	}
+	hlStyle := lipgloss.NewStyle().Bold(true).Foreground(cAccent).Underline(true)
+	name := fit(r.Name+suffix, o.nameW)
+	styledName := fit(highlight(r.Name, o.hl, bold, func(s string) string { return hlStyle.Render(s) })+styledSuffix, o.nameW)
 	br := fit(r.Branch, 16)
-	sync := fit(r.Info.Sync(), 11)
-	plain := sel + dirty + " " + name + " " + br + " " + sync + "  " + rel
-	styled := fg(cGreen, sel) + fg(cYellow, dirty) + " " + styledName + " " + fg(cCyan, br) + " " +
-		fit(syncStyled(r.Info), 11) + "  " + fg(cDim, rel)
+	sync := fit(r.Info.Sync(), 10)
+	rel := fmt.Sprintf("%4s", relTime(r.LastUnix, o.now))
+	plain := sel + dirty + " " + name + " " + br + " " + sync + " " + rel
+	dc := cYellow
+	if dirty == "!" {
+		dc = cRed
+	}
+	styled := fg(cGreen, sel) + fg(dc, dirty) + " " + styledName + " " + fg(cCyan, br) + " " +
+		fit(syncStyled(r.Info), 10) + " " + fg(cDim, rel)
 	return rowItem{plain: plain, styled: styled}
 }
 
@@ -474,6 +692,9 @@ func (a *App) viewRepos() string {
 
 	head := lipgloss.NewStyle().Bold(true).Foreground(cAccent).Render("gitnest") +
 		fg(cDim, fmt.Sprintf("  %d repos · %d dirty", len(rs.all), dirty))
+	if rs.sortMode != sortRecent {
+		head += "  " + fg(cDim, "sort: "+sortNames[rs.sortMode])
+	}
 	if rs.dirtyOnly {
 		head += "  " + fg(cYellow, "[dirty only]")
 	}
@@ -490,14 +711,16 @@ func (a *App) viewRepos() string {
 
 	listW := a.w
 	if a.w >= 90 {
-		listW = a.w * 11 / 20
+		listW = a.w * 3 / 5
 	}
 	inner := listW - 2
-	nameW := clamp(inner-48, 10, 40)
+	nameW := clamp(inner-37, 10, 60)
+	now := time.Now()
 	items := make([]rowItem, len(rs.view))
 	for i, idx := range rs.view {
 		r := rs.all[idx]
-		items[i] = repoRow(r, rs.marked[r.Path], rs.isNew[r.Path], nameW)
+		items[i] = repoRow(r, rowOpts{marked: rs.marked[r.Path], isNew: rs.isNew[r.Path],
+			label: rs.label[r.Path], hl: rs.hl[r.Path], nameW: nameW, now: now})
 	}
 	lh := bodyH - 3
 	rs.listH = lh
@@ -525,13 +748,16 @@ func (a *App) viewRepos() string {
 		title := "Preview"
 		if p := a.selectedPath(); p != "" {
 			title = "Preview · " + filepath.Base(p)
+			if l := rs.label[p]; l != "" {
+				title += " · " + l
+			}
 		}
 		body = lipgloss.JoinHorizontal(lipgloss.Top, list, panel(title, pl, a.w-listW, bodyH, false))
 	}
 
-	hints := "enter open  / search  space mark  d dirty only  f fetch  p pull  R rescan  r refresh  ? help  q quit"
+	hints := "enter open  / search  s sort  d dirty only  space mark  f fetch  p pull  R rescan  r refresh  ? help  q quit"
 	if rs.filtering {
-		hints = "type to filter  ·  ↑/↓ move  ·  enter keep filter  ·  esc clear"
+		hints = "type to search (@branch)  ·  ↑/↓ move  ·  enter open  ·  tab keep filter  ·  esc clear"
 	}
 	return strings.Join([]string{fit(head, a.w), body, a.footer(hints)}, "\n")
 }
