@@ -203,3 +203,19 @@ func TestDiff(t *testing.T) {
 		t.Fatalf("empty: %v %v", a, r)
 	}
 }
+
+func TestStatusCache(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "status.json")
+	if got := Cached(path, []string{"/r/a"}, nil); len(got) != 1 || got[0].Name != "a" {
+		t.Fatalf("no cache: %+v", got)
+	}
+	saved := []Repo{{Path: "/r/a", Name: "a"}, {Path: "/r/gone", Name: "gone"}}
+	saved[0].Branch, saved[0].Changes = "main", 2
+	if err := SaveStatus(path, saved); err != nil {
+		t.Fatal(err)
+	}
+	got := Cached(path, []string{"/r/a", "/r/new"}, map[string]int64{"/r/new": 5})
+	if len(got) != 2 || got[0].Branch != "main" || got[0].Changes != 2 || got[1].Name != "new" || got[1].Used != 5 {
+		t.Fatalf("cached = %+v", got)
+	}
+}

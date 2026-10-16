@@ -3,6 +3,8 @@ package scan
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -78,6 +80,46 @@ func Sort(repos []Repo) {
 		}
 		return a.Name < b.Name
 	})
+}
+
+// SaveStatus writes repos to path so the next start can show them at once.
+func SaveStatus(path string, repos []Repo) error {
+	b, err := json.Marshal(repos)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// Cached returns a Repo for every path, filled from the status cache at
+// path when it has one (possibly stale) and with just the name otherwise.
+func Cached(path string, paths []string, recent map[string]int64) []Repo {
+	known := map[string]Repo{}
+	if b, err := os.ReadFile(path); err == nil {
+		var repos []Repo
+		if json.Unmarshal(b, &repos) == nil {
+			for _, r := range repos {
+				known[r.Path] = r
+			}
+		}
+	}
+	out := make([]Repo, len(paths))
+	for i, p := range paths {
+		r, ok := known[p]
+		if !ok {
+			r = Repo{Path: p, Name: filepath.Base(p)}
+		}
+		r.Used = recent[p]
+		out[i] = r
+	}
+	return out
 }
 
 // RunAll runs fn on every path in parallel and returns how many calls failed.

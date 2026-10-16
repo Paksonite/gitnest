@@ -326,7 +326,9 @@ func (a *App) paths() []string {
 func (a *App) gather(paths []string) tea.Cmd {
 	ctx, jobs, recent := a.ctx, a.cfg.Jobs, a.st.Snapshot()
 	return func() tea.Msg {
-		return reposMsg{repos: scan.Gather(ctx, paths, jobs, recent)}
+		repos := scan.Gather(ctx, paths, jobs, recent)
+		_ = scan.SaveStatus(state.StatusCachePath(), repos)
+		return reposMsg{repos: repos}
 	}
 }
 

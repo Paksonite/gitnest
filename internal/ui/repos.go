@@ -58,13 +58,19 @@ func (a *App) loadRepos() tea.Cmd {
 	ctx, sc, jobs, recent := a.ctx, a.scanner, a.cfg.Jobs, a.st.Snapshot()
 	a.rs.loading = true
 	return func() tea.Msg {
-		cached := sc.Load(state.ScanCachePath())
-		paths := sc.Repos()
-		if !cached {
-			paths, _ = sc.Scan(false)
-			_ = sc.Save(state.ScanCachePath())
+		if sc.Load(state.ScanCachePath()) {
+			// Show the last known list and status immediately; fresh status
+			// and a rescan follow in the background.
+			paths := sc.Repos()
+			repos := scan.Cached(state.StatusCachePath(), paths, recent)
+			scan.Sort(repos)
+			return reposMsg{repos: repos, paths: paths, cached: true}
 		}
-		return reposMsg{repos: scan.Gather(ctx, paths, jobs, recent), paths: paths, cached: cached}
+		paths, _ := sc.Scan(false)
+		_ = sc.Save(state.ScanCachePath())
+		repos := scan.Gather(ctx, paths, jobs, recent)
+		_ = scan.SaveStatus(state.StatusCachePath(), repos)
+		return reposMsg{repos: repos, paths: paths}
 	}
 }
 
@@ -95,7 +101,7 @@ func (a *App) statusCmd(paths []string, added bool) tea.Cmd {
 
 func (a *App) onRepos(m reposMsg) tea.Cmd {
 	rs := &a.rs
-	rs.loading = false
+	rs.loading = m.cached // cached rows are shown while fresh status loads
 	keep := a.selectedPath()
 	rs.all = m.repos
 	if m.paths != nil {
@@ -104,7 +110,7 @@ func (a *App) onRepos(m reposMsg) tea.Cmd {
 	a.rebuildView(keep)
 	var cmds []tea.Cmd
 	if m.cached {
-		cmds = append(cmds, a.scanCmd(false))
+		cmds = append(cmds, a.gather(m.paths), a.scanCmd(false))
 	} else if m.paths != nil {
 		a.setToast(fmt.Sprintf("%d repositories found", len(m.repos)), false)
 	}
@@ -705,8 +711,10 @@ func (a *App) viewRepos() string {
 		}
 		head += "  " + fg(cAccent, "/"+rs.filter+cursor)
 	}
-	if rs.loading {
+	if rs.loading && len(rs.all) == 0 {
 		head += "  " + fg(cYellow, "⟳ scanning…")
+	} else if rs.loading {
+		head += "  " + fg(cYellow, "⟳ refreshing…")
 	}
 
 	listW := a.w
