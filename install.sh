@@ -62,7 +62,9 @@ if command -v sha256sum >/dev/null 2>&1; then
 else
   have=$(shasum -a 256 "$tmp/$asset" | cut -d ' ' -f 1)
 fi
-[ -n "$want" ] && [ "$want" = "$have" ] || die "checksum mismatch for $asset"
+if [ -z "$want" ] || [ "$want" != "$have" ]; then
+  die "checksum mismatch for $asset"
+fi
 
 tar -xzf "$tmp/$asset" -C "$tmp"
 mkdir -p "$dir"
