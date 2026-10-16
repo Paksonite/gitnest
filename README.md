@@ -152,7 +152,7 @@ the **`gn`** command: it opens gitnest, and when you press `o` on a
 repository (in the list or inside it) gitnest quits and your shell is in that
 repository's folder.
 
-**zsh** — add to `~/.zshrc` (after `compinit`, if you call it yourself):
+**zsh** — add to `~/.zshrc` (anywhere: before or after `compinit` or oh-my-zsh):
 
 ```sh
 eval "$(gitnest shell zsh)"

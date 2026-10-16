@@ -78,3 +78,33 @@ func TestShellScriptParses(t *testing.T) {
 		}
 	}
 }
+
+// eval "$(gitnest shell zsh)" may come before compinit in ~/.zshrc (above
+// oh-my-zsh, say), or there may be no compinit at all: neither is an error,
+// and the completion is registered at the first prompt.
+func TestZshShellBeforeCompinit(t *testing.T) {
+	zsh, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("zsh not installed")
+	}
+	f := filepath.Join(t.TempDir(), "gn.zsh")
+	if err := os.WriteFile(f, []byte(zshCompletion+"\n"+zshShell), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	prompt := `for f in $precmd_functions; do $f; done; print -r -- "${_comps[gitnest]-none} ${_comps[gn]-none} ${#precmd_functions}"`
+	compinit := "autoload -Uz compinit; compinit -u -D -d " + filepath.Join(t.TempDir(), "zcompdump")
+	for name, script := range map[string]string{
+		"before compinit": "source " + f + "; " + compinit + "; " + prompt,
+		"after compinit":  compinit + "; source " + f + "; " + prompt,
+		"no compinit":     "source " + f + "; " + prompt,
+	} {
+		out, err := exec.Command(zsh, "-f", "-c", script).CombinedOutput()
+		want := "_gitnest _gitnest 0\n"
+		if name == "no compinit" {
+			want = "none none 0\n"
+		}
+		if err != nil || string(out) != want {
+			t.Errorf("%s: %v\n%s(want %q)", name, err, out, want)
+		}
+	}
+}

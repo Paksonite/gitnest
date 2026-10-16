@@ -23,7 +23,7 @@ gn() {
   fi
   return $rc
 }
-(( $+functions[compdef] )) && compdef gn=gitnest
+if (( $+functions[compdef] )); then compdef gn=gitnest; fi
 `
 
 // bashShell is gn for bash, plus completion for gitnest and gn.
@@ -49,8 +49,8 @@ func shellCmd(args []string) error {
 	}
 	switch args[0] {
 	case "zsh":
-		// Completion first (it registers itself with compdef when compinit
-		// has run), then gn.
+		// Completion first (it registers itself with compdef now if compinit
+		// has run, else at the first prompt, gn included), then gn.
 		fmt.Print(zshCompletion, "\n", zshShell)
 	case "bash":
 		fmt.Print(bashCompletion, "\n", bashShell, "complete -o filenames -o bashdefault -F _gitnest gn\n")
