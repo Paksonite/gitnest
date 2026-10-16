@@ -30,6 +30,7 @@ type Config struct {
 	StatusInterval int      `yaml:"status_interval"` // seconds, 0 disables
 	Jobs           int      `yaml:"jobs"`
 	Editor         string   `yaml:"editor"`
+	Icons          string   `yaml:"icons"` // "nerd" (needs a Nerd Font) or "unicode"
 	Theme          Theme    `yaml:"theme"`
 }
 
@@ -55,6 +56,9 @@ status_interval: 15
 jobs: 8
 # Editor used by "e" (empty = $VISUAL, then $EDITOR, then vi).
 editor: ""
+# Icons: "nerd" for file-type and git icons (needs a Nerd Font in the
+# terminal, e.g. MesloLGS NF), "unicode" for plain symbols any font has.
+icons: unicode
 theme:
   # auto follows the terminal background; set dark or light if it guesses wrong.
   mode: auto

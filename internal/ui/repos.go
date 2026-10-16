@@ -32,6 +32,9 @@ type reposState struct {
 	label       map[string]string // tells apart clones that share a name, e.g. "forgejo"
 	hl          map[string][]int  // name runes matched by the filter
 	sortMode    int
+	tree        bool            // group repositories by directory
+	rows        []listRow       // what is shown: repositories and, in tree mode, directories
+	collapsed   map[string]bool // collapsed directories in tree mode
 	preview     string
 	previewPath string
 }
@@ -102,7 +105,7 @@ func (a *App) statusCmd(paths []string, added bool) tea.Cmd {
 func (a *App) onRepos(m reposMsg) tea.Cmd {
 	rs := &a.rs
 	rs.loading = m.cached // cached rows are shown while fresh status loads
-	keep := a.selectedPath()
+	keep := a.selectedKey()
 	rs.all = m.repos
 	if m.paths != nil {
 		rs.known = m.paths
@@ -143,7 +146,7 @@ func (a *App) onScan(m scanMsg) tea.Cmd {
 			}
 		}
 		rs.all = keep
-		a.rebuildView(a.selectedPath())
+		a.rebuildView(a.selectedKey())
 	}
 	for _, p := range added {
 		rs.isNew[p] = true
@@ -175,7 +178,7 @@ func changeSummary(added, removed []string) string {
 // it, so rows don't jump under the cursor; new repositories are sorted in.
 func (a *App) onStatus(m statusMsg) tea.Cmd {
 	rs := &a.rs
-	keep := a.selectedPath()
+	keep := a.selectedKey()
 	got := map[string]scan.Repo{}
 	for _, r := range m.repos {
 		got[r.Path] = r
@@ -212,8 +215,10 @@ func (a *App) onStatus(m statusMsg) tea.Cmd {
 func (a *App) visiblePaths() []string {
 	rs := &a.rs
 	var ps []string
-	for i := rs.off; i < len(rs.view) && i < rs.off+rs.listH; i++ {
-		ps = append(ps, rs.all[rs.view[i]].Path)
+	for i := rs.off; i < len(rs.rows) && i < rs.off+rs.listH; i++ {
+		if r := rs.rows[i]; r.repo >= 0 {
+			ps = append(ps, rs.all[r.repo].Path)
+		}
 	}
 	return ps
 }
@@ -328,10 +333,11 @@ func (a *App) rebuildView(keep string) {
 	for _, c := range cs {
 		rs.view = append(rs.view, c.idx)
 	}
-	rs.cur = clamp(rs.cur, 0, len(rs.view)-1)
+	a.buildRows()
+	rs.cur = clamp(rs.cur, 0, len(rs.rows)-1)
 	if keep != "" {
-		for i, idx := range rs.view {
-			if rs.all[idx].Path == keep {
+		for i, r := range rs.rows {
+			if r.key(a) == keep {
 				rs.cur = i
 				break
 			}
@@ -422,10 +428,28 @@ func disambiguate(repos []scan.Repo) map[string]string {
 
 func (a *App) selectedPath() string {
 	rs := &a.rs
-	if rs.cur >= 0 && rs.cur < len(rs.view) {
-		return rs.all[rs.view[rs.cur]].Path
+	if rs.cur >= 0 && rs.cur < len(rs.rows) && rs.rows[rs.cur].repo >= 0 {
+		return rs.all[rs.rows[rs.cur].repo].Path
 	}
 	return ""
+}
+
+// selectedKey identifies the selected row, repository or directory.
+func (a *App) selectedKey() string {
+	rs := &a.rs
+	if rs.cur >= 0 && rs.cur < len(rs.rows) {
+		return rs.rows[rs.cur].key(a)
+	}
+	return ""
+}
+
+// selectedDir returns the selected row's index when it is a directory.
+func (a *App) selectedDir() (int, bool) {
+	rs := &a.rs
+	if rs.cur >= 0 && rs.cur < len(rs.rows) && rs.rows[rs.cur].repo < 0 {
+		return rs.cur, true
+	}
+	return 0, false
 }
 
 func (a *App) previewCmd() tea.Cmd {
@@ -451,7 +475,7 @@ func (a *App) openDir(path string) tea.Cmd {
 
 func (a *App) moveRepos(delta int) tea.Cmd {
 	rs := &a.rs
-	rs.cur = clamp(rs.cur+delta, 0, len(rs.view)-1)
+	rs.cur = clamp(rs.cur+delta, 0, len(rs.rows)-1)
 	return a.previewCmd()
 }
 
@@ -488,34 +512,58 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 	case actPageDown:
 		return a.moveRepos(10)
 	case actTop:
-		return a.moveRepos(-len(rs.view))
+		return a.moveRepos(-len(rs.rows))
 	case actBottom:
-		return a.moveRepos(len(rs.view))
+		return a.moveRepos(len(rs.rows))
 	case actQuit:
 		return tea.Quit
 	case actClearSearch:
 		if rs.filter != "" {
 			rs.filter = ""
-			a.rebuildView(a.selectedPath())
+			a.rebuildView(a.selectedKey())
 			return a.previewCmd()
 		}
 	case actSearch:
 		rs.filtering = true
 	case actOpen:
+		if i, ok := a.selectedDir(); ok { // enter on a directory folds it
+			d := rs.rows[i].dir
+			rs.collapsed[d] = !rs.collapsed[d]
+			a.rebuildView("d:" + d)
+			return nil
+		}
 		if p := a.selectedPath(); p != "" {
 			return a.openDir(p)
 		}
+	case actToggleTree:
+		rs.tree = !rs.tree
+		a.st.SetListTree(rs.tree)
+		a.rebuildView(a.selectedKey())
+		return a.previewCmd()
 	case actDirtyOnly:
 		rs.dirtyOnly = !rs.dirtyOnly
-		a.rebuildView(a.selectedPath())
+		a.rebuildView(a.selectedKey())
 		return a.previewCmd()
 	case actSort:
 		rs.sortMode = (rs.sortMode + 1) % sortModes
-		a.rebuildView(a.selectedPath())
+		a.rebuildView(a.selectedKey())
 		a.setToast("sorted by "+sortNames[rs.sortMode], false)
 		return a.previewCmd()
 	case actMark:
-		if p := a.selectedPath(); p != "" {
+		if i, ok := a.selectedDir(); ok { // a directory marks (or unmarks) everything below
+			paths := a.reposUnder(i)
+			all := true
+			for _, p := range paths {
+				all = all && rs.marked[p]
+			}
+			for _, p := range paths {
+				if all {
+					delete(rs.marked, p)
+				} else {
+					rs.marked[p] = true
+				}
+			}
+		} else if p := a.selectedPath(); p != "" {
 			if rs.marked[p] {
 				delete(rs.marked, p)
 			} else {
@@ -555,7 +603,7 @@ func (a *App) filterKey(k tea.KeyMsg) tea.Cmd {
 	switch lookup(scFilter, k.String()) {
 	case actCancelFilter:
 		rs.filtering, rs.filter = false, ""
-		a.rebuildView(a.selectedPath())
+		a.rebuildView(a.selectedKey())
 		return a.previewCmd()
 	case actOpenMatch:
 		rs.filtering = false
@@ -648,10 +696,12 @@ type rowOpts struct {
 	hl            []int  // name runes matched by the filter
 	nameW         int
 	now           time.Time
+	indent        int // tree depth
 }
 
 func repoRow(r scan.Repo, o rowOpts) rowItem {
 	sel, dirty := " ", " "
+	pad := strings.Repeat("  ", o.indent)
 	if o.marked {
 		sel = "✓"
 	}
@@ -671,8 +721,8 @@ func repoRow(r scan.Repo, o rowOpts) rowItem {
 		styledSuffix += fg(cAccent, " ✦")
 	}
 	hlStyle := lipgloss.NewStyle().Bold(true).Foreground(cAccent).Underline(true)
-	name := fit(r.Name+suffix, o.nameW)
-	styledName := fit(highlight(r.Name, o.hl, bold, func(s string) string { return hlStyle.Render(s) })+styledSuffix, o.nameW)
+	name := fit(pad+r.Name+suffix, o.nameW)
+	styledName := fit(pad+highlight(r.Name, o.hl, bold, func(s string) string { return hlStyle.Render(s) })+styledSuffix, o.nameW)
 	br := fit(r.Branch, 16)
 	sync := fit(r.Info.Sync(), 10)
 	rel := fmt.Sprintf("%4s", relTime(r.LastUnix, o.now))
@@ -729,12 +779,16 @@ func (a *App) viewRepos() string {
 	rs.off = scrollTo(rs.cur, rs.off, lh)
 	// Only the rows on screen are built: styling every row of a long list
 	// on each frame is what makes big lists sluggish.
-	end := min(rs.off+lh, len(rs.view))
+	end := min(rs.off+lh, len(rs.rows))
 	var items []rowItem
-	for _, idx := range rs.view[min(rs.off, end):end] {
-		r := rs.all[idx]
+	for _, row := range rs.rows[min(rs.off, end):end] {
+		if row.repo < 0 {
+			items = append(items, dirRow(row, rs.collapsed[row.dir] && rs.filter == "", inner))
+			continue
+		}
+		r := rs.all[row.repo]
 		items = append(items, repoRow(r, rowOpts{marked: rs.marked[r.Path], isNew: rs.isNew[r.Path],
-			label: rs.label[r.Path], hl: rs.hl[r.Path], nameW: nameW, now: now}))
+			label: rs.label[r.Path], hl: rs.hl[r.Path], nameW: nameW, now: now, indent: row.depth}))
 	}
 	lines := renderRows(items, rs.cur-rs.off, 0, lh, inner, true)
 	if len(rs.view) == 0 {

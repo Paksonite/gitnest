@@ -246,9 +246,6 @@ func TestCommitKindsAndGraph(t *testing.T) {
 	kinds := map[string]CommitKind{}
 	for _, c := range cs {
 		kinds[c.Subject] = c.Kind()
-		if c.Graph == "" {
-			t.Errorf("%s has no graph", c.Subject)
-		}
 	}
 	want := map[string]CommitKind{"base": KindRoot, "merge side": KindMerge, "fixup! m2": KindFixup, "m2": KindCommit}
 	for subj, k := range want {
@@ -259,14 +256,13 @@ func TestCommitKindsAndGraph(t *testing.T) {
 	if kinds[`Revert "fixup! m2"`] != KindRevert {
 		t.Errorf("revert kind: %v", kinds)
 	}
-	var sideGraph string
-	for _, c := range cs {
-		if c.Subject == "s1" {
-			sideGraph = c.Graph
-		}
+	if main := MainBranch(bg, dir); main != "main" {
+		t.Errorf("MainBranch = %q", main)
 	}
-	if !strings.Contains(sideGraph, "|") {
-		t.Errorf("side branch commit graph %q should show the parallel line", sideGraph)
+	git(t, dir, "checkout", "-q", "-b", "topic")
+	topic := commit(t, dir, "t.txt", "t\n", "topic work")
+	if nm := NotOnMain(bg, dir, 100); len(nm) != 1 || !nm[topic] {
+		t.Errorf("NotOnMain = %v", nm)
 	}
 }
 

@@ -98,8 +98,11 @@ func Run(cfg config.Config, noConfig bool, startDir string) error {
 	a := &App{ctx: ctx, cfg: cfg, st: state.Load(), noConfig: noConfig, startDir: startDir,
 		scanner: scan.NewScanner(scan.FromConfig(cfg))}
 	a.loadThemes()
+	setIcons(cfg.Icons)
 	a.rs.marked = map[string]bool{}
 	a.rs.isNew = map[string]bool{}
+	a.rs.collapsed = map[string]bool{}
+	a.rs.tree = a.st.ListTree
 	_, err := tea.NewProgram(a, tea.WithAltScreen(), tea.WithReportFocus()).Run()
 	return err
 }
