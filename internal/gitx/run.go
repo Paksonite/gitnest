@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 )
 
 // kind classifies a git invocation; it selects the timeout and whether the
@@ -188,10 +189,38 @@ func firstLines(s string, n int) string {
 	return strings.Join(lines, " ")
 }
 
-func limitLines(s string, n int) string {
-	if strings.Count(s, "\n") <= n {
+// Output shown in the UI is cut at maxShownLines lines or maxShownBytes
+// bytes, whichever comes first: a minified file can be megabytes on a
+// single line.
+const (
+	maxShownLines = 5000
+	maxShownBytes = 1 << 20
+)
+
+// limitOutput cuts s to the limits above, at a line end when one is close
+// enough and otherwise at a character boundary, and says so.
+func limitOutput(s string) string {
+	cut := len(s)
+	if n := strings.Count(s, "\n"); n > maxShownLines {
+		cut = 0
+		for i := 0; i < maxShownLines; i++ {
+			cut += strings.IndexByte(s[cut:], '\n') + 1
+		}
+		cut-- // drop the last newline
+	}
+	if cut > maxShownBytes {
+		cut = maxShownBytes
+		if nl := strings.LastIndexByte(s[:cut], '\n'); nl > cut/2 {
+			cut = nl
+		} else {
+			for cut > 0 && !utf8.RuneStart(s[cut]) {
+				cut--
+			}
+		}
+	}
+	if cut >= len(s) {
 		return s
 	}
-	lines := strings.SplitN(s, "\n", n+1)
-	return strings.Join(lines[:n], "\n") + "\n… (truncated)"
+	// \x1b[m ends a colour left open by the cut.
+	return s[:cut] + "\x1b[m\n… (truncated)"
 }

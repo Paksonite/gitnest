@@ -14,7 +14,6 @@ import (
 )
 
 // refIcon is the icon and colour for a reflog action (see refGlyph).
-
 func refIcon(k gitx.RefKind) (glyph string, c lipgloss.TerminalColor) {
 	glyph = refGlyph(k)
 	switch k {
@@ -63,8 +62,6 @@ func authorColor(name string) lipgloss.TerminalColor {
 	return cAuthors[h.Sum32()%uint32(len(cAuthors))]
 }
 
-// graph colours git's --graph drawing: commits in the accent, lines dimmed.
-
 // hashState says how far a commit has travelled:
 // on the main line (green), pushed (yellow), only local (red).
 type hashState int
@@ -95,17 +92,19 @@ func commitRow(c gitx.Commit, st hashState, g []gcell, copied bool) rowItem {
 	if copied {
 		mark = "▍"
 	}
-	plain := mark + c.Short + " " + ini + " " + gp + " " + c.Subject + refs
+	subject := printable(c.Subject)
+	plain := mark + c.Short + " " + ini + " " + gp + " " + subject + refs
 	styled := fg(cAccent, mark) + fg(hc, c.Short) + " " +
 		lipgloss.NewStyle().Bold(true).Foreground(authorColor(c.Author)).Render(ini) + " " +
-		gs + " " + c.Subject + fg(cCyan, refs)
+		gs + " " + subject + fg(cCyan, refs)
 	return rowItem{plain: plain, styled: styled}
 }
 
 func refRow(e gitx.RefEntry) rowItem {
 	icon, ic := refIcon(e.Kind())
-	plain := icon + " " + e.Short + " " + e.Action + " " + e.Message
-	styled := fg(ic, icon) + " " + fg(cYellow, e.Short) + " " + fg(cCyan, e.Action) + " " + e.Message
+	msg := printable(e.Message)
+	plain := icon + " " + e.Short + " " + e.Action + " " + msg
+	styled := fg(ic, icon) + " " + fg(cYellow, e.Short) + " " + fg(cCyan, e.Action) + " " + msg
 	return rowItem{plain: plain, styled: styled}
 }
 

@@ -201,6 +201,7 @@ icons in the Files tree and git icons for branches, tags and the reflog.
 | `d` | only repositories with uncommitted changes |
 | `space` | mark (on a folder: everything below); `f` fetch / `p` pull the marked ones |
 | `R` / `r` | rescan the folders / refresh the status |
+| `q` | quit |
 | `o` | quit and go to the repository (with `gn`) |
 | `T` | theme and icons |
 | `ctrl+n` | open a second gitnest next to this one ([panes](#several-repositories-side-by-side)) |
@@ -217,14 +218,15 @@ Four panels on the left — **Files**, **Branches** (`Local - Remote - Tags`),
 
 | Panel | Keys |
 |---|---|
-| Files | `space` stage/unstage, `a` all, `c` commit, `A` amend, `d` discard, `s` / `S` stash all / staged, `e` edit, `` ` `` tree/flat, **`enter` on a file: stage single lines** |
-| Line staging | `space` stage the line, `v` range, `a` hunk, `tab` staged side (unstage), `d` discard lines |
-| Branches | `space` checkout, `n` new, `r` rename, `d`/`D` delete, `u` upstream, `f` fast-forward, `M` merge, `R` rebase onto, `]` next tab |
+| Files | `space` stage/unstage, `a` all, `c` commit, `C` commit in `$EDITOR`, `A` amend, `d` discard, `s` / `S` stash all / staged, `e` edit, `` ` `` tree/flat, **`enter` on a file: stage single lines** |
+| Line staging | `space` stage the line, `v` range, `a` hunk, `tab` staged side (unstage), `d` discard lines, `esc` back |
+| Branches | `space` checkout, `n` new, `r` rename, `d`/`D` delete, `u`/`U` set/unset upstream, `f` fast-forward, `M` merge, `R` rebase onto, `]`/`[` next/previous tab |
 | Tags | `n` new at HEAD, `P` push, `d`/`D` delete local/remote, `space` checkout |
-| Commits | `s` squash, `f` fixup, `d` drop, `r` reword, `t` revert, `u` undo last commit, `ctrl+j`/`ctrl+k` move, **`i` interactive rebase**, `c` copy / `v` paste (cherry-pick, also into another repository), `]` reflog |
-| Reflog | `space` check out an entry, `g` reset the branch to it |
+| Commits | `s` squash, `f` fixup, `d` drop, `r` reword, `t` revert, `u` undo last commit, `ctrl+j`/`ctrl+k` move, **`i` interactive rebase**, `c` copy / `v` paste (cherry-pick, also into another repository) / `C` forget copied, `]` reflog |
+| Interactive rebase | `p` pick, `r` reword, `e` edit, `s` squash, `f` fixup, `d` drop, `ctrl+j`/`ctrl+k` move, `enter` run, `esc` cancel |
+| Reflog | `space` check out an entry, `g` reset the branch to it, `[` back to the commits |
 | Stash | `space` apply, `g` pop, `b` branch from it, `d` drop |
-| Anywhere | `p` pull, `P` push, `f` fetch, `z` undo the last history change, `!` full error, `?` help |
+| Anywhere | `p` pull, `ctrl+p` pull --rebase, `P` push, `F` force push, `f` or `ctrl+f` fetch (`ctrl+f` in Branches, where `f` fast-forwards), `z` undo the last history change, `o` quit and cd here, `enter` scroll the diff, `esc` back to the list, `!` full error, `?` help |
 
 The commit message editor has a **Subject** and an optional **Body**: type the
 subject and press `enter` to commit, or `tab` to write a body, then `ctrl+s`.

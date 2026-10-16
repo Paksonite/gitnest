@@ -12,8 +12,13 @@ make install      # into ~/.local/bin
 ```
 
 The tests run the real `git` against temporary repositories, and the
-end-to-end tests in `internal/ui/e2e_test.go` drive the whole app with key
-presses. `go test -short ./...` skips the end-to-end tests.
+end-to-end tests in `internal/ui/e2e*_test.go` drive the whole app with key
+presses (`press(t, app, "3", "s", "y")`): the list, every panel of the
+repository view, conflicts, panes, the update notice, and edge cases such as
+empty repositories, detached HEAD, huge diffs, odd file names, network
+timeouts and tiny windows. `go test -short ./...` skips them.
+`TestReadmeKeyTablesMatchKeymap` fails when the README's key tables and
+`keymap.go` disagree.
 
 CI (`.github/workflows/ci.yml`) runs gofmt, vet, staticcheck and the tests
 with `-race` on macOS and Ubuntu, the tests again on Debian 12, shellcheck
