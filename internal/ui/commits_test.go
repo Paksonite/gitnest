@@ -29,9 +29,9 @@ func TestInitials(t *testing.T) {
 }
 
 func TestCommitAndReflogRows(t *testing.T) {
-	c := gitx.Commit{Short: "abc1234", Author: "Michał Wadecki", Subject: "Revert \"x\"", Graph: "| * "}
-	r := commitRow(c, false)
-	if !strings.HasPrefix(r.plain, "↺ | * abc1234 MW Revert") || !strings.Contains(r.styled, "↺") {
+	c := gitx.Commit{Short: "abc1234", Author: "Michał Wadecki", Subject: "Revert \"x\""}
+	r := commitRow(c, hashLocal, []gcell{{'│', 0}, {' ', -1}, {'○', 1}})
+	if !strings.HasPrefix(r.plain, "abc1234 MW │ ○ Revert") {
 		t.Errorf("commit row: %q / %q", r.plain, r.styled)
 	}
 	e := gitx.RefEntry{Short: "def5678", Selector: "HEAD@{2}", Action: "commit (amend)", Message: "fix typo"}
@@ -51,7 +51,7 @@ func TestReflogToggleKeepsCursors(t *testing.T) {
 	}
 	a.rp.cur[pCommits] = 3
 	a.repoKey(key("]"))
-	if !a.rp.reflog || a.rp.cur[pCommits] != 0 || !strings.HasPrefix(commitsTitle(&a.rp), "[3] Reflog (5)") {
+	if !a.rp.reflog || a.rp.cur[pCommits] != 0 || !strings.Contains(commitsTitle(&a.rp), "Reflog (5)") {
 		t.Fatalf("reflog=%v cur=%d title=%q", a.rp.reflog, a.rp.cur[pCommits], commitsTitle(&a.rp))
 	}
 	a.repoKey(key("j"))
@@ -65,5 +65,22 @@ func TestReflogToggleKeepsCursors(t *testing.T) {
 	}
 	if !strings.Contains(a.repoHints(), "reset here") {
 		t.Errorf("hints: %q", a.repoHints())
+	}
+}
+
+func TestCheckoutPutsBranchOnTop(t *testing.T) {
+	a := testApp()
+	a.scr = scrRepo
+	a.rp.dir = "/r"
+	a.rp.focus = pBranches
+	a.rp.local = []gitx.Branch{{Name: "main", Current: true}, {Name: "feature"}, {Name: "old"}}
+	a.rp.cur[pBranches] = 2
+	a.branchesKey(" ") // checkout "old"
+	if !a.rp.jumpToCurrent {
+		t.Fatal("checkout should ask to jump to the new current branch")
+	}
+	a.onRepoData(repoDataMsg{dir: "/r", d: repoData{local: []gitx.Branch{{Name: "main"}, {Name: "feature"}, {Name: "old", Current: true}}}})
+	if a.rp.local[0].Name != "old" || a.rp.cur[pBranches] != 0 || a.rp.jumpToCurrent {
+		t.Errorf("first=%s cur=%d jump=%v", a.rp.local[0].Name, a.rp.cur[pBranches], a.rp.jumpToCurrent)
 	}
 }

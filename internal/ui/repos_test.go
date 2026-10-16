@@ -17,7 +17,7 @@ import (
 
 func testApp(paths ...string) *App {
 	a := &App{ctx: context.Background(), st: &state.State{Recent: map[string]int64{}}}
-	a.rs.marked, a.rs.isNew = map[string]bool{}, map[string]bool{}
+	a.rs.marked, a.rs.isNew, a.rs.collapsed = map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, p := range paths {
 		a.rs.all = append(a.rs.all, scan.Repo{Path: p, Name: p})
 		a.rs.known = append(a.rs.known, p)

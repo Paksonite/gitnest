@@ -144,8 +144,9 @@ func fileRow(n fileNode, collapsed bool) rowItem {
 		case staged:
 			col = cYellow
 		}
-		plain := indent + arrow + " " + n.Name + "/"
-		return rowItem{plain: plain, styled: indent + fg(cDim, arrow) + " " + fg(col, n.Name+"/")}
+		icon := fileIcon(n.Path, true, collapsed)
+		plain := indent + arrow + " " + icon + n.Name + "/"
+		return rowItem{plain: plain, styled: indent + fg(cDim, arrow) + " " + fg(col, icon+n.Name+"/")}
 	}
 	f := n.File
 	code := string([]byte{f.X, f.Y})
@@ -165,7 +166,8 @@ func fileRow(n fileNode, collapsed bool) rowItem {
 		}
 		st = x + y
 	}
-	plain, styled := indent+code+" "+n.Name, indent+st+" "+n.Name
+	icon := fileIcon(n.Path, false, false)
+	plain, styled := indent+code+" "+icon+n.Name, indent+st+" "+icon+n.Name
 	if f.Orig != "" { // rename or copy
 		plain += " ← " + f.Orig
 		styled += fg(cDim, " ← "+f.Orig)

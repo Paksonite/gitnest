@@ -176,7 +176,10 @@ func panel(title string, lines []string, w, h int, focused bool) string {
 		ts = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
 	}
 	rows := make([]string, 0, ih)
-	rows = append(rows, fit(ts.Render(title), inner))
+	if !strings.Contains(title, "\x1b") { // pre-styled titles (tabs) are kept as they are
+		title = ts.Render(title)
+	}
+	rows = append(rows, fit(title, inner))
 	for _, l := range lines {
 		if len(rows) >= ih {
 			break
@@ -187,4 +190,22 @@ func panel(title string, lines []string, w, h int, focused bool) string {
 		rows = append(rows, strings.Repeat(" ", inner))
 	}
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(col).Render(strings.Join(rows, "\n"))
+}
+
+// tabsTitle renders a panel title with tabs, lazygit style: "[3] Commits - Reflog"
+// with the active tab highlighted.
+func tabsTitle(num string, tabs []string, active int, focused bool) string {
+	numStyle := lipgloss.NewStyle().Foreground(cDim)
+	if focused {
+		numStyle = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
+	}
+	parts := make([]string, len(tabs))
+	for i, t := range tabs {
+		if i == active {
+			parts[i] = lipgloss.NewStyle().Foreground(cGreen).Bold(true).Render(t)
+		} else {
+			parts[i] = fg(cDim, t)
+		}
+	}
+	return numStyle.Render(num) + " " + strings.Join(parts, fg(cDim, " - "))
 }

@@ -11,46 +11,23 @@ import (
 	"github.com/Paksonite/gitnest/internal/gitx"
 )
 
-// Icons for the kind of change a commit or reflog entry is. They are plain
-// Unicode symbols available in the default macOS terminal fonts.
-func commitIcon(k gitx.CommitKind) (glyph string, c lipgloss.TerminalColor) {
-	switch k {
-	case gitx.KindMerge:
-		return "◆", cCyan
-	case gitx.KindRevert:
-		return "↺", cRed
-	case gitx.KindFixup:
-		return "↯", cYellow
-	case gitx.KindRoot:
-		return "◎", cGreen
-	}
-	return "●", cAccent
-}
+// refIcon is the icon and colour for a reflog action (see refGlyph).
 
 func refIcon(k gitx.RefKind) (glyph string, c lipgloss.TerminalColor) {
+	glyph = refGlyph(k)
 	switch k {
 	case gitx.RefCommit:
-		return "●", cAccent
+		return glyph, cAccent
 	case gitx.RefAmend:
-		return "✎", cYellow
-	case gitx.RefMerge:
-		return "◆", cCyan
-	case gitx.RefRebase:
-		return "↻", cCyan
-	case gitx.RefReset:
-		return "↶", cRed
-	case gitx.RefCheckout:
-		return "→", cDim
-	case gitx.RefPull:
-		return "↓", cGreen
-	case gitx.RefCherryPick:
-		return "✚", cGreen
-	case gitx.RefRevert:
-		return "↺", cRed
-	case gitx.RefInitial:
-		return "◎", cGreen
+		return glyph, cYellow
+	case gitx.RefMerge, gitx.RefRebase:
+		return glyph, cCyan
+	case gitx.RefReset, gitx.RefRevert:
+		return glyph, cRed
+	case gitx.RefPull, gitx.RefCherryPick, gitx.RefInitial:
+		return glyph, cGreen
 	}
-	return "·", cDim
+	return glyph, cDim
 }
 
 // initials turns an author name into two letters: "Michał Wadecki" → "MW",
@@ -85,27 +62,25 @@ func authorColor(name string) lipgloss.TerminalColor {
 }
 
 // graph colours git's --graph drawing: commits in the accent, lines dimmed.
-func graph(g string) string {
-	if g == "" {
-		return ""
-	}
-	var b strings.Builder
-	for _, r := range g {
-		switch r {
-		case '*':
-			b.WriteString(fg(cAccent, "*"))
-		case ' ':
-			b.WriteByte(' ')
-		default:
-			b.WriteString(fg(cDim, string(r)))
-		}
-	}
-	return b.String()
-}
 
-func commitRow(c gitx.Commit, unpushed bool) rowItem {
-	hc := cYellow
-	if unpushed {
+// hashState says how far a commit has travelled, coloured like lazygit:
+// on the main line (green), pushed (yellow), only local (red).
+type hashState int
+
+const (
+	hashMain hashState = iota
+	hashPushed
+	hashLocal
+)
+
+// commitRow is a Commits panel row: hash, author initials, the graph, the
+// subject and refs.
+func commitRow(c gitx.Commit, st hashState, g []gcell) rowItem {
+	hc := cGreen
+	switch st {
+	case hashPushed:
+		hc = cYellow
+	case hashLocal:
 		hc = cRed
 	}
 	refs := ""
@@ -113,11 +88,11 @@ func commitRow(c gitx.Commit, unpushed bool) rowItem {
 		refs = " (" + c.Refs + ")"
 	}
 	ini := initials(c.Author)
-	icon, ic := commitIcon(c.Kind())
-	plain := icon + " " + c.Graph + c.Short + " " + ini + " " + c.Subject + refs
-	styled := fg(ic, icon) + " " + graph(c.Graph) + fg(hc, c.Short) + " " +
+	gp, gs := graphText(g)
+	plain := c.Short + " " + ini + " " + gp + " " + c.Subject + refs
+	styled := fg(hc, c.Short) + " " +
 		lipgloss.NewStyle().Bold(true).Foreground(authorColor(c.Author)).Render(ini) + " " +
-		c.Subject + fg(cCyan, refs)
+		gs + " " + c.Subject + fg(cCyan, refs)
 	return rowItem{plain: plain, styled: styled}
 }
 

@@ -75,9 +75,9 @@ func TestParseLog(t *testing.T) {
 		"garbage\n"
 	got := parseLog(out)
 	want := []Commit{
-		{Hash: "h1", Short: "s1", Author: "Ann", Rel: "2 days ago", Subject: "subject one", Refs: "HEAD -> main", Merge: true, Graph: "*   "},
-		{Hash: "h2", Short: "s2", Author: "Bob", Rel: "3 days ago", Subject: "subject two", Graph: "| * "},
-		{Hash: "h3", Short: "s3", Author: "Bob", Rel: "4 days ago", Subject: "initial", Root: true, Graph: "* "},
+		{Hash: "h1", Short: "s1", Author: "Ann", Rel: "2 days ago", Subject: "subject one", Refs: "HEAD -> main", Merge: true, Parents: []string{"p1", "p2"}},
+		{Hash: "h2", Short: "s2", Author: "Bob", Rel: "3 days ago", Subject: "subject two", Parents: []string{"p3"}},
+		{Hash: "h3", Short: "s3", Author: "Bob", Rel: "4 days ago", Subject: "initial", Root: true, Parents: []string{}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v\nwant %+v", got, want)

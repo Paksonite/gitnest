@@ -343,9 +343,9 @@ func Discard(ctx context.Context, dir string, f File) error {
 
 type Commit struct {
 	Hash, Short, Author, Rel, Subject, Refs string
-	Merge                                   bool   // more than one parent
-	Root                                    bool   // no parent
-	Graph                                   string // git's --graph drawing before this commit ("* ", "| * ")
+	Merge                                   bool     // more than one parent
+	Root                                    bool     // no parent
+	Parents                                 []string // full hashes, first parent first
 }
 
 // CommitKind classifies a commit for its icon.
@@ -374,24 +374,25 @@ func (c Commit) Kind() CommitKind {
 	return KindCommit
 }
 
-// logFormat starts every commit line with a record separator, so the graph
-// drawn by --graph (everything before it) can be split off.
+// logFormat starts every commit line with a record separator, so anything
+// before it (e.g. a --graph drawing) can be split off.
 const logFormat = "--format=%x1e%H%x1f%h%x1f%an%x1f%ar%x1f%s%x1f%D%x1f%P"
 
 func Log(ctx context.Context, dir string, n int) ([]Commit, error) {
-	out, err := run(ctx, kRead, dir, nil, "log", "--graph", "-n", strconv.Itoa(n), logFormat)
+	// Topological order keeps a branch's commits together, which the
+	// commit graph needs.
+	out, err := run(ctx, kRead, dir, nil, "log", "--topo-order", "-n", strconv.Itoa(n), logFormat)
 	if err != nil {
 		return nil, err
 	}
 	return parseLog(out), nil
 }
 
-// parseLog reads logFormat output, with or without --graph. Graph-only
-// connector lines (no commit) are dropped.
+// parseLog reads logFormat output; lines without a commit are skipped.
 func parseLog(out string) []Commit {
 	var cs []Commit
 	for _, l := range strings.Split(out, "\n") {
-		graph, rest, ok := strings.Cut(l, "\x1e")
+		_, rest, ok := strings.Cut(l, "\x1e")
 		if !ok {
 			continue
 		}
@@ -401,7 +402,7 @@ func parseLog(out string) []Commit {
 		}
 		parents := strings.Fields(f[6])
 		cs = append(cs, Commit{Hash: f[0], Short: f[1], Author: f[2], Rel: f[3],
-			Subject: f[4], Refs: f[5], Merge: len(parents) > 1, Root: len(parents) == 0, Graph: graph})
+			Subject: f[4], Refs: f[5], Merge: len(parents) > 1, Root: len(parents) == 0, Parents: parents})
 	}
 	return cs
 }
@@ -537,6 +538,38 @@ func ResetHard(ctx context.Context, dir, rev, label string) error {
 func CheckoutDetached(ctx context.Context, dir, rev string) error {
 	_, err := run(ctx, kWrite, dir, nil, "checkout", "--detach", rev)
 	return err
+}
+
+// MainBranch names the repository's main line: the remote's default branch
+// (origin/HEAD), else a local main or master. Empty when there is none.
+func MainBranch(ctx context.Context, dir string) string {
+	if out, err := run(ctx, kRead, dir, nil, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD"); err == nil {
+		return strings.TrimSpace(out)
+	}
+	for _, b := range []string{"main", "master"} {
+		if _, err := run(ctx, kRead, dir, nil, "show-ref", "--verify", "-q", "refs/heads/"+b); err == nil {
+			return b
+		}
+	}
+	return ""
+}
+
+// NotOnMain returns the commits of HEAD that the main line doesn't contain
+// (at most n), or nil when there is no main line.
+func NotOnMain(ctx context.Context, dir string, n int) map[string]bool {
+	main := MainBranch(ctx, dir)
+	if main == "" {
+		return nil
+	}
+	out, err := run(ctx, kRead, dir, nil, "rev-list", "-n", strconv.Itoa(n), "HEAD", "^"+main)
+	if err != nil {
+		return nil
+	}
+	m := map[string]bool{}
+	for _, h := range strings.Fields(out) {
+		m[h] = true
+	}
+	return m
 }
 
 // Unpushed returns the set of commit hashes not on the upstream (nil if no upstream).

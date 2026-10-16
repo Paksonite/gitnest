@@ -26,7 +26,14 @@ func StatusCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cac
 func ScanCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "scan.json") }
 
 type State struct {
-	Recent map[string]int64 `json:"recent"`
+	Recent   map[string]int64 `json:"recent"`
+	ListTree bool             `json:"list_tree"` // repository list grouped by directory
+}
+
+// SetListTree remembers the repository list layout for the next start.
+func (s *State) SetListTree(on bool) {
+	s.ListTree = on
+	_ = s.save()
 }
 
 func Load() *State {

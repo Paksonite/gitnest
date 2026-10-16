@@ -70,6 +70,7 @@ rescan_interval: 60   # seconds between background scans for new clones (0 = off
 status_interval: 15   # seconds between status refreshes of visible rows (0 = off)
 jobs: 8           # parallel git processes
 editor: ""        # empty = $VISUAL, then $EDITOR, then vi
+icons: unicode    # "nerd" with a Nerd Font (e.g. MesloLGS NF)
 theme:
   mode: auto      # follows the terminal background; dark or light to force
   dark: catppuccin-mocha
@@ -88,13 +89,24 @@ a full rescan.
 
 Press `?` in the app for every key binding.
 
-In a repository, the Commits panel draws the branch graph and marks each
-commit with an icon for its kind (● commit, ◆ merge, ↺ revert, ↯ fixup/squash,
-◎ root) and the author's initials in a per-author colour. `]` switches it to
-HEAD's reflog (● commit, ✎ amend, ↻ rebase, ↶ reset, → checkout, ◆ merge,
-↓ pull, ✚ cherry-pick); the diff panel then shows a graph of what each step
-changed (`<` only before, `>` only after). From the reflog, `space` checks out
-an entry and `g` resets the branch to it (`z` undoes).
+In a repository, the Commits panel works like lazygit's: the hash (green on
+the main line, yellow pushed, red only local), the author's initials in a
+per-author colour, a commit graph with every line of development in its own
+colour (○ commit, ◎ merge), the subject and refs. Its title has two tabs,
+`Commits - Reflog`: `]` / `[` switch to HEAD's reflog, where the diff panel
+shows a graph of what each step changed (`<` only before, `>` only after),
+`space` checks out an entry and `g` resets the branch to it (`z` undoes).
+
+The checked-out branch is always first in the Branches panel, and checking
+out another branch moves the selection to it.
+
+In the repository list, `` ` `` groups repositories by the directories they
+live in (for example one folder per git host) with collapsible directories;
+`space` on a directory marks everything below it.
+
+Set `icons: nerd` in the config if your terminal uses a Nerd Font (for
+example MesloLGS NF): files get type icons, the reflog and branches get git
+icons. The default `unicode` works with any font.
 
 ## Themes
 

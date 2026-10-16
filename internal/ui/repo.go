@@ -31,33 +31,37 @@ type repoData struct {
 	unpushed map[string]bool
 	stashes  []gitx.Stash
 	refs     []gitx.RefEntry
+	notMain  map[string]bool
 }
 
 type repoState struct {
-	dir, name  string
-	focus      int
-	info       gitx.Info
-	files      []gitx.File
-	local      []gitx.Branch
-	remote     []gitx.Branch
-	showRemote bool
-	commits    []gitx.Commit
-	unpushed   map[string]bool
-	stashes    []gitx.Stash
-	cur, off   [4]int
-	main       string
-	mainKey    string
-	mainOff    int
-	mainFocus  bool            // keys scroll the main (diff) panel
-	fileRows   []fileNode      // Files panel rows (tree or flat)
-	flat       bool            // Files panel as a flat list instead of a tree
-	collapsed  map[string]bool // collapsed directories in the tree
-	refreshing bool            // a live refresh is running
-	reflog     bool            // the Commits panel shows the reflog
-	refs       []gitx.RefEntry // HEAD's reflog, newest first
-	otherCur   int             // cursor of the commits/reflog list not shown
-	mainH      int             // rows of the main panel on screen (set while rendering)
-	mainLen    int             // lines in the main panel
+	dir, name     string
+	focus         int
+	info          gitx.Info
+	files         []gitx.File
+	local         []gitx.Branch
+	remote        []gitx.Branch
+	showRemote    bool
+	commits       []gitx.Commit
+	unpushed      map[string]bool
+	stashes       []gitx.Stash
+	cur, off      [4]int
+	main          string
+	mainKey       string
+	mainOff       int
+	mainFocus     bool            // keys scroll the main (diff) panel
+	fileRows      []fileNode      // Files panel rows (tree or flat)
+	flat          bool            // Files panel as a flat list instead of a tree
+	collapsed     map[string]bool // collapsed directories in the tree
+	refreshing    bool            // a live refresh is running
+	reflog        bool            // the Commits panel shows the reflog
+	jumpToCurrent bool            // select the checked-out branch after the next reload
+	graph         [][]gcell       // commit graph rows, one per commit
+	notMain       map[string]bool // commits of HEAD not on the main line
+	refs          []gitx.RefEntry // HEAD's reflog, newest first
+	otherCur      int             // cursor of the commits/reflog list not shown
+	mainH         int             // rows of the main panel on screen (set while rendering)
+	mainLen       int             // lines in the main panel
 }
 
 func (rp *repoState) branches() []gitx.Branch {
@@ -134,6 +138,7 @@ func loadRepoData(ctx context.Context, dir string) tea.Cmd {
 		par(func() { d.unpushed = gitx.Unpushed(ctx, dir) })
 		par(func() { d.stashes, _ = gitx.Stashes(ctx, dir) })
 		par(func() { d.refs, _ = gitx.Reflog(ctx, dir, 300) })
+		par(func() { d.notMain = gitx.NotOnMain(ctx, dir, 1000) })
 		wg.Wait()
 		return repoDataMsg{dir: dir, d: d}
 	}
@@ -145,9 +150,14 @@ func (a *App) onRepoData(m repoDataMsg) tea.Cmd {
 	}
 	rp := &a.rp
 	d := m.d
-	rp.info, rp.local, rp.remote = d.info, d.local, d.remote
+	rp.info, rp.local, rp.remote = d.info, currentFirst(d.local), d.remote
+	if rp.jumpToCurrent { // after a checkout: show the branch now checked out, on top
+		rp.jumpToCurrent, rp.showRemote = false, false
+		rp.cur[pBranches], rp.off[pBranches] = 0, 0
+	}
 	rp.setFiles(d.files)
 	rp.commits, rp.unpushed, rp.stashes, rp.refs = d.commits, d.unpushed, d.stashes, d.refs
+	rp.notMain, rp.graph = d.notMain, buildGraph(d.commits)
 	for i := 0; i < 4; i++ {
 		rp.cur[i] = clamp(rp.cur[i], 0, rp.count(i)-1)
 	}
@@ -492,6 +502,7 @@ func (a *App) branchesKey(s string) (tea.Cmd, bool) {
 		if !has {
 			return nil, true
 		}
+		rp.jumpToCurrent = true
 		return a.do("checkout "+b.Name, func() error { return gitx.Checkout(ctx, dir, b) }), true
 	case actNewBranch:
 		base := ""
@@ -499,6 +510,7 @@ func (a *App) branchesKey(s string) (tea.Cmd, bool) {
 			base = b.Name
 		}
 		a.ask("New branch name (from "+base+")", "", func(name string) tea.Cmd {
+			rp.jumpToCurrent = true
 			return a.do("new branch", func() error { return gitx.NewBranch(ctx, dir, name, base) })
 		})
 		return nil, true
@@ -676,13 +688,14 @@ func (a *App) panelItems(panel int) []rowItem {
 	case pBranches:
 		for _, b := range rp.branches() {
 			mark := "  "
-			name := b.Name
+			glyph := branchGlyph(b.Remote)
+			name := fg(cDim, glyph) + b.Name
 			if b.Current {
 				mark = "* "
-				name = fg(cGreen, bold(b.Name))
+				name = fg(cGreen, glyph+bold(b.Name))
 			}
 			items = append(items, rowItem{
-				plain:  mark + b.Name + " " + b.Track,
+				plain:  mark + glyph + b.Name + " " + b.Track,
 				styled: mark + name + " " + fg(cDim, b.Track),
 			})
 		}
@@ -692,8 +705,19 @@ func (a *App) panelItems(panel int) []rowItem {
 				items = append(items, refRow(e))
 			}
 		} else {
-			for _, c := range rp.commits {
-				items = append(items, commitRow(c, rp.unpushed[c.Hash]))
+			for i, c := range rp.commits {
+				st := hashMain
+				switch {
+				case rp.unpushed[c.Hash]:
+					st = hashLocal
+				case rp.notMain == nil || rp.notMain[c.Hash]:
+					st = hashPushed
+				}
+				var g []gcell
+				if i < len(rp.graph) {
+					g = rp.graph[i]
+				}
+				items = append(items, commitRow(c, st, g))
 			}
 		}
 	default:
@@ -738,10 +762,11 @@ func (a *App) viewRepo() string {
 	}
 	mainW := a.w - leftW
 
-	branchTitle := "[2] Branches (local)"
+	branchTab := 0
 	if rp.showRemote {
-		branchTitle = "[2] Branches (remote)"
+		branchTab = 1
 	}
+	branchTitle := tabsTitle("[2]", []string{fmt.Sprintf("Local (%d)", len(rp.local)), fmt.Sprintf("Remote (%d)", len(rp.remote))}, branchTab, rp.focus == pBranches)
 	titles := [4]string{
 		fmt.Sprintf("[1] Files (%d)", len(rp.files)),
 		branchTitle,
@@ -1009,8 +1034,26 @@ func (a *App) push(force bool) tea.Cmd {
 }
 
 func commitsTitle(rp *repoState) string {
+	active := 0
 	if rp.reflog {
-		return fmt.Sprintf("[3] Reflog (%d) · ] commits", len(rp.refs))
+		active = 1
 	}
-	return fmt.Sprintf("[3] Commits (%d) · ] reflog", len(rp.commits))
+	return tabsTitle("[3]", []string{fmt.Sprintf("Commits (%d)", len(rp.commits)), fmt.Sprintf("Reflog (%d)", len(rp.refs))}, active, rp.focus == pCommits)
+}
+
+// currentFirst puts the checked-out branch at the top, like lazygit; the
+// rest keep their order (most recent commit first).
+func currentFirst(bs []gitx.Branch) []gitx.Branch {
+	out := make([]gitx.Branch, 0, len(bs))
+	for _, b := range bs {
+		if b.Current {
+			out = append(out, b)
+		}
+	}
+	for _, b := range bs {
+		if !b.Current {
+			out = append(out, b)
+		}
+	}
+	return out
 }
