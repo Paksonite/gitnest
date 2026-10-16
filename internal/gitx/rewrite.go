@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -229,6 +230,63 @@ func RebaseOnto(ctx context.Context, dir, name string) error {
 	}
 	_, err := run(ctx, kWrite, dir, nil, "rebase", "--autostash", name)
 	return err
+}
+
+// ------------------------------------------------------------- cherry-pick
+
+// CherryPick applies commits from repository src onto the current branch of
+// dst, oldest first. Within one repository (or another worktree of it) this
+// is git cherry-pick; across repositories the commits travel as patches
+// (format-patch + am -3), keeping authors, dates and messages. Conflicts
+// leave a cherry-pick or am in progress, which the usual continue / skip /
+// abort keys handle. An undo point is recorded first.
+func CherryPick(ctx context.Context, dst, src string, hashes []string) error {
+	if len(hashes) == 0 {
+		return errors.New("nothing to cherry-pick")
+	}
+	if err := requireNoOperation(ctx, dst); err != nil {
+		return err
+	}
+	if err := savePoint(ctx, dst, fmt.Sprintf("cherry-pick %d commit(s)", len(hashes))); err != nil {
+		return err
+	}
+	if sameRepository(dst, src) {
+		_, err := run(ctx, kWrite, dst, nil, append([]string{"cherry-pick", "--allow-empty"}, hashes...)...)
+		return err
+	}
+	tmp, err := os.MkdirTemp("", "gitnest-patches")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	var patches []string
+	for i, h := range hashes {
+		parents, err := run(ctx, kRead, src, nil, "rev-list", "--parents", "-n", "1", h)
+		if err != nil {
+			return err
+		}
+		if len(strings.Fields(parents)) > 2 {
+			return fmt.Errorf("%s is a merge commit; merges can't be copied between repositories", short(h))
+		}
+		out, err := run(ctx, kRead, src, nil, "format-patch", "-k", "--binary", "--no-signature",
+			"--start-number", strconv.Itoa(i+1), "-o", tmp, "-1", h)
+		if err != nil {
+			return err
+		}
+		patches = append(patches, strings.Fields(out)...)
+	}
+	_, err = run(ctx, kWrite, dst, nil, append([]string{"am", "-3", "-k", "--keep-cr"}, patches...)...)
+	return err
+}
+
+// sameRepository reports whether two worktrees share one repository.
+func sameRepository(a, b string) bool {
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	_, ca, ok1 := gitDirs(a)
+	_, cb, ok2 := gitDirs(b)
+	return ok1 && ok2 && ca == cb
 }
 
 // ------------------------------------------------------------- undo points

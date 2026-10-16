@@ -88,6 +88,7 @@ type App struct {
 	dark      bool        // the dark theme slot is in use
 	themeWarn string      // problem loading themes, shown at start
 	cdFile    string      // gn shell function: write the repository to cd into here
+	copied    *clipboard  // commits copied for cherry-pick
 	lastErr   *report     // details of the last failed operation, shown with "!"
 	toast     string
 	toastErr  bool

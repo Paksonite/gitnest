@@ -34,8 +34,8 @@ func TestInitials(t *testing.T) {
 
 func TestCommitAndReflogRows(t *testing.T) {
 	c := gitx.Commit{Short: "abc1234", Author: "Michał Wadecki", Subject: "Revert \"x\""}
-	r := commitRow(c, hashLocal, []gcell{{'│', 0}, {' ', -1}, {'○', 1}})
-	if !strings.HasPrefix(r.plain, "abc1234 MW │ ○ Revert") {
+	r := commitRow(c, hashLocal, []gcell{{'│', 0}, {' ', -1}, {'○', 1}}, false)
+	if !strings.HasPrefix(r.plain, " abc1234 MW │ ○ Revert") {
 		t.Errorf("commit row: %q / %q", r.plain, r.styled)
 	}
 	e := gitx.RefEntry{Short: "def5678", Selector: "HEAD@{2}", Action: "commit (amend)", Message: "fix typo"}
@@ -132,5 +132,39 @@ func TestCdQuit(t *testing.T) {
 	b, err := os.ReadFile(a.cdFile)
 	if err != nil || strings.TrimSpace(string(b)) != "/r/one" {
 		t.Errorf("cd file = %q, %v", b, err)
+	}
+}
+
+func TestCopyAndPasteAcrossRepos(t *testing.T) {
+	a := testApp()
+	a.scr = scrRepo
+	a.rp = repoState{dir: "/r/src", name: "src", focus: pCommits}
+	a.rp.commits = []gitx.Commit{{Hash: "h3", Short: "h3"}, {Hash: "h2", Short: "h2"}, {Hash: "h1", Short: "h1"}}
+	a.rp.cur[pCommits] = 2
+	a.repoKey(key("c")) // h1
+	a.rp.cur[pCommits] = 0
+	a.repoKey(key("c")) // h3
+	if !a.isCopied("h1") || !a.isCopied("h3") || a.isCopied("h2") || !strings.Contains(a.copiedBadge(), "2 copied from src") {
+		t.Fatalf("copied: %+v", a.copied)
+	}
+	a.rp.cur[pCommits] = 0
+	a.repoKey(key("c")) // uncopy h3
+	if a.isCopied("h3") {
+		t.Error("c again should uncopy")
+	}
+	a.rp.cur[pCommits] = 0
+	a.repoKey(key("c"))
+
+	// another repository: the clipboard stays, v asks to apply as patches
+	a.rp = repoState{dir: "/r/dst", name: "dst", focus: pCommits, info: gitx.Info{Branch: "main"}}
+	a.rp.commits = []gitx.Commit{{Hash: "x", Short: "x"}}
+	a.repoKey(key("v"))
+	if a.p == nil || !strings.Contains(a.p.title, "Cherry-pick 2 commit(s) onto main (as patches from src)") {
+		t.Fatalf("prompt: %+v", a.p)
+	}
+	a.p = nil
+	a.repoKey(key("C"))
+	if a.copied != nil {
+		t.Error("C should clear the clipboard")
 	}
 }

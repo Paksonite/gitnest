@@ -622,12 +622,23 @@ func (a *App) commitsKey(s string) (tea.Cmd, bool) {
 	if rp.reflog {
 		return a.reflogKey(s)
 	}
-	if lookup(scCommits, s) == actToggleReflog {
+	switch lookup(scCommits, s) {
+	case actToggleReflog:
 		return a.toggleReflog(), true
+	case actPaste:
+		return a.paste(), true
+	case actClearCopied:
+		a.copied = nil
+		a.setToast("copied commits cleared", false)
+		return nil, true
 	}
 	dir, ctx := rp.dir, a.ctx
 	if len(rp.commits) == 0 {
 		return nil, false
+	}
+	if lookup(scCommits, s) == actCopy {
+		a.copyCommit(rp.cur[pCommits])
+		return a.move(1), true
 	}
 	idx := rp.cur[pCommits]
 	c := rp.commits[idx]
@@ -755,7 +766,7 @@ func (a *App) panelItems(panel int) []rowItem {
 				if i < len(rp.graph) {
 					g = rp.graph[i]
 				}
-				items = append(items, commitRow(c, st, g))
+				items = append(items, commitRow(c, st, g, a.isCopied(c.Hash)))
 			}
 		}
 	default:
@@ -796,6 +807,7 @@ func (a *App) viewRepo() string {
 	if st := rp.info.State; st != gitx.StateNone {
 		head += "  " + lipgloss.NewStyle().Bold(true).Foreground(cYellow).Render(st.String()+" — "+stateKeys(st))
 	}
+	head += a.copiedBadge()
 
 	leftW := clamp(a.w*2/5, 34, 64)
 	if a.w < 80 {

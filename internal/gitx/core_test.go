@@ -327,3 +327,58 @@ func TestResetHardIsUndoable(t *testing.T) {
 }
 
 var ansiRe = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+func TestCherryPickSameRepo(t *testing.T) {
+	dir, h := conflictRepo(t) // main and other both change f.txt
+	git(t, dir, "checkout", "-q", "other")
+	extra := commit(t, dir, "g.txt", "g\n", "other: add g")
+	git(t, dir, "checkout", "-q", "main")
+	if err := CherryPick(bg, dir, dir, []string{extra}); err != nil {
+		t.Fatal(err)
+	}
+	if got := git(t, dir, "log", "-1", "--format=%s"); got != "other: add g" {
+		t.Errorf("HEAD = %q", got)
+	}
+	// conflicting pick leaves a cherry-pick in progress
+	if err := CherryPick(bg, dir, dir, []string{h}); err == nil {
+		t.Fatal("conflict expected")
+	}
+	mustState(t, dir, StateCherryPicking)
+	if err := Abort(bg, dir, StateCherryPicking); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCherryPickAcrossRepositories(t *testing.T) {
+	src := newRepo(t)
+	commit(t, src, "a.txt", "a\n", "base")
+	h1 := commit(t, src, "b.txt", "b\n", "add b\n\nwith a body")
+	h2 := commit(t, src, "c.txt", "c\n", "add c")
+	dst := newRepo(t)
+	commit(t, dst, "a.txt", "a\n", "base")
+	commit(t, dst, "z.txt", "z\n", "dst work")
+
+	if err := CherryPick(bg, dst, src, []string{h1, h2}); err != nil {
+		t.Fatal(err)
+	}
+	if got := git(t, dst, "log", "--format=%s", "-3"); got != "add c\nadd b\ndst work" {
+		t.Errorf("history:\n%s", got)
+	}
+	if got := git(t, dst, "log", "-1", "--format=%B", "HEAD~1"); got != "add b\n\nwith a body" {
+		t.Errorf("message: %q", got)
+	}
+	if p, _ := LastUndo(bg, dst); p == nil || !strings.Contains(p.Label, "cherry-pick 2") {
+		t.Errorf("undo point: %+v", p)
+	}
+
+	// a conflicting patch leaves "git am" in progress, handled like the others
+	conflict := commit(t, src, "z.txt", "from src\n", "touch z")
+	if err := CherryPick(bg, dst, src, []string{conflict}); err == nil {
+		t.Fatal("conflict expected")
+	}
+	mustState(t, dst, StateApplying)
+	if err := Abort(bg, dst, StateApplying); err != nil {
+		t.Fatal(err)
+	}
+	mustState(t, dst, StateNone)
+}

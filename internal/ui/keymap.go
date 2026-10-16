@@ -152,6 +152,9 @@ const (
 	actRevert
 	actUndoCommit
 	actToggleReflog
+	actCopy
+	actPaste
+	actClearCopied
 	actCheckoutEntry
 	actResetHere
 
@@ -290,6 +293,9 @@ var keymap = [scopes][]binding{
 		b(actReword, "reword (full message editor)", "reword", "r"),
 		b(actRevert, "revert the commit", "revert", "t"),
 		b(actUndoCommit, "undo the last commit, keep changes staged", "undo last", "u"),
+		b(actCopy, "copy the commit for cherry-pick (again: uncopy)", "copy", "c"),
+		b(actPaste, "paste copied commits onto this branch (also from another repository)", "paste", "v"),
+		b(actClearCopied, "forget the copied commits", "", "C"),
 		b(actToggleReflog, "show HEAD's reflog (every move, with a graph of what changed)", "reflog", "]", "["),
 	},
 	scTags: {
