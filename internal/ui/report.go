@@ -114,16 +114,16 @@ func errorReport(label string, err error) *report {
 func (a *App) reportKey(k tea.KeyMsg) tea.Cmd {
 	r := a.report
 	page := a.reportHeight()
-	switch k.String() {
-	case "esc", "q", "enter":
+	switch lookup(scOverlay, k.String()) {
+	case actBack:
 		a.report = nil
-	case "j", "down":
+	case actDown:
 		r.off++
-	case "k", "up":
+	case actUp:
 		r.off--
-	case "pgdown", "ctrl+d", " ":
+	case actPageDown:
 		r.off += page
-	case "pgup", "ctrl+u":
+	case actPageUp:
 		r.off -= page
 	}
 	if r := a.report; r != nil {
@@ -148,7 +148,7 @@ func (a *App) viewReport() string {
 		more = fmt.Sprintf("  ·  %d–%d of %d lines", r.off+1, min(r.off+h, len(r.lines)), len(r.lines))
 	}
 	text := bold(r.title) + "\n\n" + strings.Join(body, "\n") + "\n\n" +
-		fg(cDim, "j/k scroll · esc close"+more)
+		fg(cDim, "j/k scroll  "+hints(scOverlay)+more)
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cRed).
 		Padding(1, 2).Width(w).Render(text)
 	return lipgloss.Place(a.w, a.h, lipgloss.Center, lipgloss.Center, box)

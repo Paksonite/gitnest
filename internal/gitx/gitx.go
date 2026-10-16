@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -45,6 +47,13 @@ func GetInfo(ctx context.Context, dir string) (Info, error) {
 			in.LastRel = parts[1]
 		}
 	}
+	// State and remote come from files in the git dir when it can be found
+	// directly: two git processes per repository instead of four.
+	if gitDir, common, ok := gitDirs(dir); ok {
+		in.State = stateIn(gitDir)
+		in.RemoteURL = remoteFromConfig(filepath.Join(common, "config"))
+		return in, nil
+	}
 	in.State, _ = GetState(ctx, dir)
 	if o, err := run(ctx, kRead, dir, nil, "config", "--get-regexp", `^remote\..*\.url$`); err == nil {
 		in.RemoteURL = pickRemote(o)
@@ -72,6 +81,73 @@ func parseStatusV2(out string) Info {
 		}
 	}
 	return in
+}
+
+// gitDirs finds the git dir of the repository rooted at dir, and the common
+// dir that holds its config (they differ for linked worktrees), without
+// running git. ok is false when dir has no .git entry it understands.
+func gitDirs(dir string) (gitDir, common string, ok bool) {
+	dotgit := filepath.Join(dir, ".git")
+	st, err := os.Stat(dotgit)
+	if err != nil {
+		return "", "", false
+	}
+	if st.IsDir() {
+		return dotgit, dotgit, true
+	}
+	b, err := os.ReadFile(dotgit)
+	if err != nil {
+		return "", "", false
+	}
+	line, _, _ := strings.Cut(string(b), "\n")
+	gd, found := strings.CutPrefix(strings.TrimSpace(line), "gitdir:")
+	if !found {
+		return "", "", false
+	}
+	gitDir = strings.TrimSpace(gd)
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(dir, gitDir)
+	}
+	common = gitDir
+	if c, err := os.ReadFile(filepath.Join(gitDir, "commondir")); err == nil {
+		common = strings.TrimSpace(string(c))
+		if !filepath.IsAbs(common) {
+			common = filepath.Join(gitDir, common)
+		}
+	}
+	return gitDir, filepath.Clean(common), true
+}
+
+// remoteFromConfig reads remote URLs from a git config file: origin's, or
+// the first one. Includes are not followed; this only feeds display labels.
+func remoteFromConfig(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var remote, first string
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") {
+			remote = ""
+			if name, ok := strings.CutPrefix(line, "[remote \""); ok {
+				remote, _, _ = strings.Cut(name, "\"")
+			}
+			continue
+		}
+		key, val, ok := strings.Cut(line, "=")
+		if remote == "" || !ok || !strings.EqualFold(strings.TrimSpace(key), "url") {
+			continue
+		}
+		val = strings.Trim(strings.TrimSpace(val), "\"")
+		if remote == "origin" {
+			return val
+		}
+		if first == "" {
+			first = val
+		}
+	}
+	return first
 }
 
 // pickRemote chooses origin's URL from `git config --get-regexp remote.*.url`

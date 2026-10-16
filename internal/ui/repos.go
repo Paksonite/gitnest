@@ -472,43 +472,43 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 		return a.filterKey(k)
 	}
 
-	switch s {
-	case "up", "k":
+	switch lookup(scList, s) {
+	case actUp:
 		return a.moveRepos(-1)
-	case "down", "j":
+	case actDown:
 		return a.moveRepos(1)
-	case "pgup", "ctrl+u":
+	case actPageUp:
 		return a.moveRepos(-10)
-	case "pgdown", "ctrl+d":
+	case actPageDown:
 		return a.moveRepos(10)
-	case "home", "g":
+	case actTop:
 		return a.moveRepos(-len(rs.view))
-	case "end", "G":
+	case actBottom:
 		return a.moveRepos(len(rs.view))
-	case "q":
+	case actQuit:
 		return tea.Quit
-	case "esc":
+	case actClearSearch:
 		if rs.filter != "" {
 			rs.filter = ""
 			a.rebuildView(a.selectedPath())
 			return a.previewCmd()
 		}
-	case "/":
+	case actSearch:
 		rs.filtering = true
-	case "enter":
+	case actOpen:
 		if p := a.selectedPath(); p != "" {
 			return a.openDir(p)
 		}
-	case "d":
+	case actDirtyOnly:
 		rs.dirtyOnly = !rs.dirtyOnly
 		a.rebuildView(a.selectedPath())
 		return a.previewCmd()
-	case "s":
+	case actSort:
 		rs.sortMode = (rs.sortMode + 1) % sortModes
 		a.rebuildView(a.selectedPath())
 		a.setToast("sorted by "+sortNames[rs.sortMode], false)
 		return a.previewCmd()
-	case " ":
+	case actMark:
 		if p := a.selectedPath(); p != "" {
 			if rs.marked[p] {
 				delete(rs.marked, p)
@@ -517,14 +517,14 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 			}
 		}
 		return a.moveRepos(1)
-	case "R":
+	case actRescan:
 		a.setToast("rescanning all roots…", false)
 		return a.scanCmd(true)
-	case "r":
+	case actRefreshList:
 		return a.gather(a.paths())
-	case "f":
+	case actFetchMany:
 		return a.bulk("fetch", "fetched", a.targets(a.paths), func(p string) error { return gitx.Fetch(ctx, p) })
-	case "p":
+	case actPullMany:
 		ps := a.targets(func() []string {
 			if p := a.selectedPath(); p != "" {
 				return []string{p}
@@ -546,34 +546,34 @@ func (a *App) filterKey(k tea.KeyMsg) tea.Cmd {
 		rs.cur = 0
 		return a.previewCmd()
 	}
-	switch k.String() {
-	case "esc":
+	switch lookup(scFilter, k.String()) {
+	case actCancelFilter:
 		rs.filtering, rs.filter = false, ""
 		a.rebuildView(a.selectedPath())
 		return a.previewCmd()
-	case "enter":
+	case actOpenMatch:
 		rs.filtering = false
 		if p := a.selectedPath(); p != "" {
 			return a.openDir(p)
 		}
 		return nil
-	case "tab":
+	case actKeepFilter:
 		rs.filtering = false
 		return nil
-	case "up", "ctrl+p", "ctrl+k":
+	case actUp:
 		return a.moveRepos(-1)
-	case "down", "ctrl+n", "ctrl+j":
+	case actDown:
 		return a.moveRepos(1)
-	case "backspace":
+	case actDeleteChar:
 		if r := []rune(rs.filter); len(r) > 0 {
 			rs.filter = string(r[:len(r)-1])
 			return refilter()
 		}
 		return nil
-	case "ctrl+u":
+	case actClearQuery:
 		rs.filter = ""
 		return refilter()
-	case "ctrl+w":
+	case actDeleteWord:
 		f := strings.TrimRight(rs.filter, " ")
 		if i := strings.LastIndex(f, " "); i >= 0 {
 			rs.filter = f[:i+1]
@@ -716,17 +716,20 @@ func (a *App) viewRepos() string {
 	inner := listW - 2
 	nameW := clamp(inner-37, 10, 60)
 	now := time.Now()
-	items := make([]rowItem, len(rs.view))
-	for i, idx := range rs.view {
-		r := rs.all[idx]
-		items[i] = repoRow(r, rowOpts{marked: rs.marked[r.Path], isNew: rs.isNew[r.Path],
-			label: rs.label[r.Path], hl: rs.hl[r.Path], nameW: nameW, now: now})
-	}
 	lh := bodyH - 3
 	rs.listH = lh
 	rs.off = scrollTo(rs.cur, rs.off, lh)
-	lines := renderRows(items, rs.cur, rs.off, lh, inner, true)
-	if len(items) == 0 {
+	// Only the rows on screen are built: styling every row of a long list
+	// on each frame is what makes big lists sluggish.
+	end := min(rs.off+lh, len(rs.view))
+	var items []rowItem
+	for _, idx := range rs.view[min(rs.off, end):end] {
+		r := rs.all[idx]
+		items = append(items, repoRow(r, rowOpts{marked: rs.marked[r.Path], isNew: rs.isNew[r.Path],
+			label: rs.label[r.Path], hl: rs.hl[r.Path], nameW: nameW, now: now}))
+	}
+	lines := renderRows(items, rs.cur-rs.off, 0, lh, inner, true)
+	if len(rs.view) == 0 {
 		msg := "No repositories match."
 		if rs.loading {
 			msg = "Scanning…"
@@ -755,11 +758,11 @@ func (a *App) viewRepos() string {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, list, panel(title, pl, a.w-listW, bodyH, false))
 	}
 
-	hints := "enter open  / search  s sort  d dirty only  space mark  f fetch  p pull  R rescan  r refresh  ? help  q quit"
+	footer := hints(scList, scGlobal)
 	if rs.filtering {
-		hints = "type to search (@branch)  ·  ↑/↓ move  ·  enter open  ·  tab keep filter  ·  esc clear"
+		footer = "type to search (@branch)  ·  ↑/↓ move  ·  " + hints(scFilter)
 	}
-	return strings.Join([]string{fit(head, a.w), body, a.footer(hints)}, "\n")
+	return strings.Join([]string{fit(head, a.w), body, a.footer(footer)}, "\n")
 }
 
 func rootsList(roots []string) string {

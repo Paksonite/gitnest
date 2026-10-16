@@ -46,6 +46,14 @@ gitnest .        # open the repository you are in
 gitnest version
 ```
 
+## Shell completion (zsh)
+
+The Homebrew cask installs it. For a build from source, add to `~/.zshrc`:
+
+```sh
+eval "$(gitnest completion zsh)"
+```
+
 ## Configuration
 
 `~/.config/gitnest/config.yaml` (or `$XDG_CONFIG_HOME/gitnest/config.yaml`):
@@ -63,7 +71,8 @@ status_interval: 15   # seconds between status refreshes of visible rows (0 = of
 jobs: 8           # parallel git processes
 editor: ""        # empty = $VISUAL, then $EDITOR, then vi
 theme:
-  accent: "#cba6f7"
+  mode: auto      # follows the terminal background; dark or light to force
+  accent: ""      # empty = the theme's purple
 ```
 
 Without a config file gitnest scans the usual project directories that exist
@@ -73,6 +82,8 @@ Without a config file gitnest scans the usual project directories that exist
 New clones are picked up automatically: background scans only re-read
 directories whose modification time changed, so they stay cheap. Press `R` for
 a full rescan.
+
+Press `?` in the app for every key binding.
 
 ## Releasing
 

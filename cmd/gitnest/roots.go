@@ -19,10 +19,13 @@ func rootsCmd(args []string) error {
 	}
 	switch sub {
 	case "list", "ls":
-		if len(args) > 0 {
-			return errors.New("roots list takes no arguments")
+		switch {
+		case len(args) == 0:
+			return listRoots()
+		case len(args) == 1 && args[0] == "--plain":
+			return listRootsPlain()
 		}
-		return listRoots()
+		return errors.New("usage: gitnest roots list [--plain]")
 	case "add":
 		return addRoots(args)
 	case "rm", "remove":
@@ -49,6 +52,18 @@ func listRoots() error {
 			note = "  (missing)"
 		}
 		fmt.Println(config.Abbrev(r) + note)
+	}
+	return nil
+}
+
+// listRootsPlain prints one root per line and nothing else (for completion).
+func listRootsPlain() error {
+	cfg, _, err := config.Load()
+	if err != nil {
+		return err
+	}
+	for _, r := range cfg.Roots {
+		fmt.Println(config.Abbrev(r))
 	}
 	return nil
 }
