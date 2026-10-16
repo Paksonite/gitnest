@@ -89,6 +89,7 @@ type App struct {
 	themeWarn string      // problem loading themes, shown at start
 	cdFile    string      // gn shell function: write the repository to cd into here
 	copied    *clipboard  // commits copied for cherry-pick
+	plan      *planner    // interactive rebase being planned
 	lastErr   *report     // details of the last failed operation, shown with "!"
 	toast     string
 	toastErr  bool
@@ -232,6 +233,9 @@ func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 	}
 	if a.picker != nil {
 		return a.pickerKey(k)
+	}
+	if a.plan != nil {
+		return a.plannerKey(k)
 	}
 	if a.scr == scrRepos && a.rs.filtering {
 		return a.reposKey(k) // every key belongs to the search query, "?" too
@@ -433,6 +437,8 @@ func (a *App) View() string {
 		return a.viewReport()
 	case a.picker != nil:
 		return a.viewPicker()
+	case a.plan != nil:
+		return a.viewPlanner()
 	case a.scr == scrRepos:
 		return a.viewRepos()
 	}

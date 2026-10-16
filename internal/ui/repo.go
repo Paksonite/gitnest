@@ -636,9 +636,17 @@ func (a *App) commitsKey(s string) (tea.Cmd, bool) {
 	if len(rp.commits) == 0 {
 		return nil, false
 	}
-	if lookup(scCommits, s) == actCopy {
+	switch lookup(scCommits, s) {
+	case actCopy:
 		a.copyCommit(rp.cur[pCommits])
 		return a.move(1), true
+	case actRebasePlan:
+		a.openPlanner(rp.cur[pCommits])
+		return nil, true
+	case actMoveDown:
+		return a.moveCommit(rp.cur[pCommits], 1), true
+	case actMoveUp:
+		return a.moveCommit(rp.cur[pCommits], -1), true
 	}
 	idx := rp.cur[pCommits]
 	c := rp.commits[idx]

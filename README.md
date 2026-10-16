@@ -106,6 +106,12 @@ colour (○ commit, ◎ merge), the subject and refs. Its title has two tabs,
 shows a graph of what each step changed (`<` only before, `>` only after),
 `space` checks out an entry and `g` resets the branch to it (`z` undoes).
 
+`i` in the Commits panel opens an interactive rebase from the selected commit
+up to HEAD: set pick / reword / edit / squash / fixup / drop per commit,
+reorder with `ctrl+j` / `ctrl+k`, `enter` runs it (`z` undoes). `ctrl+j` /
+`ctrl+k` in the panel itself move a single commit. `c` copies commits and
+`v` pastes them (cherry-pick), also into another repository.
+
 The checked-out branch is always first in the Branches panel, and checking
 out another branch moves the selection to it.
 

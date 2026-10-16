@@ -26,6 +26,7 @@ const (
 	scPicker                // theme chooser
 	scReflog                // Commits panel showing the reflog
 	scTags                  // Branches panel, Tags tab
+	scPlan                  // interactive rebase planner
 	scopes
 )
 
@@ -45,6 +46,7 @@ var scopeTitles = [scopes]string{
 	scPicker:   "Theme chooser (T)",
 	scReflog:   "Reflog (] in the Commits panel)",
 	scTags:     "Tags (third tab of the Branches panel)",
+	scPlan:     "Interactive rebase (i in the Commits panel)",
 }
 
 type action int
@@ -153,6 +155,11 @@ const (
 	actUndoCommit
 	actToggleReflog
 	actCopy
+	actRebasePlan
+	actMoveUp
+	actMoveDown
+	actPick
+	actEditStep
 	actPaste
 	actClearCopied
 	actCheckoutEntry
@@ -293,10 +300,27 @@ var keymap = [scopes][]binding{
 		b(actReword, "reword (full message editor)", "reword", "r"),
 		b(actRevert, "revert the commit", "revert", "t"),
 		b(actUndoCommit, "undo the last commit, keep changes staged", "undo last", "u"),
+		b(actRebasePlan, "interactive rebase from this commit to HEAD (plan, reorder)", "rebase -i", "i"),
+		b(actMoveDown, "move the commit down (older)", "", "ctrl+j"),
+		b(actMoveUp, "move the commit up (newer)", "", "ctrl+k"),
 		b(actCopy, "copy the commit for cherry-pick (again: uncopy)", "copy", "c"),
 		b(actPaste, "paste copied commits onto this branch (also from another repository)", "paste", "v"),
 		b(actClearCopied, "forget the copied commits", "", "C"),
 		b(actToggleReflog, "show HEAD's reflog (every move, with a graph of what changed)", "reflog", "]", "["),
+	},
+	scPlan: {
+		b(actUp, "previous commit", "", "up", "k"),
+		b(actDown, "next commit", "", "down", "j"),
+		b(actMoveUp, "move up (newer)", "", "ctrl+k", "K"),
+		b(actMoveDown, "move down (older)", "move", "ctrl+j", "J"),
+		b(actPick, "pick", "pick", "p"),
+		b(actReword, "reword (opens the editor)", "reword", "r"),
+		b(actEditStep, "edit: stop there to change the commit", "edit", "e"),
+		b(actSquash, "squash into the commit below", "squash", "s"),
+		b(actFixup, "fixup into the commit below", "fixup", "f"),
+		b(actDrop, "drop", "drop", "d"),
+		b(actSave, "run the plan", "run", "enter"),
+		b(actCancel, "cancel", "cancel", "esc", "q"),
 	},
 	scTags: {
 		b(actNewTag, "new tag at HEAD (with a message: annotated)", "new", "n"),
@@ -377,7 +401,7 @@ func hints(scs ...scope) string {
 
 // helpLines renders every scope's bindings for the help overlay.
 func helpLines() []string {
-	order := []scope{scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scTags, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
+	order := []scope{scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scPlan, scTags, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
 	var out []string
 	for _, sc := range order {
 		if len(out) > 0 {
