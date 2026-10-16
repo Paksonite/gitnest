@@ -265,6 +265,8 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 	case "ctrl+r":
 		rp.mainKey = ""
 		return loadRepoData(ctx, dir)
+	case "z":
+		return a.undoLast()
 	case "L":
 		if _, err := exec.LookPath("lazygit"); err != nil {
 			a.setToast("lazygit not found in PATH", true)
@@ -315,10 +317,12 @@ func (a *App) filesKey(s string) (tea.Cmd, bool) {
 		c.Dir = dir
 		return a.execCmd(c), true
 	case "A":
-		a.confirm("Amend last commit with the staged changes?", func() tea.Cmd {
-			return a.do("amend", func() error { return gitx.AmendNoEdit(ctx, dir) })
-		})
-		return nil, true
+		return a.check(func() ([]string, error) { return gitx.CheckRewrite(ctx, dir, "HEAD", gitx.ActionAmend) },
+			func(pushed []string) tea.Cmd {
+				return a.confirmRewrite("Amend last commit with the staged changes?", pushed, func() tea.Cmd {
+					return a.doUndoable("amend", func() error { return gitx.AmendNoEdit(ctx, dir) })
+				})
+			}), true
 	case "d":
 		if !has {
 			return nil, true
@@ -400,17 +404,19 @@ func (a *App) branchesKey(s string) (tea.Cmd, bool) {
 			return nil, true
 		}
 		a.confirm("Merge "+b.Name+" into the current branch?", func() tea.Cmd {
-			return a.do("merge", func() error { return gitx.Merge(ctx, dir, b.Name) })
+			return a.doUndoable("merge "+b.Name, func() error { return gitx.Merge(ctx, dir, b.Name) })
 		})
 		return nil, true
 	case "R":
 		if !has || b.Current {
 			return nil, true
 		}
-		a.confirm("Rebase the current branch onto "+b.Name+"?", func() tea.Cmd {
-			return a.do("rebase", func() error { return gitx.RebaseOnto(ctx, dir, b.Name) })
-		})
-		return nil, true
+		return a.check(func() ([]string, error) { return gitx.CheckRebaseOnto(ctx, dir, b.Name) },
+			func(pushed []string) tea.Cmd {
+				return a.confirmRewrite("Rebase the current branch onto "+b.Name+"?", pushed, func() tea.Cmd {
+					return a.doUndoable("rebase onto "+b.Name, func() error { return gitx.RebaseOnto(ctx, dir, b.Name) })
+				})
+			}), true
 	}
 	return nil, false
 }
@@ -423,34 +429,47 @@ func (a *App) commitsKey(s string) (tea.Cmd, bool) {
 	}
 	idx := rp.cur[pCommits]
 	c := rp.commits[idx]
-	action := func(label, verb string) tea.Cmd {
-		a.confirm(strings.ToUpper(verb[:1])+verb[1:]+" commit "+c.Short+" ("+c.Subject+")?", func() tea.Cmd {
-			return a.do(label, func() error { return gitx.RebaseAction(ctx, dir, c.Hash, label, "") })
+	// rewrite checks the commit first (merges, operation in progress, pushed)
+	// and only then asks; then runs op.
+	rewrite := func(action, question string, op func() tea.Cmd) tea.Cmd {
+		return a.check(func() ([]string, error) { return gitx.CheckRewrite(ctx, dir, c.Hash, action) },
+			func(pushed []string) tea.Cmd { return a.confirmRewrite(question, pushed, op) })
+	}
+	meld := func(action string) tea.Cmd {
+		q := strings.ToUpper(action[:1]) + action[1:] + " commit " + c.Short + " (" + c.Subject + ")?"
+		return rewrite(action, q, func() tea.Cmd {
+			return a.doUndoable(action+" "+c.Short, func() error { return gitx.RebaseAction(ctx, dir, c.Hash, action, "") })
 		})
-		return nil
 	}
 	switch s {
 	case "s":
-		return action("squash", "squash"), true
+		return meld(gitx.ActionSquash), true
 	case "f":
-		return action("fixup", "fixup"), true
+		return meld(gitx.ActionFixup), true
 	case "d":
-		return action("drop", "drop"), true
+		return meld(gitx.ActionDrop), true
 	case "r":
-		a.ask("Reword "+c.Short, c.Subject, func(msg string) tea.Cmd {
-			return a.do("reword", func() error { return gitx.Reword(ctx, dir, c.Hash, msg) })
-		})
-		return nil, true
+		return a.check(func() ([]string, error) { return gitx.CheckRewrite(ctx, dir, c.Hash, gitx.ActionReword) },
+			func(pushed []string) tea.Cmd {
+				a.ask("Reword "+c.Short, c.Subject, func(msg string) tea.Cmd {
+					return a.confirmRewrite("", pushed, func() tea.Cmd {
+						return a.doUndoable("reword "+c.Short, func() error { return gitx.Reword(ctx, dir, c.Hash, msg) })
+					})
+				})
+				return nil
+			}), true
 	case "t":
 		a.confirm("Revert commit "+c.Short+"?", func() tea.Cmd {
-			return a.do("revert", func() error { return gitx.Revert(ctx, dir, c.Hash) })
+			return a.doUndoable("revert "+c.Short, func() error { return gitx.Revert(ctx, dir, c.Hash) })
 		})
 		return nil, true
 	case "u":
-		a.confirm("Undo the last commit (soft reset, changes stay staged)?", func() tea.Cmd {
-			return a.do("undo commit", func() error { return gitx.UndoCommit(ctx, dir) })
-		})
-		return nil, true
+		return a.check(func() ([]string, error) { return gitx.CheckRewrite(ctx, dir, "HEAD", gitx.ActionAmend) },
+			func(pushed []string) tea.Cmd {
+				return a.confirmRewrite("Undo the last commit (soft reset, changes stay staged)?", pushed, func() tea.Cmd {
+					return a.doUndoable("undo commit", func() error { return gitx.UndoCommit(ctx, dir) })
+				})
+			}), true
 	}
 	return nil, false
 }
@@ -552,7 +571,7 @@ func (a *App) repoHints() string {
 	case pBranches:
 		return "space checkout  n new  d delete  r rename  M merge  R rebase  t local/remote  ·  p pull  P push  esc back  ? help"
 	case pCommits:
-		return "s squash  f fixup  d drop  r reword  t revert  u undo last  ·  p pull  P push  esc back  ? help"
+		return "s squash  f fixup  d drop  r reword  t revert  u undo last  z undo rewrite  ·  p pull  P push  esc back  ? help"
 	}
 	return "space apply  g pop  d drop  ·  p pull  P push  esc back  ? help"
 }
@@ -627,4 +646,34 @@ func stateKeys(st gitx.State) string {
 		k = append(k, "S skip")
 	}
 	return strings.Join(append(k, "X abort"), " · ")
+}
+
+// doUndoable runs a history-changing operation and reminds that z undoes it.
+func (a *App) doUndoable(label string, fn func() error) tea.Cmd {
+	return a.doMsg(label, func() (string, error) { return label + " ✓  ·  z to undo", fn() })
+}
+
+// undoLast asks to reset the branch to the point saved before the last
+// history-changing operation.
+func (a *App) undoLast() tea.Cmd {
+	dir, ctx := a.rp.dir, a.ctx
+	p, err := gitx.LastUndo(ctx, dir)
+	switch {
+	case err != nil:
+		a.setToast(err.Error(), true)
+		return nil
+	case p == nil:
+		a.setToast("nothing to undo", false)
+		return nil
+	}
+	target := p.Branch
+	if target == "" {
+		target = "detached HEAD"
+	}
+	a.confirm(fmt.Sprintf("Undo %q? %s will be reset to %.7s.", p.Label, target, p.Head), func() tea.Cmd {
+		return a.doMsg("undo", func() (string, error) {
+			return "undid " + p.Label + "  ·  z to redo", gitx.Undo(ctx, dir)
+		})
+	})
+	return nil
 }
