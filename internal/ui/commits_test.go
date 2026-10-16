@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -119,3 +121,16 @@ func TestBranchTabsAndTags(t *testing.T) {
 }
 
 func stripStyles(s string) string { return s }
+
+func TestCdQuit(t *testing.T) {
+	a := testApp("/r/one")
+	if cmd := a.cdQuit("/r/one"); cmd != nil || !strings.Contains(a.toast, "gitnest shell zsh") {
+		t.Errorf("without gn: cmd=%v toast=%q", cmd != nil, a.toast)
+	}
+	a.cdFile = filepath.Join(t.TempDir(), "cd")
+	a.reposKey(key("o"))
+	b, err := os.ReadFile(a.cdFile)
+	if err != nil || strings.TrimSpace(string(b)) != "/r/one" {
+		t.Errorf("cd file = %q, %v", b, err)
+	}
+}

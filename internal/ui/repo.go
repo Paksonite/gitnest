@@ -378,6 +378,8 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 		return loadRepoData(ctx, dir)
 	case actUndo:
 		return a.undoLast()
+	case actCdQuit:
+		return a.cdQuit(rp.dir)
 	case actLazygit:
 		if _, err := exec.LookPath("lazygit"); err != nil {
 			a.setToast("lazygit not found in PATH", true)

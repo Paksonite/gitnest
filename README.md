@@ -54,6 +54,15 @@ The Homebrew cask installs it. For a build from source, add to `~/.zshrc`:
 eval "$(gitnest completion zsh)"
 ```
 
+## Jump into a repository from the shell (zsh)
+
+```sh
+eval "$(gitnest shell zsh)"   # in ~/.zshrc
+```
+
+Then `gn` opens gitnest; press `o` on a repository (or inside one) to quit
+and land in its directory.
+
 ## Configuration
 
 `~/.config/gitnest/config.yaml` (or `$XDG_CONFIG_HOME/gitnest/config.yaml`):

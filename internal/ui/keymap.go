@@ -57,6 +57,7 @@ const (
 	actThemes
 	actErrorDetails
 	actQuit
+	actCdQuit
 
 	// movement (shared by several scopes)
 	actUp
@@ -212,6 +213,7 @@ var keymap = [scopes][]binding{
 		b(actPullMany, "pull --ff-only marked (or selected) repositories", "pull", "p"),
 		b(actRescan, "rescan the roots for new and removed repositories", "rescan", "R"),
 		b(actRefreshList, "refresh the status of every repository", "refresh", "r"),
+		b(actCdQuit, "quit and cd into the repository (gn shell function)", "", "o"),
 		b(actQuit, "quit", "quit", "q"),
 	},
 	scFilter: {
@@ -247,6 +249,7 @@ var keymap = [scopes][]binding{
 		b(actUndo, "undo the last history change (again to redo)", "undo", "z"),
 		b(actReload, "reload", "", "ctrl+r"),
 		b(actLazygit, "open in lazygit", "", "L"),
+		b(actCdQuit, "quit and cd into this repository (gn shell function)", "", "o"),
 	},
 	scState: {
 		b(actContinue, "continue after resolving conflicts", "continue", "C"),

@@ -517,6 +517,8 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 		return a.moveRepos(len(rs.rows))
 	case actQuit:
 		return tea.Quit
+	case actCdQuit:
+		return a.cdQuit(a.selectedPath())
 	case actClearSearch:
 		if rs.filter != "" {
 			rs.filter = ""

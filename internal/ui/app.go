@@ -4,6 +4,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -86,6 +87,7 @@ type App struct {
 	theme     theme.Theme // active theme
 	dark      bool        // the dark theme slot is in use
 	themeWarn string      // problem loading themes, shown at start
+	cdFile    string      // gn shell function: write the repository to cd into here
 	lastErr   *report     // details of the last failed operation, shown with "!"
 	toast     string
 	toastErr  bool
@@ -93,10 +95,12 @@ type App struct {
 }
 
 // Run starts the TUI. startDir, if non-empty, opens that repository directly.
-func Run(cfg config.Config, noConfig bool, startDir string) error {
+// cdFile, when set, is where "o" writes the chosen repository for the gn
+// shell function to cd into.
+func Run(cfg config.Config, noConfig bool, startDir, cdFile string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	a := &App{ctx: ctx, cfg: cfg, st: state.Load(), noConfig: noConfig, startDir: startDir,
+	a := &App{ctx: ctx, cfg: cfg, st: state.Load(), noConfig: noConfig, startDir: startDir, cdFile: cdFile,
 		scanner: scan.NewScanner(scan.FromConfig(cfg))}
 	a.loadThemes()
 	setIcons(cfg.Icons)
@@ -461,4 +465,20 @@ func (a *App) footer(hints string) string {
 		t = fg(cGreen, a.toast)
 	}
 	return fit(t, a.w) + "\n" + fit(fg(cDim, hints), a.w)
+}
+
+// cdQuit leaves gitnest so the gn shell function cds into path.
+func (a *App) cdQuit(path string) tea.Cmd {
+	if path == "" {
+		return nil
+	}
+	if a.cdFile == "" {
+		a.setToast(`o needs the gn shell function: add  eval "$(gitnest shell zsh)"  to ~/.zshrc and start with gn`, true)
+		return nil
+	}
+	if err := os.WriteFile(a.cdFile, []byte(path+"\n"), 0o600); err != nil {
+		a.setToast("writing "+a.cdFile+": "+err.Error(), true)
+		return nil
+	}
+	return tea.Quit
 }
