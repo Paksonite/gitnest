@@ -2,8 +2,8 @@ package gitx
 
 import (
 	"os"
-	"regexp"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
