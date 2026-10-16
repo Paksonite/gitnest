@@ -31,8 +31,8 @@ Usage:
   gitnest roots add <dir> scan <dir> (and rm <dir> to stop)
   gitnest scan            print every repository found
   gitnest theme           list colour themes (also: theme export <name>, theme check <name|file>)
-  gitnest completion zsh  print the zsh completion script
-  gitnest shell zsh       print the gn function: gitnest, then cd into the repo you leave with o
+  gitnest completion zsh  print the completion script (zsh or bash)
+  gitnest shell zsh       gn + completion for ~/.zshrc (or: shell bash for ~/.bashrc)
   gitnest version         print version information
   gitnest doctor          check git, config, icons, terminal and shell setup
   gitnest help            show this help

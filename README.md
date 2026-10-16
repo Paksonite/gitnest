@@ -1,187 +1,330 @@
 # gitnest
 
-A terminal UI for managing many git repositories at once: a git-scope style
-overview of every repository under your project directories, plus a
-lazygit-style view for working inside a single repository.
+**One terminal UI for all your git repositories.**
 
-> Early development. See the keys with `?` inside the app.
+gitnest finds every repository under your project folders and shows them in
+one list: branch, ahead/behind, uncommitted changes, last commit. Open any of
+them to stage (down to single lines), commit, branch, rebase, cherry-pick,
+tag and push — all from the keyboard.
 
-## Install
+- **Every repository at a glance.** Fuzzy search with `/`, sort, group by
+  folder (for example by git host), see which ones need attention.
+- **New clones appear on their own.** Background scans pick up repositories
+  cloned or removed while gitnest runs.
+- **A full git client per repository.** Files as a tree with line-by-line
+  staging, branches and tags, a coloured commit graph, the reflog, stashes.
+- **History editing you can undo.** Squash, fixup, reword, drop, reorder or
+  plan a whole interactive rebase; every rewrite can be undone with `z`, and
+  rewriting pushed commits warns you first.
+- **Work across repositories.** Copy commits in one repository and paste
+  them into another; fetch or pull many repositories at once.
+- **Fits your terminal.** Ten built-in themes plus your own, light and dark
+  terminals, optional Nerd Font icons, zsh and bash integration.
 
-### Homebrew (macOS 13+, Apple Silicon and Intel)
+Runs on macOS 13+ and Linux (Debian, Ubuntu and others), as a
+single binary. It only needs `git`.
+
+---
+
+## Contents
+
+- [Install on macOS](#install-on-macos)
+- [Install on Debian / Ubuntu](#install-on-debian--ubuntu)
+- [Other ways to install](#other-ways-to-install)
+- [First start](#first-start)
+- [Shell integration: completion and `gn`](#shell-integration-completion-and-gn)
+- [Icons (Nerd Font)](#icons-nerd-font)
+- [Using gitnest](#using-gitnest)
+- [Configuration](#configuration)
+- [Themes](#themes)
+- [Troubleshooting](#troubleshooting)
+- [Update and uninstall](#update-and-uninstall)
+
+---
+
+## Install on macOS
+
+Requires macOS 13 (Ventura) or newer, Apple Silicon or Intel.
+
+1. **Homebrew** — if you don't have it yet, see [brew.sh](https://brew.sh).
+2. **git** — macOS asks to install the Command Line Tools the first time you
+   run `git`. A newer git from Homebrew works too:
+   ```sh
+   brew install git
+   ```
+3. **gitnest:**
+   ```sh
+   brew install --cask paksonite/tap/gitnest
+   ```
+   The cask also installs zsh completion.
+
+Check it:
 
 ```sh
-brew install --cask paksonite/tap/gitnest
+gitnest doctor
 ```
 
-Upgrade with `brew update && brew upgrade --cask gitnest`.
+## Install on Debian / Ubuntu
 
-The binary is not notarized by Apple; the cask removes the quarantine flag on
-install. If you download the archive from GitHub Releases by hand, run
-`xattr -d com.apple.quarantine gitnest` before the first start.
+Works on Debian 12+ and Ubuntu 22.04+ (amd64 and arm64).
 
-### From source
+1. **git** (2.35 or newer; Debian 12 has 2.39, Ubuntu 22.04 has 2.34 — see
+   the note below):
+   ```sh
+   sudo apt update && sudo apt install -y git curl
+   ```
+2. **gitnest** from the `.deb` package of the latest release:
+   ```sh
+   arch=$(dpkg --print-architecture)   # amd64 or arm64
+   version=$(curl -fsSL https://api.github.com/repos/Paksonite/gitnest/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
+   curl -fsSLO "https://github.com/Paksonite/gitnest/releases/download/v${version}/gitnest_${version}_${arch}.deb"
+   sudo apt install -y "./gitnest_${version}_${arch}.deb"
+   ```
+   The package installs `/usr/bin/gitnest` and bash and zsh completion, and
+   depends on `git`.
 
-Requires Go 1.24+.
+   Fedora / RHEL: the same release has `.rpm` packages
+   (`sudo dnf install ./gitnest_<version>_amd64.rpm`).
+
+Check it:
+
+```sh
+gitnest doctor
+```
+
+> **Ubuntu 22.04** ships git 2.34. gitnest works with it, except "stash only
+> staged changes" (`S`), which needs git 2.35. For a newer git:
+> `sudo add-apt-repository ppa:git-core/ppa && sudo apt install git`.
+
+## Other ways to install
+
+**Install script** (macOS or Linux, no root needed — installs into
+`~/.local/bin`, or `/usr/local/bin` as root, and verifies the checksum):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Paksonite/gitnest/main/install.sh | sh
+```
+
+A specific version: `… | sh -s -- v1.0.0`. Make sure `~/.local/bin` is on
+your `PATH`.
+
+**From source** (Go 1.24 or newer):
 
 ```sh
 go install github.com/Paksonite/gitnest/cmd/gitnest@latest
 ```
 
-or, from a checkout:
+The binary lands in `$(go env GOPATH)/bin` (usually `~/go/bin`).
+
+**Release archives** for every platform are on the
+[releases page](https://github.com/Paksonite/gitnest/releases).
+
+## First start
+
+Tell gitnest where your repositories live, then start it:
 
 ```sh
-make install   # installs to ~/.local/bin
+gitnest roots add ~/repos          # as many folders as you like
+gitnest                            # the repository list
 ```
 
-`git` must be on your `PATH` (the one from Xcode Command Line Tools is fine).
-
-## Usage
-
-```sh
-gitnest roots add ~/repos   # directories to scan (also: gitnest roots, gitnest roots rm <dir>)
-gitnest          # repository list
-gitnest scan     # print every repository found
-gitnest .        # open the repository you are in
-gitnest version
-```
-
-## Shell completion (zsh)
-
-The Homebrew cask installs it. For a build from source, add to `~/.zshrc`:
-
-```sh
-eval "$(gitnest completion zsh)"
-```
-
-## Jump into a repository from the shell (zsh)
-
-```sh
-eval "$(gitnest shell zsh)"   # in ~/.zshrc
-```
-
-Then `gn` opens gitnest; press `o` on a repository (or inside one) to quit
-and land in its directory.
-
-## Configuration
-
-`~/.config/gitnest/config.yaml` (or `$XDG_CONFIG_HOME/gitnest/config.yaml`):
-
-```yaml
-roots:            # directories scanned for repositories
-  - ~/repos
-depth: 4          # how deep below each root to look
-exclude: [node_modules, vendor, .terraform, .venv, Library, .Trash]
-skip_hidden: true
-nested: false     # also find repositories inside repositories (not submodules)
-follow_symlinks: false
-rescan_interval: 60   # seconds between background scans for new clones (0 = off)
-status_interval: 15   # seconds between status refreshes of visible rows (0 = off)
-jobs: 8           # parallel git processes
-editor: ""        # empty = $VISUAL, then $EDITOR, then vi
-icons: unicode    # "nerd" with a Nerd Font (e.g. MesloLGS NF)
-theme:
-  mode: auto      # follows the terminal background; dark or light to force
-  dark: catppuccin-mocha
-  light: catppuccin-latte
-  diff: theme     # "git" keeps your own git diff colours
-  accent: ""      # overrides the theme's accent
-```
-
-Without a config file gitnest scans the usual project directories that exist
+Without configuration gitnest looks in the usual project folders that exist
 (`~/code`, `~/dev`, `~/Developer`, `~/projects`, `~/src`, `~/work`,
-`~/workspace`, `~/repos`, `~/git`), never your whole home directory.
+`~/workspace`, `~/repos`, `~/git`) — never your whole home directory.
 
-New clones are picked up automatically: background scans only re-read
-directories whose modification time changed, so they stay cheap. Press `R` for
-a full rescan.
+Other entry points:
+
+```sh
+gitnest .                          # open the repository you are in
+gitnest roots                      # list the scanned folders (roots rm <dir> to remove)
+gitnest scan                       # print every repository found
+gitnest doctor                     # check git, config, icons, terminal and shell
+```
 
 Press `?` in the app for every key binding.
 
-In a repository, the Commits panel works like lazygit's: the hash (green on
-the main line, yellow pushed, red only local), the author's initials in a
-per-author colour, a commit graph with every line of development in its own
-colour (○ commit, ◎ merge), the subject and refs. Its title has two tabs,
-`Commits - Reflog`: `]` / `[` switch to HEAD's reflog, where the diff panel
-shows a graph of what each step changed (`<` only before, `>` only after),
-`space` checks out an entry and `g` resets the branch to it (`z` undoes).
+## Shell integration: completion and `gn`
 
-`enter` on a file in the Files panel opens its changes line by line, like
-lazygit's staging view: `space` stages the line under the cursor, a range
-(`v`) or the whole hunk (`a`); `tab` switches to the staged side, where
-`space` unstages; `d` discards unstaged lines. New files can be staged in
-parts too.
+One line in your shell's startup file gives you completion for `gitnest` and
+the **`gn`** command: it opens gitnest, and when you press `o` on a
+repository (in the list or inside it) gitnest quits and your shell is in that
+repository's folder.
 
-`i` in the Commits panel opens an interactive rebase from the selected commit
-up to HEAD: set pick / reword / edit / squash / fixup / drop per commit,
-reorder with `ctrl+j` / `ctrl+k`, `enter` runs it (`z` undoes). `ctrl+j` /
-`ctrl+k` in the panel itself move a single commit. `c` copies commits and
-`v` pastes them (cherry-pick), also into another repository.
+**zsh** — add to `~/.zshrc` (after `compinit`, if you call it yourself):
 
-The Branches panel has three tabs, `Local - Remote - Tags` (`]` / `[`). In
-Tags, `n` creates a tag at HEAD (with a message it is annotated), `P` pushes
-it, `d` / `D` delete it locally / on the remote, `space` checks it out.
+```sh
+eval "$(gitnest shell zsh)"
+```
 
-The checked-out branch is always first in the Branches panel, and checking
-out another branch moves the selection to it.
+**bash** — add to `~/.bashrc`:
 
-In the repository list, `` ` `` groups repositories by the directories they
-live in (for example one folder per git host) with collapsible directories;
-`space` on a directory marks everything below it.
+```sh
+eval "$(gitnest shell bash)"
+```
 
-Set `icons: nerd` in the config if your terminal uses a Nerd Font (for
-example MesloLGS NF): files get type icons, the reflog and branches get git
-icons. The default `unicode` works with any font.
+Open a new terminal and try `gn`. (Completion alone: `gitnest completion zsh`
+or `gitnest completion bash`.)
+
+## Icons (Nerd Font)
+
+By default gitnest uses plain symbols that every font has. With a
+[Nerd Font](https://www.nerdfonts.com) in your terminal you get file-type
+icons in the Files tree and git icons for branches, tags and the reflog.
+
+1. **Install a Nerd Font**, for example MesloLGS NF:
+   - macOS: `brew install --cask font-meslo-lg-nerd-font`
+   - Debian / Ubuntu:
+     ```sh
+     mkdir -p ~/.local/share/fonts && cd ~/.local/share/fonts
+     curl -fsSLO https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Meslo.tar.xz
+     tar -xf Meslo.tar.xz && rm Meslo.tar.xz && fc-cache -f
+     ```
+2. **Select it in your terminal** (iTerm2: Settings → Profiles → Text → Font;
+   Terminal.app: Settings → Profiles → Text; GNOME Terminal: Preferences →
+   your profile → Custom font). Over SSH, the font of the terminal on your own
+   computer is what counts.
+3. **Turn icons on in gitnest:** press `T`, then `i` (it is saved), or set
+   `icons: nerd` in the config.
+
+## Using gitnest
+
+### The repository list
+
+| Key | |
+|---|---|
+| `/` | search by name (also git host and folder; `@text` searches branches); `enter` opens, `tab` keeps the filter, `esc` clears |
+| `enter` | open the repository |
+| `` ` `` | group repositories by folder (tree) or show a flat list; `enter` folds a folder |
+| `s` | sort: recently used, name, last commit, needs attention |
+| `d` | only repositories with uncommitted changes |
+| `space` | mark (on a folder: everything below); `f` fetch / `p` pull the marked ones |
+| `R` / `r` | rescan the folders / refresh the status |
+| `o` | quit and go to the repository (with `gn`) |
+| `T` | theme and icons |
+
+`✦` marks repositories found since gitnest started, `●` uncommitted changes,
+`!` a conflict or an operation in progress. Clones of the same project from
+different hosts are told apart by host (`org-core-dns · forgejo`).
+
+### Inside a repository
+
+Four panels on the left — **Files**, **Branches** (`Local - Remote - Tags`),
+**Commits** (`Commits - Reflog`), **Stash** — and the diff on the right.
+`1`–`4` or `tab` switch panels, `enter` on the diff scrolls it.
+
+| Panel | Keys |
+|---|---|
+| Files | `space` stage/unstage, `a` all, `c` commit, `A` amend, `d` discard, `s` / `S` stash all / staged, `e` edit, `` ` `` tree/flat, **`enter` on a file: stage single lines** |
+| Line staging | `space` stage the line, `v` range, `a` hunk, `tab` staged side (unstage), `d` discard lines |
+| Branches | `space` checkout, `n` new, `r` rename, `d`/`D` delete, `u` upstream, `f` fast-forward, `M` merge, `R` rebase onto, `]` next tab |
+| Tags | `n` new at HEAD, `P` push, `d`/`D` delete local/remote, `space` checkout |
+| Commits | `s` squash, `f` fixup, `d` drop, `r` reword, `t` revert, `u` undo last commit, `ctrl+j`/`ctrl+k` move, **`i` interactive rebase**, `c` copy / `v` paste (cherry-pick, also into another repository), `]` reflog |
+| Reflog | `space` check out an entry, `g` reset the branch to it |
+| Stash | `space` apply, `g` pop, `b` branch from it, `d` drop |
+| Anywhere | `p` pull, `P` push, `f` fetch, `z` undo the last history change, `!` full error, `?` help |
+
+The commit message editor has a **Subject** and an optional **Body**: type the
+subject and press `enter` to commit, or `tab` to write a body, then `ctrl+s`.
+
+When a rebase, merge, cherry-pick or revert stops on a conflict, the header
+says so: resolve the files, stage them, and press `C` to continue, `S` to skip
+or `X` to abort.
+
+Rewriting commits that are already pushed asks twice; afterwards `P` offers a
+push with `--force-with-lease` — but only when the remote has nothing you
+haven't seen. Every history change records an undo point: `z` goes back,
+`z` again redoes.
+
+## Configuration
+
+`~/.config/gitnest/config.yaml` (or `$XDG_CONFIG_HOME/gitnest/config.yaml`).
+`gitnest init` writes a commented one; `gitnest roots add` edits it in place.
+
+```yaml
+roots:                 # folders scanned for repositories
+  - ~/repos
+depth: 4               # how deep below each root to look
+exclude: [node_modules, vendor, .terraform, .venv, Library, .Trash]
+skip_hidden: true
+nested: false          # also find repositories inside repositories (not submodules)
+follow_symlinks: false
+rescan_interval: 60    # seconds between background scans for new clones (0 = off)
+status_interval: 15    # seconds between status refreshes of visible rows (0 = off)
+jobs: 8                # parallel git processes
+editor: ""             # for e; empty = $VISUAL, then $EDITOR, then vi
+icons: unicode         # or nerd (needs a Nerd Font)
+theme:
+  mode: auto           # follows the terminal background; dark or light to force
+  dark: catppuccin-mocha
+  light: catppuccin-latte
+  diff: theme          # "git" keeps your own git diff colours
+  accent: ""           # overrides the theme's accent colour
+```
+
+`GITNEST_ICONS=nerd` overrides `icons` for one session.
 
 ## Themes
 
-Press `T` in the app to pick a theme: moving through the list previews it
-live, `enter` saves it for dark or light backgrounds, `esc` goes back.
+Press `T` to pick a theme: the list previews each one live, `enter` saves it
+for dark or light backgrounds, `esc` goes back, `i` switches icons.
 
 Built in: `catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`,
 `gruvbox-light`, `nord`, `solarized-dark`, `solarized-light`, `tokyo-night`,
-`dracula`, and `terminal`, which uses your terminal's own 16 ANSI colours
-(best for Terminal.app, which has no true colour).
+`dracula`, and `terminal`, which uses your terminal's own 16 colours (best
+for terminals without true colour, such as macOS Terminal.app).
 
-A custom theme is a small YAML file in `~/.config/gitnest/themes/` that
-extends another theme and overrides a few colours:
+Your own theme is a small file in `~/.config/gitnest/themes/` that extends
+another and changes a few colours:
 
 ```yaml
-name: tokyo-orange
+# ~/.config/gitnest/themes/tokyo-orange.yaml
 extends: tokyo-night
 colors:
   accent: "#ff9e64"
-  sel: "#3b4261"
 ```
 
 ```sh
-gitnest theme                       # list themes and which ones are in use
-gitnest theme export nord > ~/.config/gitnest/themes/my-nord.yaml   # full template
-gitnest theme check my-nord         # unknown roles, bad colours, low contrast
+gitnest theme                                    # all themes, and which are in use
+gitnest theme export nord > ~/.config/gitnest/themes/my-nord.yaml   # a full template
+gitnest theme check my-nord                      # unknown roles, bad colours, low contrast
 ```
 
-Roles: `background` (not painted; used by `check`), `text`, `dim`, `accent`,
-`added`, `removed`, `warn`, `branch`, `sel`, `sel_dim`, `border`, `diff_add`,
-`diff_del`, `diff_hunk`, `diff_meta`, plus `authors` (a list of colours for
-commit authors). Colours are `#rrggbb`, `#rgb`, ANSI numbers `0`–`255`, or
-`""` for the terminal default.
+## Troubleshooting
 
-## Releasing
+Start with `gitnest doctor`: it checks git, the configuration, the scanned
+folders, themes, icons, colour support and the shell setup, and says what to
+do.
 
-Releases are built by GoReleaser from tags:
+- **"No directories to scan"** — `gitnest roots add ~/your/projects`.
+- **Boxes or question marks instead of icons** — the terminal font is not a
+  Nerd Font: install one (see [Icons](#icons-nerd-font)) or press `T` then `i`
+  to go back to plain symbols.
+- **Colours look off** — your terminal may not report its background: set
+  `theme.mode: dark` or `light`. Without true colour, try the `terminal`
+  theme.
+- **`gitnest: command not found` after the install script** — add
+  `~/.local/bin` to your `PATH`.
+- **Push or fetch fails without asking for a password** — gitnest never
+  prompts: use an SSH agent (`ssh-add`) or a credential helper
+  (macOS: `osxkeychain`, Linux: `git config --global credential.helper store`
+  or `libsecret`). `!` shows git's full error.
+- **macOS says the binary "is damaged"** (only when you downloaded the archive
+  in a browser): `xattr -d com.apple.quarantine /path/to/gitnest`.
 
-```sh
-git tag v0.1.0 && git push origin v0.1.0
-```
+## Update and uninstall
 
-The `release` workflow builds a universal macOS binary, publishes a GitHub
-Release and updates the cask in
-[Paksonite/homebrew-tap](https://github.com/Paksonite/homebrew-tap). It needs a
-`HOMEBREW_TAP_TOKEN` repository secret: a fine-grained token with
-*Contents: read and write* on `homebrew-tap`.
+| Installed with | Update | Uninstall |
+|---|---|---|
+| Homebrew | `brew update && brew upgrade --cask gitnest` | `brew uninstall --cask gitnest` |
+| `.deb` / `.rpm` | install the newer package the same way | `sudo apt remove gitnest` / `sudo dnf remove gitnest` |
+| install script | run it again | `rm ~/.local/bin/gitnest` |
+| `go install` | run it again | `rm "$(go env GOPATH)/bin/gitnest"` |
 
-`make snapshot` builds the same artifacts locally without publishing.
+Configuration lives in `~/.config/gitnest`, caches in `~/.cache/gitnest` and
+state in `~/.local/state/gitnest`; remove them to start from scratch.
 
-## License
+---
 
-MIT
+Development, tests and releasing: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
+License: [MIT](LICENSE).
