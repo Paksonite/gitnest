@@ -2,6 +2,7 @@
 package scan
 
 import (
+	"context"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -86,11 +87,11 @@ func ForEach(n, jobs int, fn func(i int)) {
 }
 
 // Gather collects status for every path and sorts: recently used, then newest commit.
-func Gather(paths []string, jobs int, recent map[string]int64) []Repo {
+func Gather(ctx context.Context, paths []string, jobs int, recent map[string]int64) []Repo {
 	res := make([]Repo, len(paths))
 	ok := make([]bool, len(paths))
 	ForEach(len(paths), jobs, func(i int) {
-		info, err := gitx.GetInfo(paths[i])
+		info, err := gitx.GetInfo(ctx, paths[i])
 		if err != nil {
 			return
 		}
