@@ -12,8 +12,11 @@ import (
 )
 
 type Theme struct {
-	Mode   string `yaml:"mode"` // auto (default), dark or light
-	Accent string `yaml:"accent"`
+	Mode   string `yaml:"mode"`   // auto (default), dark or light
+	Dark   string `yaml:"dark"`   // theme used on dark backgrounds
+	Light  string `yaml:"light"`  // theme used on light backgrounds
+	Diff   string `yaml:"diff"`   // "theme" colours diffs with the theme, "git" keeps git's colours
+	Accent string `yaml:"accent"` // overrides the theme's accent colour
 }
 
 type Config struct {
@@ -55,7 +58,13 @@ editor: ""
 theme:
   # auto follows the terminal background; set dark or light if it guesses wrong.
   mode: auto
-  # Accent colour; empty uses the theme's own (purple).
+  # Themes for dark and light backgrounds: press T in the app to pick one,
+  # "gitnest theme list" shows them all; custom ones live in themes/*.yaml.
+  dark: catppuccin-mocha
+  light: catppuccin-latte
+  # "theme" colours diffs with the theme; "git" keeps your git colours.
+  diff: theme
+  # Overrides the theme's accent colour; empty keeps the theme's.
   accent: ""
 `
 
@@ -67,6 +76,9 @@ func Dir() string {
 	h, _ := os.UserHomeDir()
 	return filepath.Join(h, ".config", "gitnest")
 }
+
+// ThemesDir holds user themes (*.yaml).
+func ThemesDir() string { return filepath.Join(Dir(), "themes") }
 
 // Path returns the config file path.
 func Path() string { return filepath.Join(Dir(), "config.yaml") }
@@ -110,7 +122,7 @@ func Default() Config {
 		RescanInterval: 60,
 		StatusInterval: 15,
 		Jobs:           8,
-		Theme:          Theme{Mode: "auto"},
+		Theme:          Theme{Mode: "auto", Dark: "catppuccin-mocha", Light: "catppuccin-latte", Diff: "theme"},
 	}
 }
 
@@ -200,6 +212,30 @@ func SetRoots(roots []string) error {
 	if err != nil {
 		return err
 	}
+	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+	for _, r := range roots {
+		seq.Content = append(seq.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: Abbrev(r), Style: yaml.DoubleQuotedStyle})
+	}
+	return editFile(b, []string{"roots"}, seq)
+}
+
+// SetValue sets a string at a key path (e.g. "theme", "dark") in the config
+// file, keeping everything else including comments. It creates the file
+// from the template, and missing mappings, as needed.
+func SetValue(path []string, value string) error {
+	if _, err := os.Stat(Path()); os.IsNotExist(err) {
+		if err := writeTemplate(DetectRoots()); err != nil {
+			return err
+		}
+	}
+	b, err := os.ReadFile(Path())
+	if err != nil {
+		return err
+	}
+	return editFile(b, path, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value})
+}
+
+func editFile(b []byte, path []string, value *yaml.Node) error {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		return fmt.Errorf("%s: %w", Path(), err)
@@ -207,23 +243,34 @@ func SetRoots(roots []string) error {
 	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
 		return fmt.Errorf("%s: expected a YAML mapping", Path())
 	}
-	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
-	for _, r := range roots {
-		seq.Content = append(seq.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: Abbrev(r), Style: yaml.DoubleQuotedStyle})
-	}
 	m := doc.Content[0]
-	found := false
-	for i := 0; i+1 < len(m.Content); i += 2 {
-		if m.Content[i].Value == "roots" {
-			old := m.Content[i+1]
-			seq.LineComment, seq.FootComment = old.LineComment, old.FootComment
-			m.Content[i+1] = seq
-			found = true
-			break
+	for i, key := range path {
+		var found *yaml.Node
+		idx := -1
+		for j := 0; j+1 < len(m.Content); j += 2 {
+			if m.Content[j].Value == key {
+				found, idx = m.Content[j+1], j+1
+				break
+			}
 		}
-	}
-	if !found {
-		m.Content = append([]*yaml.Node{{Kind: yaml.ScalarNode, Tag: "!!str", Value: "roots"}, seq}, m.Content...)
+		last := i == len(path)-1
+		switch {
+		case last && found != nil:
+			value.LineComment, value.FootComment = found.LineComment, found.FootComment
+			m.Content[idx] = value
+		case last:
+			m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, value)
+		case found == nil || found.Kind != yaml.MappingNode:
+			next := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+			if found != nil {
+				m.Content[idx] = next
+			} else {
+				m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, next)
+			}
+			m = next
+		default:
+			m = found
+		}
 	}
 	var out bytes.Buffer
 	enc := yaml.NewEncoder(&out)

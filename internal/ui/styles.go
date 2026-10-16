@@ -1,41 +1,93 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/Paksonite/gitnest/internal/config"
+	"github.com/Paksonite/gitnest/internal/gitx"
+	"github.com/Paksonite/gitnest/internal/theme"
 )
 
-// Colours adapt to the terminal background: Catppuccin Mocha on dark
-// terminals, Catppuccin Latte on light ones. Terminals without true colour
-// get the nearest 256/16-colour match from lipgloss.
+// The active palette. These are set from the colour theme by usePalette;
+// the defaults are catppuccin-mocha. Terminals without true colour get the
+// nearest 256/16-colour match from lipgloss.
 var (
-	cAccent = lipgloss.AdaptiveColor{Dark: "#cba6f7", Light: "#8839ef"}
-	cDim    = lipgloss.AdaptiveColor{Dark: "#6c7086", Light: "#8c8fa1"}
-	cGreen  = lipgloss.AdaptiveColor{Dark: "#a6e3a1", Light: "#40a02b"}
-	cRed    = lipgloss.AdaptiveColor{Dark: "#f38ba8", Light: "#d20f39"}
-	cYellow = lipgloss.AdaptiveColor{Dark: "#f9e2af", Light: "#df8e1d"}
-	cCyan   = lipgloss.AdaptiveColor{Dark: "#89dceb", Light: "#04a5e5"}
-	cText   = lipgloss.AdaptiveColor{Dark: "#cdd6f4", Light: "#4c4f69"}
-	cSel    = lipgloss.AdaptiveColor{Dark: "#45475a", Light: "#bcc0cc"}
-	cSelDim = lipgloss.AdaptiveColor{Dark: "#313244", Light: "#dce0e8"}
+	cAccent  lipgloss.TerminalColor = lipgloss.Color("#cba6f7")
+	cDim     lipgloss.TerminalColor = lipgloss.Color("#6c7086")
+	cGreen   lipgloss.TerminalColor = lipgloss.Color("#a6e3a1")
+	cRed     lipgloss.TerminalColor = lipgloss.Color("#f38ba8")
+	cYellow  lipgloss.TerminalColor = lipgloss.Color("#f9e2af")
+	cCyan    lipgloss.TerminalColor = lipgloss.Color("#89dceb")
+	cText    lipgloss.TerminalColor = lipgloss.Color("#cdd6f4")
+	cSel     lipgloss.TerminalColor = lipgloss.Color("#45475a")
+	cSelDim  lipgloss.TerminalColor = lipgloss.Color("#313244")
+	cBorder  lipgloss.TerminalColor = lipgloss.Color("#6c7086")
+	cAuthors []lipgloss.TerminalColor
 )
 
-// applyTheme applies the config: theme.mode forces light or dark colours
-// when auto-detection guesses wrong (e.g. inside tmux), theme.accent
-// replaces the accent colour.
-func applyTheme(cfg config.Config) {
+func color(c string) lipgloss.TerminalColor {
+	if c == "" {
+		return lipgloss.NoColor{}
+	}
+	return lipgloss.Color(c)
+}
+
+// usePalette switches the UI (and git's diff colours, unless diffs keep
+// git's own) to p. accent, when set, overrides the palette's accent.
+func usePalette(p theme.Palette, accent string, gitDiffs bool) {
+	if accent != "" {
+		p.Accent = accent
+	}
+	cAccent, cDim, cText = color(p.Accent), color(p.Dim), color(p.Text)
+	cGreen, cRed, cYellow, cCyan = color(p.Added), color(p.Removed), color(p.Warn), color(p.Branch)
+	cSel, cSelDim, cBorder = color(p.Sel), color(p.SelDim), color(p.Border)
+	cAuthors = cAuthors[:0]
+	for _, c := range p.Authors {
+		cAuthors = append(cAuthors, color(c))
+	}
+	if gitDiffs {
+		gitx.SetColors(nil)
+		return
+	}
+	gitx.SetColors(map[string]string{
+		"color.diff.new": p.DiffAdd, "color.diff.old": p.DiffDel,
+		"color.diff.frag": p.DiffHunk, "color.diff.meta": p.DiffMeta,
+		"color.status.added": p.Added, "color.status.changed": p.Removed, "color.status.untracked": p.Removed,
+		"color.status.branch": p.Branch, "color.decorate.branch": p.Branch, "color.decorate.HEAD": p.Accent,
+		"color.decorate.remoteBranch": p.Removed, "color.decorate.tag": p.Warn,
+	})
+}
+
+// darkBackground decides between the dark and light theme: theme.mode wins,
+// otherwise the terminal is asked.
+func darkBackground(cfg config.Config) bool {
 	switch strings.ToLower(cfg.Theme.Mode) {
 	case "dark":
-		lipgloss.SetHasDarkBackground(true)
+		return true
 	case "light":
-		lipgloss.SetHasDarkBackground(false)
+		return false
 	}
-	if cfg.Theme.Accent != "" {
-		cAccent = lipgloss.AdaptiveColor{Dark: cfg.Theme.Accent, Light: cfg.Theme.Accent}
+	return lipgloss.HasDarkBackground()
+}
+
+// pickTheme returns the configured theme for the background, falling back
+// to the default built-in when the name is unknown.
+func pickTheme(set *theme.Set, cfg config.Config, dark bool) (theme.Theme, error) {
+	name, fallback := cfg.Theme.Light, "catppuccin-latte"
+	if dark {
+		name, fallback = cfg.Theme.Dark, "catppuccin-mocha"
 	}
+	if name == "" {
+		name = fallback
+	}
+	if t, ok := set.Get(name); ok {
+		return t, nil
+	}
+	t, _ := set.Get(fallback)
+	return t, fmt.Errorf("unknown theme %q, using %s (see gitnest theme list)", name, fallback)
 }
 
 func fg(c lipgloss.TerminalColor, s string) string {
@@ -117,7 +169,7 @@ func panel(title string, lines []string, w, h int, focused bool) string {
 		h = 3
 	}
 	inner, ih := w-2, h-2
-	col := cDim
+	col := cBorder
 	ts := lipgloss.NewStyle().Foreground(cDim)
 	if focused {
 		col = cAccent

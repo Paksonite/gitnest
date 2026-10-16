@@ -12,6 +12,7 @@ import (
 	"github.com/Paksonite/gitnest/internal/config"
 	"github.com/Paksonite/gitnest/internal/scan"
 	"github.com/Paksonite/gitnest/internal/state"
+	"github.com/Paksonite/gitnest/internal/theme"
 )
 
 // Smallest window the layout supports; below it a notice is shown instead.
@@ -76,26 +77,50 @@ type App struct {
 	rs   reposState
 	rp   repoState
 
-	p        *prompt
-	report   *report // failures of the last bulk operation, or details of an error
-	ed       *editor // commit message editor
-	lastErr  *report // details of the last failed operation, shown with "!"
-	toast    string
-	toastErr bool
-	busy     string
+	p         *prompt
+	report    *report // failures of the last bulk operation, or details of an error
+	ed        *editor // commit message editor
+	picker    *themePicker
+	themes    *theme.Set
+	theme     theme.Theme // active theme
+	dark      bool        // the dark theme slot is in use
+	themeWarn string      // problem loading themes, shown at start
+	lastErr   *report     // details of the last failed operation, shown with "!"
+	toast     string
+	toastErr  bool
+	busy      string
 }
 
 // Run starts the TUI. startDir, if non-empty, opens that repository directly.
 func Run(cfg config.Config, noConfig bool, startDir string) error {
-	applyTheme(cfg)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	a := &App{ctx: ctx, cfg: cfg, st: state.Load(), noConfig: noConfig, startDir: startDir,
 		scanner: scan.NewScanner(scan.FromConfig(cfg))}
+	a.loadThemes()
 	a.rs.marked = map[string]bool{}
 	a.rs.isNew = map[string]bool{}
 	_, err := tea.NewProgram(a, tea.WithAltScreen(), tea.WithReportFocus()).Run()
 	return err
+}
+
+// loadThemes loads built-in and user themes and applies the configured one.
+func (a *App) loadThemes() {
+	set, errs := theme.Load(config.ThemesDir())
+	a.themes = set
+	a.dark = darkBackground(a.cfg)
+	t, err := pickTheme(set, a.cfg, a.dark)
+	if err != nil {
+		errs = append([]error{err}, errs...)
+	}
+	a.theme = t
+	a.previewTheme(t)
+	if len(errs) > 0 {
+		a.themeWarn = errs[0].Error()
+		if len(errs) > 1 {
+			a.themeWarn += fmt.Sprintf(" (+%d more: gitnest theme list)", len(errs)-1)
+		}
+	}
 }
 
 func (a *App) Init() tea.Cmd {
@@ -105,6 +130,9 @@ func (a *App) Init() tea.Cmd {
 	}
 	if a.noConfig {
 		a.setToast("no config yet — choose directories with: gitnest roots add ~/repos", false)
+	}
+	if a.themeWarn != "" {
+		a.setToast(a.themeWarn, true)
 	}
 	return tea.Batch(cmds...)
 }
@@ -193,8 +221,15 @@ func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 	if a.report != nil {
 		return a.reportKey(k)
 	}
+	if a.picker != nil {
+		return a.pickerKey(k)
+	}
 	if a.scr == scrRepos && a.rs.filtering {
 		return a.reposKey(k) // every key belongs to the search query, "?" too
+	}
+	if global == actThemes {
+		a.openPicker()
+		return nil
 	}
 	if global == actHelp {
 		a.report = &report{title: "Keys", lines: helpLines()}
@@ -387,6 +422,8 @@ func (a *App) View() string {
 		return a.viewPrompt()
 	case a.report != nil:
 		return a.viewReport()
+	case a.picker != nil:
+		return a.viewPicker()
 	case a.scr == scrRepos:
 		return a.viewRepos()
 	}

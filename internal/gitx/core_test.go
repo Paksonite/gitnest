@@ -214,3 +214,22 @@ func TestRemoteFromConfig(t *testing.T) {
 		t.Errorf("missing: %q", got)
 	}
 }
+
+func TestThemeColorsReachGit(t *testing.T) {
+	dir := newRepo(t)
+	commit(t, dir, "a.txt", "a\n", "first")
+	writeFile(t, dir, "a.txt", "b\n")
+	SetColors(map[string]string{"color.diff.new": "#00ff00", "color.diff.old": "", "color.diff.frag": "5"})
+	defer SetColors(nil)
+	d := DiffFile(bg, dir, File{Path: "a.txt", X: ' ', Y: 'M'})
+	if !strings.Contains(d, "\x1b[38;2;0;255;0m") { // 24-bit green for added lines
+		t.Errorf("theme colour not applied:\n%q", d)
+	}
+	if !strings.Contains(d, "\x1b[35m") { // ANSI 5 for the hunk header
+		t.Errorf("ANSI colour not applied:\n%q", d)
+	}
+	SetColors(nil)
+	if d := DiffFile(bg, dir, File{Path: "a.txt", X: ' ', Y: 'M'}); strings.Contains(d, "38;2;0;255;0") {
+		t.Error("colours not reset")
+	}
+}

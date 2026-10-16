@@ -72,7 +72,10 @@ jobs: 8           # parallel git processes
 editor: ""        # empty = $VISUAL, then $EDITOR, then vi
 theme:
   mode: auto      # follows the terminal background; dark or light to force
-  accent: ""      # empty = the theme's purple
+  dark: catppuccin-mocha
+  light: catppuccin-latte
+  diff: theme     # "git" keeps your own git diff colours
+  accent: ""      # overrides the theme's accent
 ```
 
 Without a config file gitnest scans the usual project directories that exist
@@ -84,6 +87,39 @@ directories whose modification time changed, so they stay cheap. Press `R` for
 a full rescan.
 
 Press `?` in the app for every key binding.
+
+## Themes
+
+Press `T` in the app to pick a theme: moving through the list previews it
+live, `enter` saves it for dark or light backgrounds, `esc` goes back.
+
+Built in: `catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`,
+`gruvbox-light`, `nord`, `solarized-dark`, `solarized-light`, `tokyo-night`,
+`dracula`, and `terminal`, which uses your terminal's own 16 ANSI colours
+(best for Terminal.app, which has no true colour).
+
+A custom theme is a small YAML file in `~/.config/gitnest/themes/` that
+extends another theme and overrides a few colours:
+
+```yaml
+name: tokyo-orange
+extends: tokyo-night
+colors:
+  accent: "#ff9e64"
+  sel: "#3b4261"
+```
+
+```sh
+gitnest theme                       # list themes and which ones are in use
+gitnest theme export nord > ~/.config/gitnest/themes/my-nord.yaml   # full template
+gitnest theme check my-nord         # unknown roles, bad colours, low contrast
+```
+
+Roles: `background` (not painted; used by `check`), `text`, `dim`, `accent`,
+`added`, `removed`, `warn`, `branch`, `sel`, `sel_dim`, `border`, `diff_add`,
+`diff_del`, `diff_hunk`, `diff_meta`, plus `authors` (a list of colours for
+commit authors). Colours are `#rrggbb`, `#rgb`, ANSI numbers `0`–`255`, or
+`""` for the terminal default.
 
 ## Releasing
 

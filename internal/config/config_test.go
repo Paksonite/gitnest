@@ -113,3 +113,23 @@ func TestSetRootsCreatesFile(t *testing.T) {
 		t.Fatalf("cfg=%+v existed=%v err=%v", cfg.Roots, existed, err)
 	}
 }
+
+func TestSetValueNested(t *testing.T) {
+	sandbox(t)
+	if err := SetValue([]string{"theme", "dark"}, "nord"); err != nil { // creates the file
+		t.Fatal(err)
+	}
+	if err := SetValue([]string{"new", "deep", "key"}, "v"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := Load()
+	if err != nil || cfg.Theme.Dark != "nord" || cfg.Theme.Light != "catppuccin-latte" {
+		t.Fatalf("theme = %+v err=%v", cfg.Theme, err)
+	}
+	b, _ := os.ReadFile(Path())
+	for _, want := range []string{"# Themes for dark and light backgrounds", "dark: nord", "deep:\n    key: v"} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("config lacks %q:\n%s", want, b)
+		}
+	}
+}
