@@ -16,8 +16,9 @@ tag and push — all from the keyboard.
 - **History editing you can undo.** Squash, fixup, reword, drop, reorder or
   plan a whole interactive rebase; every rewrite can be undone with `z`, and
   rewriting pushed commits warns you first.
-- **Work across repositories.** Copy commits in one repository and paste
-  them into another; fetch or pull many repositories at once.
+- **Work across repositories.** Up to four gitnests side by side in one
+  terminal (`ctrl+n`), copy commits from one repository into another, fetch
+  or pull many repositories at once.
 - **Fits your terminal.** Ten built-in themes plus your own, light and dark
   terminals, optional Nerd Font icons, zsh and bash integration.
 
@@ -35,6 +36,7 @@ single binary. It only needs `git`.
 - [Shell integration: completion and `gn`](#shell-integration-completion-and-gn)
 - [Icons (Nerd Font)](#icons-nerd-font)
 - [Using gitnest](#using-gitnest)
+- [Several repositories side by side](#several-repositories-side-by-side)
 - [Configuration](#configuration)
 - [Themes](#themes)
 - [Troubleshooting](#troubleshooting)
@@ -201,6 +203,7 @@ icons in the Files tree and git icons for branches, tags and the reflog.
 | `R` / `r` | rescan the folders / refresh the status |
 | `o` | quit and go to the repository (with `gn`) |
 | `T` | theme and icons |
+| `ctrl+n` | open a second gitnest next to this one ([panes](#several-repositories-side-by-side)) |
 
 `✦` marks repositories found since gitnest started, `●` uncommitted changes,
 `!` a conflict or an operation in progress. Clones of the same project from
@@ -234,6 +237,24 @@ Rewriting commits that are already pushed asks twice; afterwards `P` offers a
 push with `--force-with-lease` — but only when the remote has nothing you
 haven't seen. Every history change records an undo point: `z` goes back,
 `z` again redoes.
+
+## Several repositories side by side
+
+Work on related repositories at the same time — say IAM in one, the
+resources in another and a shared module in a third — with up to four
+gitnests in one terminal:
+
+| Key | |
+|---|---|
+| `ctrl+n` | open another pane next to the current one; pick its repository from the list |
+| `ctrl+o` / `alt+→` / `alt+←` | move between panes |
+| `ctrl+w` | close the pane (the last one quits); `q` on a pane's list closes it too |
+
+Each pane is a complete gitnest with its own repository, panels, search and
+editor; the focused one has the coloured border, and every title shows the
+pane's repository and branch. Panes sit side by side, in a 2×2 grid when
+there are more, or — in a small window — as tabs above the focused pane.
+Commits copied with `c` in one pane can be pasted with `v` in another.
 
 ## Configuration
 

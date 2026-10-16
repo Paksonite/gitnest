@@ -627,7 +627,7 @@ func (a *App) commitsKey(s string) (tea.Cmd, bool) {
 	case actPaste:
 		return a.paste(), true
 	case actClearCopied:
-		a.copied = nil
+		a.sh.copied = nil
 		a.setToast("copied commits cleared", false)
 		return nil, true
 	}
@@ -805,7 +805,7 @@ func (a *App) repoHints() string {
 	if panel == scBranches && rp.branchTab == tabTags {
 		return hints(scTags) + "  ·  ] tabs  ·  " + hints(scRepo, scGlobal)
 	}
-	return hints(panel) + "  ·  " + hints(scRepo, scGlobal)
+	return hints(panel) + "  ·  " + hints(scRepo, scPanes, scGlobal)
 }
 
 func (a *App) viewRepo() string {
@@ -986,7 +986,7 @@ func (a *App) mainKey(s string) tea.Cmd {
 
 // How often the open repository's working tree is re-read, so new, edited
 // and deleted files show up without leaving the repository.
-const liveRefresh = 2 * time.Second
+var liveRefresh = 2 * time.Second
 
 type (
 	repoTickMsg    struct{}

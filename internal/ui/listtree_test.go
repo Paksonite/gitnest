@@ -87,3 +87,14 @@ func TestRepoTreeSeveralRoots(t *testing.T) {
 		t.Errorf("roots: %v", got)
 	}
 }
+
+func TestTreeSearchLandsOnRepository(t *testing.T) {
+	a := treeApp(t, []string{"/r"}, "/r/forgejo/org-core-dns", "/r/gitea/x/other")
+	a.reposKey(key("/"))
+	for _, k := range []string{"d", "n", "s"} {
+		a.reposKey(key(k))
+	}
+	if a.selectedPath() != "/r/forgejo/org-core-dns" {
+		t.Errorf("cursor on %q (row %d of %v)", a.selectedKey(), a.rs.cur, rowsText(a))
+	}
+}

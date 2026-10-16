@@ -175,8 +175,10 @@ func (a *App) moveCommit(i, delta int) tea.Cmd {
 	for k := len(order) - 1; k >= 0; k-- {
 		steps = append(steps, gitx.PlanStep{Hash: order[k].Hash, Action: "pick"})
 	}
-	dir, ctx, c := rp.dir, a.ctx, rp.commits[i]
-	return a.check(func() ([]string, error) { return gitx.CheckRewrite(ctx, dir, rp.commits[oldest].Hash, gitx.ActionDrop) },
+	// Values the background check needs are copied now: rp.commits may be
+	// replaced by a refresh while it runs.
+	dir, ctx, c, oldestHash := rp.dir, a.ctx, rp.commits[i], rp.commits[oldest].Hash
+	return a.check(func() ([]string, error) { return gitx.CheckRewrite(ctx, dir, oldestHash, gitx.ActionDrop) },
 		func(pushed []string) tea.Cmd {
 			return a.confirmRewrite("", pushed, func() tea.Cmd {
 				rp.cur[pCommits] = j // follow the moved commit

@@ -604,6 +604,12 @@ func (a *App) filterKey(k tea.KeyMsg) tea.Cmd {
 	refilter := func() tea.Cmd {
 		a.rebuildView("")
 		rs.cur = 0
+		for i, r := range rs.rows { // in the tree, land on the best match, not its folder
+			if r.repo >= 0 {
+				rs.cur = i
+				break
+			}
+		}
 		return a.previewCmd()
 	}
 	switch lookup(scFilter, k.String()) {
@@ -827,7 +833,7 @@ func (a *App) viewRepos() string {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, list, panel(title, pl, a.w-listW, bodyH, false))
 	}
 
-	footer := hints(scList, scGlobal)
+	footer := hints(scList, scPanes, scGlobal)
 	if rs.filtering {
 		footer = "type to search (@branch)  ·  ↑/↓ move  ·  " + hints(scFilter)
 	}
