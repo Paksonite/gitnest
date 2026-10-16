@@ -140,7 +140,7 @@ Other entry points:
 gitnest .                          # open the repository you are in
 gitnest roots                      # list the scanned folders (roots rm <dir> to remove)
 gitnest scan                       # print every repository found
-gitnest doctor                     # check git, config, icons, terminal and shell
+gitnest doctor                     # check git, config, icons, terminal, shell and updates
 ```
 
 Press `?` in the app for every key binding.
@@ -274,6 +274,7 @@ status_interval: 15    # seconds between status refreshes of visible rows (0 = o
 jobs: 8                # parallel git processes
 editor: ""             # for e; empty = $VISUAL, then $EDITOR, then vi
 icons: unicode         # or nerd (needs a Nerd Font)
+update_check: true     # look for a new release once a day (false = never)
 theme:
   mode: auto           # follows the terminal background; dark or light to force
   dark: catppuccin-mocha
@@ -282,7 +283,8 @@ theme:
   accent: ""           # overrides the theme's accent colour
 ```
 
-`GITNEST_ICONS=nerd` overrides `icons` for one session.
+`GITNEST_ICONS=nerd` overrides `icons` for one session;
+`GITNEST_NO_UPDATE_CHECK=1` turns the release check off.
 
 ## Themes
 
@@ -334,12 +336,34 @@ do.
 
 ## Update and uninstall
 
-| Installed with | Update | Uninstall |
+gitnest looks for a new release on GitHub at most once a day (one small
+request, nothing else is sent). When there is one, the header shows
+`⬆ 1.2.0 · gitnest update`. Turn this off with `update_check: false` or
+`GITNEST_NO_UPDATE_CHECK=1`; development builds never check.
+
+```bash
+gitnest update --check
+```
+
+```bash
+gitnest update
+```
+
+`gitnest update` works out how gitnest was installed and updates it the same
+way:
+
+| Installed with | `gitnest update` runs | Uninstall |
 |---|---|---|
 | Homebrew | `brew update && brew upgrade --cask gitnest` | `brew uninstall --cask gitnest` |
-| `.deb` / `.rpm` | install the newer package the same way | `sudo apt remove gitnest` / `sudo dnf remove gitnest` |
-| install script | run it again | `rm ~/.local/bin/gitnest` |
-| `go install` | run it again | `rm "$(go env GOPATH)/bin/gitnest"` |
+| `.deb` (Debian / Ubuntu) | downloads the new `.deb`, checks it against `checksums.txt`, `sudo apt-get install` | `sudo apt remove gitnest` |
+| `.rpm` | the same with `sudo dnf install` (or `rpm -U`) | `sudo dnf remove gitnest` |
+| install script / archive | downloads the release archive, checks it and replaces the binary in place | `rm ~/.local/bin/gitnest` |
+| `go install` | `go install …/cmd/gitnest@<new version>` | `rm "$(go env GOPATH)/bin/gitnest"` |
+
+If the binary sits in a directory you can't write to (e.g. `/usr/local/bin`),
+run `sudo gitnest update`. `gitnest update --force` reinstalls the latest
+release, e.g. over a development build. `gitnest doctor` also says whether an
+update is waiting.
 
 Configuration lives in `~/.config/gitnest`, caches in `~/.cache/gitnest` and
 state in `~/.local/state/gitnest`; remove them to start from scratch.

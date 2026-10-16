@@ -22,6 +22,10 @@ func statePath() string { return filepath.Join(dir("XDG_STATE_HOME", ".local/sta
 // at startup until fresh status arrives.
 func StatusCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "status.json") }
 
+// UpdateCachePath remembers the last release check, so GitHub is asked at
+// most once a day.
+func UpdateCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "update.json") }
+
 // ScanCachePath is where the repository scanner keeps its directory listings.
 func ScanCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "scan.json") }
 

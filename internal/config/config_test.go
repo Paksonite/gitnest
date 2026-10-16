@@ -148,3 +148,15 @@ func TestIconsResolution(t *testing.T) {
 		t.Errorf("env: %s %s", mode, src)
 	}
 }
+
+func TestUpdateCheck(t *testing.T) {
+	off := false
+	t.Setenv("GITNEST_NO_UPDATE_CHECK", "")
+	if !UpdateCheck(Config{}) || UpdateCheck(Config{UpdateCheck: &off}) {
+		t.Fatal("update_check from config")
+	}
+	t.Setenv("GITNEST_NO_UPDATE_CHECK", "1")
+	if UpdateCheck(Config{}) {
+		t.Fatal("GITNEST_NO_UPDATE_CHECK=1 must turn checks off")
+	}
+}

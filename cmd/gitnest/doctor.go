@@ -14,7 +14,9 @@ import (
 	"github.com/Paksonite/gitnest/internal/config"
 	"github.com/Paksonite/gitnest/internal/gitx"
 	"github.com/Paksonite/gitnest/internal/scan"
+	"github.com/Paksonite/gitnest/internal/state"
 	"github.com/Paksonite/gitnest/internal/theme"
+	"github.com/Paksonite/gitnest/internal/update"
 )
 
 // doctorCmd checks the environment gitnest depends on and says how to fix
@@ -111,6 +113,25 @@ func doctorCmd(args []string) error {
 			ok("shell", shell+": gn is set up in ~/"+rc)
 		} else {
 			warn("shell", fmt.Sprintf("%s: add  eval \"$(gitnest shell %s)\"  to ~/%s for gn and completion", shell, shell, rc))
+		}
+	}
+
+	switch {
+	case !config.UpdateCheck(cfg):
+		warn("updates", "checks are off (update_check / GITNEST_NO_UPDATE_CHECK); gitnest update --check looks now")
+	default:
+		exe, _ := update.Executable()
+		how := update.Detect(exe, update.PackageOwner, update.GopathBin())
+		uctx, ucancel := context.WithTimeout(ctx, 5*time.Second)
+		rel, newer, err := update.Check(uctx, v, state.UpdateCachePath(), 24*time.Hour)
+		ucancel()
+		switch {
+		case err != nil:
+			warn("updates", "can't reach GitHub: "+err.Error())
+		case newer:
+			warn("updates", fmt.Sprintf("%s is available — gitnest update (installed with %s)", rel.Version, how))
+		default:
+			ok("updates", fmt.Sprintf("latest release %s, installed with %s", rel.Version, how))
 		}
 	}
 

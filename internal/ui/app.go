@@ -20,6 +20,7 @@ import (
 // paste in another).
 type shared struct {
 	copied *clipboard
+	update string // newer gitnest release, shown in the header
 }
 
 // Smallest window the layout supports; below it a notice is shown instead.

@@ -32,6 +32,7 @@ type Config struct {
 	Editor         string   `yaml:"editor"`
 	Icons          string   `yaml:"icons"` // "nerd" (needs a Nerd Font) or "unicode"
 	Theme          Theme    `yaml:"theme"`
+	UpdateCheck    *bool    `yaml:"update_check"` // nil means on
 }
 
 const template = `# gitnest configuration
@@ -60,6 +61,9 @@ editor: ""
 # terminal, e.g. MesloLGS NF), "unicode" for plain symbols any font has.
 # T then i in the app switches and saves it.
 icons: unicode
+# Check GitHub once a day for a new gitnest release and say so in the
+# header ("gitnest update" installs it). GITNEST_NO_UPDATE_CHECK=1 also turns it off.
+update_check: true
 theme:
   # auto follows the terminal background; set dark or light if it guesses wrong.
   mode: auto
@@ -299,4 +303,13 @@ func Icons(cfg Config) (mode, source string) {
 		}
 	}
 	return "unicode", "default"
+}
+
+// UpdateCheck reports whether gitnest may look for new releases: on unless
+// update_check is false or GITNEST_NO_UPDATE_CHECK is set.
+func UpdateCheck(cfg Config) bool {
+	if v := strings.ToLower(os.Getenv("GITNEST_NO_UPDATE_CHECK")); v != "" && v != "0" && v != "false" {
+		return false
+	}
+	return cfg.UpdateCheck == nil || *cfg.UpdateCheck
 }

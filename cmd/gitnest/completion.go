@@ -24,6 +24,7 @@ _gitnest() {
     'completion:print a shell completion script'
     'shell:print the gn shell function (cd into a repository)'
     'doctor:check git, config, icons, terminal and shell setup'
+    'update:install the latest release'
   )
   roots_cmds=(
     'list:list the scanned directories'
@@ -55,6 +56,9 @@ _gitnest() {
       ;;
     init)
       _arguments '--force[overwrite an existing config file]'
+      ;;
+    update|upgrade)
+      _arguments '--check[only say whether a newer release exists]' '--force[reinstall the latest release]'
       ;;
     theme|themes)
       if (( CURRENT == 3 )); then
@@ -90,10 +94,12 @@ const bashCompletion = `_gitnest() {
   local cur=${COMP_WORDS[COMP_CWORD]} sub=${COMP_WORDS[1]}
   local IFS=$'\n'
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W $'roots\nscan\ninit\nversion\nhelp\ndoctor\ntheme\ncompletion\nshell' -- "$cur") $(compgen -d -- "$cur"))
+    COMPREPLY=($(compgen -W $'roots\nscan\ninit\nversion\nhelp\ndoctor\nupdate\ntheme\ncompletion\nshell' -- "$cur") $(compgen -d -- "$cur"))
     return
   fi
   case $sub in
+    update|upgrade)
+      COMPREPLY=($(compgen -W $'--check\n--force' -- "$cur")) ;;
     roots)
       if [ "$COMP_CWORD" -eq 2 ]; then
         COMPREPLY=($(compgen -W $'list\nadd\nrm' -- "$cur"))

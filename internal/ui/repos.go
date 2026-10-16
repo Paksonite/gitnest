@@ -760,7 +760,7 @@ func (a *App) viewRepos() string {
 
 	head := lipgloss.NewStyle().Bold(true).Foreground(cAccent).Render("gitnest") +
 		fg(cDim, fmt.Sprintf("  %d repos · %d dirty", len(rs.all), dirty))
-	head += a.copiedBadge()
+	head += a.copiedBadge() + a.updateBadge()
 	if rs.sortMode != sortRecent {
 		head += "  " + fg(cDim, "sort: "+sortNames[rs.sortMode])
 	}
