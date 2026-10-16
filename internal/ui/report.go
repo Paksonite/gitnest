@@ -97,6 +97,20 @@ func newReport(m bulkMsg, labels map[string]string) *report {
 	return r
 }
 
+// errorReport shows everything git printed for a failed operation.
+func errorReport(label string, err error) *report {
+	r := &report{title: label + " failed"}
+	out := err.Error()
+	var ge *gitx.Error
+	if errors.As(err, &ge) && ge.Output != "" && ge.Timeout == 0 && !ge.Canceled {
+		out = "$ git " + strings.Join(ge.Args, " ") + "\n\n" + ge.Output
+	}
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		r.lines = append(r.lines, expandTabs(l))
+	}
+	return r
+}
+
 func (a *App) reportKey(k tea.KeyMsg) tea.Cmd {
 	r := a.report
 	page := a.reportHeight()
