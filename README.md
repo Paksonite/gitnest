@@ -106,11 +106,21 @@ colour (○ commit, ◎ merge), the subject and refs. Its title has two tabs,
 shows a graph of what each step changed (`<` only before, `>` only after),
 `space` checks out an entry and `g` resets the branch to it (`z` undoes).
 
+`enter` on a file in the Files panel opens its changes line by line, like
+lazygit's staging view: `space` stages the line under the cursor, a range
+(`v`) or the whole hunk (`a`); `tab` switches to the staged side, where
+`space` unstages; `d` discards unstaged lines. New files can be staged in
+parts too.
+
 `i` in the Commits panel opens an interactive rebase from the selected commit
 up to HEAD: set pick / reword / edit / squash / fixup / drop per commit,
 reorder with `ctrl+j` / `ctrl+k`, `enter` runs it (`z` undoes). `ctrl+j` /
 `ctrl+k` in the panel itself move a single commit. `c` copies commits and
 `v` pastes them (cherry-pick), also into another repository.
+
+The Branches panel has three tabs, `Local - Remote - Tags` (`]` / `[`). In
+Tags, `n` creates a tag at HEAD (with a message it is annotated), `P` pushes
+it, `d` / `D` delete it locally / on the remote, `space` checks it out.
 
 The checked-out branch is always first in the Branches panel, and checking
 out another branch moves the selection to it.

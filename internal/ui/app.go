@@ -160,6 +160,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.onStatus(m)
 	case repoTickMsg:
 		return a, a.onRepoTick()
+	case stagingMsg:
+		return a, a.onStaging(m)
 	case repoRefreshMsg:
 		return a, a.onRepoRefresh(m)
 	case tea.FocusMsg:

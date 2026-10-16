@@ -27,6 +27,7 @@ const (
 	scReflog                // Commits panel showing the reflog
 	scTags                  // Branches panel, Tags tab
 	scPlan                  // interactive rebase planner
+	scStaging               // line-by-line staging of a file
 	scopes
 )
 
@@ -47,6 +48,7 @@ var scopeTitles = [scopes]string{
 	scReflog:   "Reflog (] in the Commits panel)",
 	scTags:     "Tags (third tab of the Branches panel)",
 	scPlan:     "Interactive rebase (i in the Commits panel)",
+	scStaging:  "Staging lines (enter on a file)",
 }
 
 type action int
@@ -125,6 +127,9 @@ const (
 	actStashStaged
 	actEdit
 	actToggleDir
+	actRange
+	actHunkMode
+	actSwitchSide
 	actToggleTree
 
 	// branches
@@ -276,7 +281,7 @@ var keymap = [scopes][]binding{
 		b(actStash, "stash all changes", "stash", "s"),
 		b(actStashStaged, "stash staged changes only", "", "S"),
 		b(actEdit, "edit the file", "edit", "e"),
-		b(actToggleDir, "collapse / expand a directory (on files: focus the diff)", "", "enter"),
+		b(actToggleDir, "on a directory: collapse / expand; on a file: stage it line by line", "lines", "enter"),
 		b(actToggleTree, "show files as a tree or a flat list", "tree", "`"),
 	},
 	scBranches: {
@@ -307,6 +312,18 @@ var keymap = [scopes][]binding{
 		b(actPaste, "paste copied commits onto this branch (also from another repository)", "paste", "v"),
 		b(actClearCopied, "forget the copied commits", "", "C"),
 		b(actToggleReflog, "show HEAD's reflog (every move, with a graph of what changed)", "reflog", "]", "["),
+	},
+	scStaging: {
+		b(actToggleStage, "stage (or, on the staged side, unstage) the line, range or hunk", "stage", " "),
+		b(actDown, "next change line (next hunk in hunk mode)", "", "down", "j"),
+		b(actUp, "previous change line", "", "up", "k"),
+		b(actPageDown, "half page down", "", "ctrl+d", "pgdown"),
+		b(actPageUp, "half page up", "", "ctrl+u", "pgup"),
+		b(actRange, "start / end a range selection", "range", "v"),
+		b(actHunkMode, "select whole hunks / single lines", "hunk", "a"),
+		b(actSwitchSide, "switch between unstaged and staged changes", "staged/unstaged", "tab"),
+		b(actDiscard, "discard the selected unstaged lines", "discard", "d"),
+		b(actBack, "back to the files", "back", "esc", "q"),
 	},
 	scPlan: {
 		b(actUp, "previous commit", "", "up", "k"),
@@ -401,7 +418,7 @@ func hints(scs ...scope) string {
 
 // helpLines renders every scope's bindings for the help overlay.
 func helpLines() []string {
-	order := []scope{scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scPlan, scTags, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
+	order := []scope{scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scStaging, scPlan, scTags, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
 	var out []string
 	for _, sc := range order {
 		if len(out) > 0 {

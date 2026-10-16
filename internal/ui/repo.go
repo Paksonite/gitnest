@@ -57,6 +57,7 @@ type repoState struct {
 	collapsed     map[string]bool // collapsed directories in the tree
 	refreshing    bool            // a live refresh is running
 	reflog        bool            // the Commits panel shows the reflog
+	staging       *staging        // line-by-line staging of a file, shown in the main panel
 	jumpToCurrent bool            // select the checked-out branch after the next reload
 	graph         [][]gcell       // commit graph rows, one per commit
 	notMain       map[string]bool // commits of HEAD not on the main line
@@ -278,6 +279,9 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 	s := k.String()
 	half := clamp((a.h-3)/2, 3, 100)
 
+	if rp.staging != nil {
+		return a.stagingKey(s)
+	}
 	if rp.mainFocus {
 		return a.mainKey(s)
 	}
@@ -287,6 +291,8 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 			rp.collapsed[n.Path] = !rp.collapsed[n.Path]
 			rp.rebuildFiles(n.key())
 			return nil
+		} else if ok {
+			return a.openStaging(n.File) // enter on a file: stage it line by line
 		}
 	}
 
@@ -790,6 +796,9 @@ func (a *App) panelItems(panel int) []rowItem {
 
 func (a *App) repoHints() string {
 	rp := &a.rp
+	if rp.staging != nil {
+		return hints(scStaging)
+	}
 	if rp.mainFocus {
 		return hints(scMain)
 	}
@@ -865,7 +874,10 @@ func (a *App) viewRepo() string {
 		mainTitle += "  (j/k scroll · esc back)"
 	}
 	mainLines = mainLines[rp.mainOff:]
-	body := lipgloss.JoinHorizontal(lipgloss.Top, left, panel(mainTitle, mainLines, mainW, mh, rp.mainFocus))
+	if rp.staging != nil {
+		mainTitle, mainLines = a.stagingLines(mh-3, mainW-2)
+	}
+	body := lipgloss.JoinHorizontal(lipgloss.Top, left, panel(mainTitle, mainLines, mainW, mh, rp.mainFocus || rp.staging != nil))
 
 	return strings.Join([]string{fit(head, a.w), body, a.footer(a.repoHints())}, "\n")
 }
@@ -1002,7 +1014,7 @@ func repoTick() tea.Cmd {
 // the diff shown for a selected file) while nothing else is going on.
 func (a *App) onRepoTick() tea.Cmd {
 	rp := &a.rp
-	idle := a.scr == scrRepo && !rp.refreshing && a.busy == "" && a.p == nil && a.ed == nil && a.report == nil
+	idle := a.scr == scrRepo && !rp.refreshing && a.busy == "" && a.p == nil && a.ed == nil && a.report == nil && rp.staging == nil
 	if !idle {
 		return repoTick()
 	}
