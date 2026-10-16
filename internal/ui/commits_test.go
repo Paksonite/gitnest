@@ -145,7 +145,7 @@ func TestCopyAndPasteAcrossRepos(t *testing.T) {
 	a.rp.cur[pCommits] = 0
 	a.repoKey(key("c")) // h3
 	if !a.isCopied("h1") || !a.isCopied("h3") || a.isCopied("h2") || !strings.Contains(a.copiedBadge(), "2 copied from src") {
-		t.Fatalf("copied: %+v", a.copied)
+		t.Fatalf("copied: %+v", a.sh.copied)
 	}
 	a.rp.cur[pCommits] = 0
 	a.repoKey(key("c")) // uncopy h3
@@ -164,7 +164,7 @@ func TestCopyAndPasteAcrossRepos(t *testing.T) {
 	}
 	a.p = nil
 	a.repoKey(key("C"))
-	if a.copied != nil {
+	if a.sh.copied != nil {
 		t.Error("C should clear the clipboard")
 	}
 }

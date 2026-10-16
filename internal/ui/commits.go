@@ -163,10 +163,10 @@ type copiedCommit struct {
 }
 
 func (a *App) isCopied(hash string) bool {
-	if a.copied == nil || a.copied.repo != a.rp.dir {
+	if a.sh.copied == nil || a.sh.copied.repo != a.rp.dir {
 		return false
 	}
-	for _, c := range a.copied.commits {
+	for _, c := range a.sh.copied.commits {
 		if c.hash == hash {
 			return true
 		}
@@ -179,32 +179,32 @@ func (a *App) isCopied(hash string) bool {
 func (a *App) copyCommit(i int) {
 	rp := &a.rp
 	c := rp.commits[i]
-	if a.copied == nil || a.copied.repo != rp.dir {
-		a.copied = &clipboard{repo: rp.dir, name: rp.name}
+	if a.sh.copied == nil || a.sh.copied.repo != rp.dir {
+		a.sh.copied = &clipboard{repo: rp.dir, name: rp.name}
 	}
-	for k, x := range a.copied.commits {
+	for k, x := range a.sh.copied.commits {
 		if x.hash == c.Hash {
-			a.copied.commits = append(a.copied.commits[:k], a.copied.commits[k+1:]...)
-			if len(a.copied.commits) == 0 {
-				a.copied = nil
+			a.sh.copied.commits = append(a.sh.copied.commits[:k], a.sh.copied.commits[k+1:]...)
+			if len(a.sh.copied.commits) == 0 {
+				a.sh.copied = nil
 			}
 			return
 		}
 	}
-	a.copied.commits = append(a.copied.commits, copiedCommit{hash: c.Hash, short: c.Short, subject: c.Subject, order: i})
+	a.sh.copied.commits = append(a.sh.copied.commits, copiedCommit{hash: c.Hash, short: c.Short, subject: c.Subject, order: i})
 }
 
 func (a *App) copiedBadge() string {
-	if a.copied == nil {
+	if a.sh.copied == nil {
 		return ""
 	}
-	return "  " + fg(cAccent, fmt.Sprintf("⎘ %d copied from %s · v pastes", len(a.copied.commits), a.copied.name))
+	return "  " + fg(cAccent, fmt.Sprintf("⎘ %d copied from %s · v pastes", len(a.sh.copied.commits), a.sh.copied.name))
 }
 
 // paste cherry-picks the copied commits, oldest first, onto the current
 // branch of the open repository.
 func (a *App) paste() tea.Cmd {
-	cb := a.copied
+	cb := a.sh.copied
 	if cb == nil || len(cb.commits) == 0 {
 		a.setToast("nothing copied — c copies the selected commit", false)
 		return nil
@@ -222,7 +222,7 @@ func (a *App) paste() tea.Cmd {
 		how = " (as patches from " + cb.name + ")"
 	}
 	a.confirm(fmt.Sprintf("Cherry-pick %d commit(s) onto %s%s?", len(hashes), rp.info.Branch, how), func() tea.Cmd {
-		a.copied = nil
+		a.sh.copied = nil
 		return a.doUndoable(fmt.Sprintf("cherry-pick %d", len(hashes)), func() error {
 			return gitx.CherryPick(ctx, dir, src, hashes)
 		})

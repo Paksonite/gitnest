@@ -16,6 +16,12 @@ import (
 	"github.com/Paksonite/gitnest/internal/theme"
 )
 
+// shared is what all panes see: the commit clipboard (copy in one pane,
+// paste in another).
+type shared struct {
+	copied *clipboard
+}
+
 // Smallest window the layout supports; below it a notice is shown instead.
 const (
 	minWidth  = 50
@@ -88,7 +94,8 @@ type App struct {
 	dark      bool        // the dark theme slot is in use
 	themeWarn string      // problem loading themes, shown at start
 	cdFile    string      // gn shell function: write the repository to cd into here
-	copied    *clipboard  // commits copied for cherry-pick
+	sh        *shared     // state shared by every pane
+	quitAll   bool        // quitting leaves gitnest entirely (o for gn), not just this pane
 	plan      *planner    // interactive rebase being planned
 	lastErr   *report     // details of the last failed operation, shown with "!"
 	toast     string
@@ -103,13 +110,13 @@ func Run(cfg config.Config, noConfig bool, startDir, cdFile string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	a := newApp(ctx, cfg, noConfig, startDir, cdFile)
-	_, err := tea.NewProgram(a, tea.WithAltScreen(), tea.WithReportFocus()).Run()
+	_, err := tea.NewProgram(newShell(a), tea.WithAltScreen(), tea.WithReportFocus()).Run()
 	return err
 }
 
 func newApp(ctx context.Context, cfg config.Config, noConfig bool, startDir, cdFile string) *App {
 	a := &App{ctx: ctx, cfg: cfg, st: state.Load(), noConfig: noConfig, startDir: startDir, cdFile: cdFile,
-		scanner: scan.NewScanner(scan.FromConfig(cfg))}
+		scanner: scan.NewScanner(scan.FromConfig(cfg)), sh: &shared{}}
 	a.loadThemes()
 	mode, _ := config.Icons(cfg)
 	setIcons(mode)
@@ -495,5 +502,6 @@ func (a *App) cdQuit(path string) tea.Cmd {
 		a.setToast("writing "+a.cdFile+": "+err.Error(), true)
 		return nil
 	}
+	a.quitAll = true
 	return tea.Quit
 }

@@ -28,6 +28,7 @@ const (
 	scTags                  // Branches panel, Tags tab
 	scPlan                  // interactive rebase planner
 	scStaging               // line-by-line staging of a file
+	scPanes                 // several gitnests side by side
 	scopes
 )
 
@@ -49,6 +50,7 @@ var scopeTitles = [scopes]string{
 	scTags:     "Tags (third tab of the Branches panel)",
 	scPlan:     "Interactive rebase (i in the Commits panel)",
 	scStaging:  "Staging lines (enter on a file)",
+	scPanes:    "Panes (several repositories side by side)",
 }
 
 type action int
@@ -58,6 +60,10 @@ const (
 
 	// global
 	actHelp
+	actNewPane
+	actClosePane
+	actNextPane
+	actPrevPane
 	actThemes
 	actErrorDetails
 	actQuit
@@ -313,6 +319,12 @@ var keymap = [scopes][]binding{
 		b(actClearCopied, "forget the copied commits", "", "C"),
 		b(actToggleReflog, "show HEAD's reflog (every move, with a graph of what changed)", "reflog", "]", "["),
 	},
+	scPanes: {
+		b(actNewPane, "open another pane next to this one (up to 4), starting on the list", "pane", "ctrl+n"),
+		b(actClosePane, "close this pane (the last one quits)", "", "ctrl+w"),
+		b(actNextPane, "focus the next pane", "", "ctrl+o", "alt+right"),
+		b(actPrevPane, "focus the previous pane", "", "alt+left"),
+	},
 	scStaging: {
 		b(actToggleStage, "stage (or, on the staged side, unstage) the line, range or hunk", "stage", " "),
 		b(actDown, "next change line (next hunk in hunk mode)", "", "down", "j"),
@@ -418,7 +430,7 @@ func hints(scs ...scope) string {
 
 // helpLines renders every scope's bindings for the help overlay.
 func helpLines() []string {
-	order := []scope{scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scStaging, scPlan, scTags, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
+	order := []scope{scPanes, scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scStaging, scPlan, scTags, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
 	var out []string
 	for _, sc := range order {
 		if len(out) > 0 {

@@ -22,7 +22,7 @@ import (
 // drive runs cmd and everything that follows from it. Timer messages are
 // dropped (ticks would loop forever); commands still running after a few
 // seconds are abandoned.
-func drive(t *testing.T, a *App, cmd tea.Cmd) {
+func drive(t *testing.T, a tea.Model, cmd tea.Cmd) {
 	t.Helper()
 	queue := []tea.Cmd{cmd}
 	for steps := 0; len(queue) > 0; steps++ {
@@ -42,11 +42,23 @@ func drive(t *testing.T, a *App, cmd tea.Cmd) {
 		case <-time.After(3 * time.Second):
 			continue // a tick or a long timer
 		}
-		if msg != nil && strings.Contains(reflect.TypeOf(msg).PkgPath(), "bubbles/cursor") {
+		inner := msg
+		if pm, ok := msg.(paneMsg); ok {
+			inner = pm.msg
+		}
+		if inner != nil && strings.Contains(reflect.TypeOf(inner).PkgPath(), "bubbles/cursor") {
 			continue // cursor blinking re-arms itself forever
 		}
+		switch inner.(type) {
+		case rescanTickMsg, statusTickMsg, repoTickMsg, shellRescanTickMsg, shellStatusTickMsg:
+			continue
+		case tea.QuitMsg:
+			if _, isPane := msg.(paneMsg); !isPane {
+				continue
+			}
+		}
 		switch m := msg.(type) {
-		case nil, tea.QuitMsg, rescanTickMsg, statusTickMsg, repoTickMsg:
+		case nil, tea.QuitMsg:
 			continue
 		case tea.BatchMsg:
 			queue = append(queue, m...)
@@ -66,14 +78,15 @@ func drive(t *testing.T, a *App, cmd tea.Cmd) {
 
 // press sends keys: single runes, or names like "enter", "esc", "tab",
 // "space", "ctrl+s"; "type:text" types text.
-func press(t *testing.T, a *App, keys ...string) {
+func press(t *testing.T, a tea.Model, keys ...string) {
 	t.Helper()
 	for _, k := range keys {
 		var msg tea.KeyMsg
 		switch {
 		case strings.HasPrefix(k, "type:"):
 			for _, r := range strings.TrimPrefix(k, "type:") {
-				drive(t, a, a.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}))
+				_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+				drive(t, a, cmd)
 			}
 			continue
 		case k == "enter":
@@ -86,10 +99,17 @@ func press(t *testing.T, a *App, keys ...string) {
 			msg = tea.KeyMsg{Type: tea.KeySpace, Runes: []rune(" ")}
 		case k == "ctrl+s":
 			msg = tea.KeyMsg{Type: tea.KeyCtrlS}
+		case k == "ctrl+n":
+			msg = tea.KeyMsg{Type: tea.KeyCtrlN}
+		case k == "ctrl+w":
+			msg = tea.KeyMsg{Type: tea.KeyCtrlW}
+		case k == "ctrl+o":
+			msg = tea.KeyMsg{Type: tea.KeyCtrlO}
 		default:
 			msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
 		}
-		drive(t, a, a.onKey(msg))
+		_, cmd := a.Update(msg)
+		drive(t, a, cmd)
 	}
 }
 
@@ -216,8 +236,8 @@ func TestE2EWorkflow(t *testing.T) {
 
 	// Copy the commit and paste it into lib (another repository).
 	press(t, a, "3", "c", "esc")
-	if a.scr != scrRepos || a.copied == nil {
-		t.Fatalf("back on the list with a copied commit: scr=%v copied=%+v", a.scr, a.copied)
+	if a.scr != scrRepos || a.sh.copied == nil {
+		t.Fatalf("back on the list with a copied commit: scr=%v copied=%+v", a.scr, a.sh.copied)
 	}
 	press(t, a, "/", "type:lib", "enter", "3", "v")
 	if a.p == nil || !strings.Contains(a.p.title, "as patches from app") {
@@ -285,4 +305,11 @@ func TestE2EList(t *testing.T) {
 	if strings.TrimSpace(string(b)) != filepath.Join(root, "app") {
 		t.Errorf("cd file: %q", b)
 	}
+}
+
+// TestMain shortens the live-refresh timer so tests don't wait for it (its
+// messages are dropped by drive anyway).
+func TestMain(m *testing.M) {
+	liveRefresh = time.Millisecond
+	os.Exit(m.Run())
 }
