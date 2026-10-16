@@ -8,26 +8,40 @@ import (
 	"github.com/Paksonite/gitnest/internal/config"
 )
 
+// Colours adapt to the terminal background: Catppuccin Mocha on dark
+// terminals, Catppuccin Latte on light ones. Terminals without true colour
+// get the nearest 256/16-colour match from lipgloss.
 var (
-	cAccent = lipgloss.Color("#cba6f7")
-	cDim    = lipgloss.Color("#6c7086")
-	cGreen  = lipgloss.Color("#a6e3a1")
-	cRed    = lipgloss.Color("#f38ba8")
-	cYellow = lipgloss.Color("#f9e2af")
-	cCyan   = lipgloss.Color("#89dceb")
-	cText   = lipgloss.Color("#cdd6f4")
-	cSel    = lipgloss.Color("#45475a")
-	cSelDim = lipgloss.Color("#313244")
+	cAccent = lipgloss.AdaptiveColor{Dark: "#cba6f7", Light: "#8839ef"}
+	cDim    = lipgloss.AdaptiveColor{Dark: "#6c7086", Light: "#8c8fa1"}
+	cGreen  = lipgloss.AdaptiveColor{Dark: "#a6e3a1", Light: "#40a02b"}
+	cRed    = lipgloss.AdaptiveColor{Dark: "#f38ba8", Light: "#d20f39"}
+	cYellow = lipgloss.AdaptiveColor{Dark: "#f9e2af", Light: "#df8e1d"}
+	cCyan   = lipgloss.AdaptiveColor{Dark: "#89dceb", Light: "#04a5e5"}
+	cText   = lipgloss.AdaptiveColor{Dark: "#cdd6f4", Light: "#4c4f69"}
+	cSel    = lipgloss.AdaptiveColor{Dark: "#45475a", Light: "#bcc0cc"}
+	cSelDim = lipgloss.AdaptiveColor{Dark: "#313244", Light: "#dce0e8"}
 )
 
+// applyTheme applies the config: theme.mode forces light or dark colours
+// when auto-detection guesses wrong (e.g. inside tmux), theme.accent
+// replaces the accent colour.
 func applyTheme(cfg config.Config) {
+	switch strings.ToLower(cfg.Theme.Mode) {
+	case "dark":
+		lipgloss.SetHasDarkBackground(true)
+	case "light":
+		lipgloss.SetHasDarkBackground(false)
+	}
 	if cfg.Theme.Accent != "" {
-		cAccent = lipgloss.Color(cfg.Theme.Accent)
+		cAccent = lipgloss.AdaptiveColor{Dark: cfg.Theme.Accent, Light: cfg.Theme.Accent}
 	}
 }
 
-func fg(c lipgloss.Color, s string) string { return lipgloss.NewStyle().Foreground(c).Render(s) }
-func bold(s string) string                 { return lipgloss.NewStyle().Bold(true).Render(s) }
+func fg(c lipgloss.TerminalColor, s string) string {
+	return lipgloss.NewStyle().Foreground(c).Render(s)
+}
+func bold(s string) string { return lipgloss.NewStyle().Bold(true).Render(s) }
 
 // fit truncates s to w cells (ANSI-aware) and pads with spaces to exactly w.
 func fit(s string, w int) string {

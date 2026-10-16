@@ -12,6 +12,7 @@ import (
 )
 
 type Theme struct {
+	Mode   string `yaml:"mode"` // auto (default), dark or light
 	Accent string `yaml:"accent"`
 }
 
@@ -52,7 +53,10 @@ jobs: 8
 # Editor used by "e" (empty = $VISUAL, then $EDITOR, then vi).
 editor: ""
 theme:
-  accent: "#cba6f7"
+  # auto follows the terminal background; set dark or light if it guesses wrong.
+  mode: auto
+  # Accent colour; empty uses the theme's own (purple).
+  accent: ""
 `
 
 // Dir returns the gitnest config directory (~/.config/gitnest, or $XDG_CONFIG_HOME/gitnest).
@@ -106,7 +110,7 @@ func Default() Config {
 		RescanInterval: 60,
 		StatusInterval: 15,
 		Jobs:           8,
-		Theme:          Theme{Accent: "#cba6f7"},
+		Theme:          Theme{Mode: "auto"},
 	}
 }
 

@@ -47,14 +47,15 @@ func (a *App) sizeEditor() {
 	if a.ed == nil {
 		return
 	}
-	a.ed.ta.SetWidth(clamp(a.w-12, 20, 100))
-	a.ed.ta.SetHeight(clamp(a.h-14, 3, 20))
+	a.ed.ta.SetWidth(clamp(a.w-8, 10, 100))
+	// Room for the border, padding, title, status and hint lines (which may wrap).
+	a.ed.ta.SetHeight(clamp(a.h-10-2*editorPad(a.h), 1, 20))
 }
 
 func (a *App) editorKey(k tea.KeyMsg) tea.Cmd {
 	ed := a.ed
-	switch k.String() {
-	case "ctrl+s", "alt+enter":
+	switch lookup(scEditor, k.String()) {
+	case actSave:
 		msg := gitx.CleanMessage(ed.ta.Value())
 		if msg == "" {
 			ed.errorMsg = "the message is empty"
@@ -62,7 +63,7 @@ func (a *App) editorKey(k tea.KeyMsg) tea.Cmd {
 		}
 		a.ed = nil
 		return ed.onSave(msg)
-	case "esc":
+	case actCancel:
 		if ed.ta.Value() != ed.initial && !ed.discard {
 			ed.discard = true
 			return nil
@@ -77,7 +78,7 @@ func (a *App) editorKey(k tea.KeyMsg) tea.Cmd {
 }
 
 // subjectInfo describes the first line's length against the conventions.
-func subjectInfo(msg string) (string, lipgloss.Color) {
+func subjectInfo(msg string) (string, lipgloss.TerminalColor) {
 	subject, rest, _ := strings.Cut(msg, "\n")
 	subject = strings.TrimRight(subject, " \t") // trailing spaces are dropped on save
 	n := len([]rune(subject))
@@ -112,8 +113,18 @@ func (a *App) viewEditor() string {
 		status = fg(cYellow, "discard changes? esc again to discard, any other key to keep editing")
 	}
 	body := bold(ed.title) + "\n\n" + ed.ta.View() + "\n\n" + status + "\n" +
-		fg(cDim, "ctrl+s or alt+enter save · enter new line · esc cancel")
+		fg(cDim, hints(scEditor)+"  ·  alt+enter also saves  ·  enter new line")
+	// The box is as wide as the text area plus padding, and never wider than
+	// the window; long status lines wrap inside it.
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cAccent).
-		Padding(1, 2).Render(body)
+		Padding(editorPad(a.h), 2).Width(min(ed.ta.Width()+4, a.w-2)).Render(body)
 	return lipgloss.Place(a.w, a.h, lipgloss.Center, lipgloss.Center, box)
+}
+
+// editorPad is the vertical padding of the editor box; small windows get none.
+func editorPad(h int) int {
+	if h < 24 {
+		return 0
+	}
+	return 1
 }

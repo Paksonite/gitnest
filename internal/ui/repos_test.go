@@ -118,8 +118,8 @@ func TestFilterRanksAndKeepsKeys(t *testing.T) {
 	}
 	// "?" and "q" are part of the query, not help/quit.
 	a.reposKey(key("?"))
-	if a.rs.filter != "dns?" || a.help {
-		t.Errorf("filter = %q help = %v", a.rs.filter, a.help)
+	if a.rs.filter != "dns?" || a.report != nil {
+		t.Errorf("filter = %q help open = %v", a.rs.filter, a.report != nil)
 	}
 	a.reposKey(tea.KeyMsg{Type: tea.KeyBackspace})
 	a.reposKey(tea.KeyMsg{Type: tea.KeyTab})
@@ -202,7 +202,7 @@ func TestPanelHeights(t *testing.T) {
 				sum := 0
 				for i, x := range h {
 					sum += x
-					if x < 3 {
+					if x < 3 && !(x == 0 && i != focus && total < 16) { // tiny: only the focused panel
 						t.Fatalf("total=%d focus=%d counts=%v: panel %d height %d", total, focus, counts, i, x)
 					}
 					if i != focus && x > h[focus] {

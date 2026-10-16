@@ -189,36 +189,37 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 	if rp.mainFocus {
 		return a.mainKey(s)
 	}
+	act := lookup(scRepo, s)
 
 	// navigation
-	switch s {
-	case "enter":
+	switch act {
+	case actFocusMain:
 		rp.mainFocus = true
 		return nil
-	case "esc", "q":
+	case actBack:
 		a.scr = scrRepos
 		return a.gather(a.paths())
-	case "tab", "right", "l":
+	case actNextPanel:
 		rp.focus = (rp.focus + 1) % 4
 		return a.mainCmd()
-	case "shift+tab", "left", "h":
+	case actPrevPanel:
 		rp.focus = (rp.focus + 3) % 4
 		return a.mainCmd()
-	case "1", "2", "3", "4":
-		rp.focus = int(s[0] - '1')
+	case actPanel1, actPanel2, actPanel3, actPanel4:
+		rp.focus = int(act - actPanel1)
 		return a.mainCmd()
-	case "up", "k":
+	case actUp:
 		return a.move(-1)
-	case "down", "j":
+	case actDown:
 		return a.move(1)
-	case "home":
+	case actTop:
 		return a.move(-rp.count(rp.focus))
-	case "end":
+	case actBottom:
 		return a.move(rp.count(rp.focus))
-	case "pgup", "ctrl+u", "K":
+	case actScrollUp:
 		a.scrollMain(-half)
 		return nil
-	case "pgdown", "ctrl+d", "J":
+	case actScrollDown:
 		a.scrollMain(half)
 		return nil
 	}
@@ -226,15 +227,15 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 	// rebase/merge/cherry-pick/revert/bisect in progress
 	if st := rp.info.State; st != gitx.StateNone {
 		name := strings.ToLower(st.String())
-		switch {
-		case s == "C" && st != gitx.StateBisecting:
+		switch sa := lookup(scState, s); {
+		case sa == actContinue && st != gitx.StateBisecting:
 			return a.do("continue "+name, func() error { return gitx.Continue(ctx, dir, st) })
-		case s == "X":
+		case sa == actAbort:
 			a.confirm("Abort "+name+"?", func() tea.Cmd {
 				return a.do("abort "+name, func() error { return gitx.Abort(ctx, dir, st) })
 			})
 			return nil
-		case s == "S" && st.CanSkip():
+		case sa == actSkip && st.CanSkip():
 			return a.do("skip", func() error { return gitx.Skip(ctx, dir, st) })
 		}
 	}
@@ -257,32 +258,32 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 	}
 
 	// global
-	switch s {
-	case "f", "ctrl+f":
+	switch act {
+	case actFetch:
 		return a.do("fetch", func() error { return gitx.Fetch(ctx, dir) })
-	case "p", "ctrl+p":
+	case actPull, actPullRebase:
 		if !rp.info.Upstream {
 			a.setToast("no upstream for "+rp.info.Branch+" — set one in Branches with u", true)
 			return nil
 		}
-		if s == "ctrl+p" {
+		if act == actPullRebase {
 			return a.do("pull --rebase", func() error { return gitx.Pull(ctx, dir, true) })
 		}
 		return a.do("pull", func() error { return gitx.Pull(ctx, dir, false) })
-	case "P":
+	case actPush:
 		up := rp.info.Upstream
 		return a.do("push", func() error { return gitx.Push(ctx, dir, false, up) })
-	case "F":
+	case actForcePush:
 		up := rp.info.Upstream
 		a.confirm("Force push (--force-with-lease)?", func() tea.Cmd {
 			return a.do("force push", func() error { return gitx.Push(ctx, dir, true, up) })
 		})
-	case "ctrl+r":
+	case actReload:
 		rp.mainKey = ""
 		return loadRepoData(ctx, dir)
-	case "z":
+	case actUndo:
 		return a.undoLast()
-	case "L":
+	case actLazygit:
 		if _, err := exec.LookPath("lazygit"); err != nil {
 			a.setToast("lazygit not found in PATH", true)
 			return nil
@@ -301,8 +302,8 @@ func (a *App) filesKey(s string) (tea.Cmd, bool) {
 	if has {
 		f = rp.files[rp.cur[pFiles]]
 	}
-	switch s {
-	case " ":
+	switch lookup(scFiles, s) {
+	case actToggleStage:
 		if !has {
 			return nil, true
 		}
@@ -310,7 +311,7 @@ func (a *App) filesKey(s string) (tea.Cmd, bool) {
 			return a.do("stage", func() error { return gitx.Stage(ctx, dir, f.Path) }), true
 		}
 		return a.do("unstage", func() error { return gitx.Unstage(ctx, dir, f.Path) }), true
-	case "a":
+	case actStageAll:
 		anyUnstaged := false
 		for _, x := range rp.files {
 			if x.Unstaged() {
@@ -322,7 +323,7 @@ func (a *App) filesKey(s string) (tea.Cmd, bool) {
 			return a.do("stage all", func() error { return gitx.StageAll(ctx, dir) }), true
 		}
 		return a.do("unstage all", func() error { return gitx.UnstageAll(ctx, dir) }), true
-	case "c":
+	case actCommit:
 		staged := false
 		for _, x := range rp.files {
 			if x.Staged() {
@@ -350,23 +351,23 @@ func (a *App) filesKey(s string) (tea.Cmd, bool) {
 			})
 		})
 		return nil, true
-	case "S":
+	case actStashStaged:
 		a.ask("Stash staged changes — message", "", func(msg string) tea.Cmd {
 			return a.do("stash staged", func() error { return gitx.StashStaged(ctx, dir, msg) })
 		})
 		return nil, true
-	case "C":
+	case actCommitEditor:
 		c := exec.Command("git", "commit")
 		c.Dir = dir
 		return a.execCmd(c), true
-	case "A":
+	case actAmend:
 		return a.check(func() ([]string, error) { return gitx.CheckRewrite(ctx, dir, "HEAD", gitx.ActionAmend) },
 			func(pushed []string) tea.Cmd {
 				return a.confirmRewrite("Amend last commit with the staged changes?", pushed, func() tea.Cmd {
 					return a.doUndoable("amend", func() error { return gitx.AmendNoEdit(ctx, dir) })
 				})
 			}), true
-	case "d":
+	case actDiscard:
 		if !has {
 			return nil, true
 		}
@@ -374,12 +375,12 @@ func (a *App) filesKey(s string) (tea.Cmd, bool) {
 			return a.do("discard", func() error { return gitx.Discard(ctx, dir, f) })
 		})
 		return nil, true
-	case "s":
+	case actStash:
 		a.ask("Stash message", "wip", func(msg string) tea.Cmd {
 			return a.do("stash", func() error { return gitx.StashPush(ctx, dir, msg) })
 		})
 		return nil, true
-	case "e":
+	case actEdit:
 		if !has {
 			return nil, true
 		}
@@ -399,17 +400,17 @@ func (a *App) branchesKey(s string) (tea.Cmd, bool) {
 	if has {
 		b = bl[rp.cur[pBranches]]
 	}
-	switch s {
-	case "t", "[", "]":
+	switch lookup(scBranches, s) {
+	case actToggleRemote:
 		rp.showRemote = !rp.showRemote
 		rp.cur[pBranches], rp.off[pBranches] = 0, 0
 		return a.mainCmd(), true
-	case " ":
+	case actCheckout:
 		if !has {
 			return nil, true
 		}
 		return a.do("checkout "+b.Name, func() error { return gitx.Checkout(ctx, dir, b) }), true
-	case "n":
+	case actNewBranch:
 		base := ""
 		if has {
 			base = b.Name
@@ -418,7 +419,7 @@ func (a *App) branchesKey(s string) (tea.Cmd, bool) {
 			return a.do("new branch", func() error { return gitx.NewBranch(ctx, dir, name, base) })
 		})
 		return nil, true
-	case "d", "D":
+	case actDeleteBranch, actForceDeleteBranch:
 		if !has {
 			return nil, true
 		}
@@ -426,7 +427,7 @@ func (a *App) branchesKey(s string) (tea.Cmd, bool) {
 			a.setToast("can't delete the checked-out branch", true)
 			return nil, true
 		}
-		force := s == "D"
+		force := lookup(scBranches, s) == actForceDeleteBranch
 		a.confirm("Delete branch "+b.Name+"?", func() tea.Cmd {
 			if b.Remote {
 				return a.do("delete remote branch", func() error { return gitx.DeleteRemoteBranch(ctx, dir, b.Name) })
@@ -434,7 +435,7 @@ func (a *App) branchesKey(s string) (tea.Cmd, bool) {
 			return a.do("delete branch", func() error { return gitx.DeleteBranch(ctx, dir, b.Name, force) })
 		})
 		return nil, true
-	case "r":
+	case actRenameBranch:
 		if !has || b.Remote {
 			return nil, true
 		}
@@ -442,7 +443,7 @@ func (a *App) branchesKey(s string) (tea.Cmd, bool) {
 			return a.do("rename", func() error { return gitx.RenameBranch(ctx, dir, b.Name, name) })
 		})
 		return nil, true
-	case "u":
+	case actSetUpstream:
 		if !has || b.Remote {
 			return nil, true
 		}
@@ -454,7 +455,7 @@ func (a *App) branchesKey(s string) (tea.Cmd, bool) {
 			return a.do("set upstream", func() error { return gitx.SetUpstream(ctx, dir, b.Name, up) })
 		})
 		return nil, true
-	case "U":
+	case actUnsetUpstream:
 		if !has || b.Remote || b.Upstream == "" {
 			return nil, true
 		}
@@ -462,12 +463,12 @@ func (a *App) branchesKey(s string) (tea.Cmd, bool) {
 			return a.do("unset upstream", func() error { return gitx.UnsetUpstream(ctx, dir, b.Name) })
 		})
 		return nil, true
-	case "f":
+	case actFastForward:
 		if !has || b.Remote {
 			return nil, true
 		}
 		return a.do("fast-forward "+b.Name, func() error { return gitx.FastForward(ctx, dir, b) }), true
-	case "M":
+	case actMerge:
 		if !has || b.Current {
 			return nil, true
 		}
@@ -475,7 +476,7 @@ func (a *App) branchesKey(s string) (tea.Cmd, bool) {
 			return a.doUndoable("merge "+b.Name, func() error { return gitx.Merge(ctx, dir, b.Name) })
 		})
 		return nil, true
-	case "R":
+	case actRebase:
 		if !has || b.Current {
 			return nil, true
 		}
@@ -509,14 +510,14 @@ func (a *App) commitsKey(s string) (tea.Cmd, bool) {
 			return a.doUndoable(action+" "+c.Short, func() error { return gitx.RebaseAction(ctx, dir, c.Hash, action, "") })
 		})
 	}
-	switch s {
-	case "s":
+	switch lookup(scCommits, s) {
+	case actSquash:
 		return meld(gitx.ActionSquash), true
-	case "f":
+	case actFixup:
 		return meld(gitx.ActionFixup), true
-	case "d":
+	case actDrop:
 		return meld(gitx.ActionDrop), true
-	case "r":
+	case actReword:
 		var current string // filled in by the check, read after it completes
 		return a.check(func() ([]string, error) {
 			pushed, err := gitx.CheckRewrite(ctx, dir, c.Hash, gitx.ActionReword)
@@ -531,12 +532,12 @@ func (a *App) commitsKey(s string) (tea.Cmd, bool) {
 				})
 			})
 		}), true
-	case "t":
+	case actRevert:
 		a.confirm("Revert commit "+c.Short+"?", func() tea.Cmd {
 			return a.doUndoable("revert "+c.Short, func() error { return gitx.Revert(ctx, dir, c.Hash) })
 		})
 		return nil, true
-	case "u":
+	case actUndoCommit:
 		return a.check(func() ([]string, error) { return gitx.CheckRewrite(ctx, dir, "HEAD", gitx.ActionAmend) },
 			func(pushed []string) tea.Cmd {
 				return a.confirmRewrite("Undo the last commit (soft reset, changes stay staged)?", pushed, func() tea.Cmd {
@@ -554,17 +555,17 @@ func (a *App) stashKey(s string) (tea.Cmd, bool) {
 		return nil, false
 	}
 	st := rp.stashes[rp.cur[pStash]]
-	switch s {
-	case " ":
+	switch lookup(scStash, s) {
+	case actApply:
 		return a.do("stash apply", func() error { return gitx.StashApply(ctx, dir, st.Ref) }), true
-	case "g":
+	case actPop:
 		return a.do("stash pop", func() error { return gitx.StashPop(ctx, dir, st.Ref) }), true
-	case "b":
+	case actStashBranch:
 		a.ask("New branch from "+st.Ref, "", func(name string) tea.Cmd {
 			return a.do("stash branch", func() error { return gitx.StashBranch(ctx, dir, name, st.Ref) })
 		})
 		return nil, true
-	case "d":
+	case actStashDrop:
 		a.confirm("Drop "+st.Ref+" ("+st.Msg+")?", func() tea.Cmd {
 			return a.do("stash drop", func() error { return gitx.StashDrop(ctx, dir, st.Ref) })
 		})
@@ -640,18 +641,15 @@ func (a *App) panelItems(panel int) []rowItem {
 }
 
 func (a *App) repoHints() string {
-	if st := a.rp.info.State; st != gitx.StateNone {
-		return stateKeys(st) + "  ·  resolve conflicts in Files (e edit, space stage)  ·  ? help"
+	rp := &a.rp
+	if rp.mainFocus {
+		return hints(scMain)
 	}
-	switch a.rp.focus {
-	case pFiles:
-		return "space stage  a all  c commit  C git editor  A amend  d discard  s stash  S stash staged  e edit  enter diff  ·  p pull  P push  ? help"
-	case pBranches:
-		return "space checkout  n new  d delete  r rename  u upstream  f fast-forward  M merge  R rebase  t local/remote  ·  ctrl+f fetch  ? help"
-	case pCommits:
-		return "s squash  f fixup  d drop  r reword  t revert  u undo last  z undo rewrite  ·  p pull  P push  esc back  ? help"
+	if st := rp.info.State; st != gitx.StateNone {
+		return stateKeys(st) + "  ·  resolve conflicts in Files (e edit, space stage)  ·  " + hints(scGlobal)
 	}
-	return "space apply  g pop  d drop  b branch  enter diff  ·  p pull  P push  esc back  ? help"
+	panel := [4]scope{scFiles, scBranches, scCommits, scStash}[rp.focus]
+	return hints(panel) + "  ·  " + hints(scRepo, scGlobal)
 }
 
 func (a *App) viewRepo() string {
@@ -689,9 +687,17 @@ func (a *App) viewRepo() string {
 			rp.off[i] = scrollTo(rp.cur[i], rp.off[i], lh)
 			lines = renderRows(a.panelItems(i), rp.cur[i], rp.off[i], lh, leftW-2, i == rp.focus)
 		}
-		panels[i] = panel(titles[i], lines, leftW, heights[i], i == rp.focus)
+		if heights[i] > 0 {
+			panels[i] = panel(titles[i], lines, leftW, heights[i], i == rp.focus)
+		}
 	}
-	left := lipgloss.JoinVertical(lipgloss.Left, panels...)
+	var shown []string
+	for _, p := range panels {
+		if p != "" {
+			shown = append(shown, p)
+		}
+	}
+	left := lipgloss.JoinVertical(lipgloss.Left, shown...)
 
 	mainTitle := [4]string{"Diff", "Log", "Commit", "Stash"}[rp.focus]
 	mainLines := strings.Split(strings.TrimRight(expandTabs(rp.main), "\n"), "\n")
@@ -712,15 +718,18 @@ func (a *App) viewRepo() string {
 }
 
 // stateKeys lists the keys that act on an operation in progress.
+// stateKeys lists the keys that act on an operation in progress.
 func stateKeys(st gitx.State) string {
 	var k []string
-	if st != gitx.StateBisecting {
-		k = append(k, "C continue")
+	for _, bd := range keymap[scState] {
+		switch {
+		case bd.act == actContinue && st == gitx.StateBisecting:
+		case bd.act == actSkip && !st.CanSkip():
+		default:
+			k = append(k, keyLabel(bd.keys[0])+" "+bd.hint)
+		}
 	}
-	if st.CanSkip() {
-		k = append(k, "S skip")
-	}
-	return strings.Join(append(k, "X abort"), " · ")
+	return strings.Join(k, " · ")
 }
 
 // doUndoable runs a history-changing operation and reminds that z undoes it.
@@ -762,8 +771,9 @@ func panelHeights(total, focus int, counts [4]int) [4]int {
 	for i := range h {
 		h[i] = minH
 	}
-	if total < 4*minH+4 { // tiny terminal: only the focused panel shows rows
-		h[focus] = clamp(total-3*minH, minH, 1<<30)
+	if total < 4*minH+4 { // tiny terminal: only the focused panel is shown
+		h = [4]int{}
+		h[focus] = total
 		return h
 	}
 	rest := total - 4*minH
@@ -797,20 +807,20 @@ func (a *App) scrollMain(delta int) {
 func (a *App) mainKey(s string) tea.Cmd {
 	rp := &a.rp
 	half := clamp(rp.mainH/2, 1, 1<<30)
-	switch s {
-	case "esc", "q", "enter", "h", "left", "tab":
+	switch lookup(scMain, s) {
+	case actBack:
 		rp.mainFocus = false
-	case "j", "down":
+	case actDown:
 		a.scrollMain(1)
-	case "k", "up":
+	case actUp:
 		a.scrollMain(-1)
-	case "d", "ctrl+d", "pgdown", " ", "J":
+	case actPageDown:
 		a.scrollMain(half)
-	case "u", "ctrl+u", "pgup", "K":
+	case actPageUp:
 		a.scrollMain(-half)
-	case "g", "home":
+	case actTop:
 		rp.mainOff = 0
-	case "G", "end":
+	case actBottom:
 		a.scrollMain(1 << 30)
 	}
 	return nil

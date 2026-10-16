@@ -8,6 +8,7 @@ project_name: gitnest
 before:
   hooks:
     - go mod download
+    - sh -c "mkdir -p completions && go run ./cmd/gitnest completion zsh > completions/_gitnest"
 
 builds:
   - id: gitnest
@@ -33,6 +34,7 @@ archives:
     files:
       - LICENSE
       - README.md
+      - completions/*
 
 checksum:
   name_template: checksums.txt
@@ -53,6 +55,8 @@ release:
 homebrew_casks:
   - name: gitnest
     binaries: [gitnest]
+    completions:
+      zsh: completions/_gitnest
     homepage: https://github.com/Paksonite/gitnest
     description: Terminal UI for managing many git repositories
     directory: Casks

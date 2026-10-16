@@ -3,6 +3,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,6 +12,12 @@ import (
 	"github.com/Paksonite/gitnest/internal/config"
 	"github.com/Paksonite/gitnest/internal/scan"
 	"github.com/Paksonite/gitnest/internal/state"
+)
+
+// Smallest window the layout supports; below it a notice is shown instead.
+const (
+	minWidth  = 50
+	minHeight = 12
 )
 
 type screen int
@@ -73,7 +80,6 @@ type App struct {
 	report   *report // failures of the last bulk operation, or details of an error
 	ed       *editor // commit message editor
 	lastErr  *report // details of the last failed operation, shown with "!"
-	help     bool
 	toast    string
 	toastErr bool
 	busy     string
@@ -158,7 +164,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 	s := k.String()
-	if s == "ctrl+c" {
+	global := lookup(scGlobal, s)
+	if global == actQuit {
 		return tea.Quit
 	}
 	a.toast = ""
@@ -171,18 +178,14 @@ func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 	if a.report != nil {
 		return a.reportKey(k)
 	}
-	if a.help {
-		a.help = false
-		return nil
-	}
 	if a.scr == scrRepos && a.rs.filtering {
 		return a.reposKey(k) // every key belongs to the search query, "?" too
 	}
-	if s == "?" {
-		a.help = true
+	if global == actHelp {
+		a.report = &report{title: "Keys", lines: helpLines()}
 		return nil
 	}
-	if s == "!" {
+	if global == actErrorDetails {
 		if a.lastErr == nil {
 			a.setToast("no error to show", false)
 		} else {
@@ -333,6 +336,17 @@ func (a *App) View() string {
 	if a.w == 0 || a.h == 0 {
 		return ""
 	}
+	if a.w < minWidth || a.h < minHeight {
+		lines := []string{fmt.Sprintf("gitnest needs at least %d×%d", minWidth, minHeight),
+			fmt.Sprintf("(the window is %d×%d)", a.w, a.h)}
+		if len(lines) > a.h {
+			lines = lines[:a.h]
+		}
+		for i, l := range lines {
+			lines[i] = fit(l, a.w)
+		}
+		return lipgloss.Place(a.w, a.h, lipgloss.Center, lipgloss.Center, strings.Join(lines, "\n"))
+	}
 	switch {
 	case a.ed != nil:
 		return a.viewEditor()
@@ -340,8 +354,6 @@ func (a *App) View() string {
 		return a.viewPrompt()
 	case a.report != nil:
 		return a.viewReport()
-	case a.help:
-		return a.viewHelp()
 	case a.scr == scrRepos:
 		return a.viewRepos()
 	}
@@ -360,40 +372,6 @@ func (a *App) viewPrompt() string {
 	}
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cAccent).
 		Padding(1, 2).Width(w).Render(body)
-	return lipgloss.Place(a.w, a.h, lipgloss.Center, lipgloss.Center, box)
-}
-
-const helpText = `gitnest — keys
-
-Repository list
-  enter open repo       / search          s sort (recent, name, commit, status)
-  d dirty only          space mark        ✦ new since start   ! conflict or operation in progress
-  f fetch (marked or all)                 p pull --ff-only (marked or selected)
-  R rescan roots        r refresh status  q quit
-  Search    type to filter by name (also host and path; @text = branch)
-            enter open  tab keep filter  esc clear  ↑/↓ ctrl+n/p move
-
-Repo view  (panels: 1 Files  2 Branches  3 Commits  4 Stash)
-  tab / h l / 1-4 switch panel      j k move      J K / pgup pgdn scroll diff
-  enter     focus the diff: j k scroll, d u half page, g G top/bottom, esc back
-  Files     space stage/unstage  a all  c commit (multi-line editor)
-            C commit in $EDITOR  A amend  d discard  s stash  S stash staged  e edit file
-  Branches  space checkout (remote → local tracking branch)  n new  r rename
-            d delete  D force delete  u set upstream  U unset  f fast-forward
-            M merge into current  R rebase current onto  t local/remote
-  Commits   s squash  f fixup  d drop  r reword (full message)  t revert  u undo last (soft)
-            (refused across merge commits; pushed commits ask twice)
-  Stash     space apply  g pop  d drop  b new branch from stash
-  Global    p pull  ctrl+p pull --rebase  P push  F force push (lease)
-            ctrl+f fetch  ctrl+r refresh  L open lazygit  esc/q back
-            z undo last history change (press again to redo)  ! last error in full
-  In progress  C continue  S skip  X abort   (rebase, merge, cherry-pick, revert, bisect)
-
-press any key to close`
-
-func (a *App) viewHelp() string {
-	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cAccent).
-		Padding(1, 2).Render(helpText)
 	return lipgloss.Place(a.w, a.h, lipgloss.Center, lipgloss.Center, box)
 }
 
