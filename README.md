@@ -241,8 +241,8 @@ haven't seen. Every history change records an undo point: `z` goes back,
 ## Several repositories side by side
 
 Work on related repositories at the same time — say IAM in one, the
-resources in another and a shared module in a third — with as many gitnests
-in one terminal as fit:
+resources in another and a shared module in a third — with up to six
+gitnests on screen at once in one terminal:
 
 | Key | |
 |---|---|
@@ -255,8 +255,10 @@ Each pane is a complete gitnest with its own repository, panels, search and
 editor. The active pane has a heavy border in the accent colour and its title
 (`● 2 · repo · branch`) on an accent background; the others are thin and
 dimmed. When panes would get too small for the window, gitnest falls back to
-another layout and finally to tabs above the active pane. The layout is
-remembered. Commits copied with `c` in one pane can be pasted with `v` in
+another layout and finally to tabs above the active pane; from the seventh
+pane on it always shows tabs. When the tabs don't fit on one line, the bar
+follows the active one and `‹ 3` / `4 ›` count the tabs hidden on each side.
+The layout is remembered. Commits copied with `c` in one pane can be pasted with `v` in
 another.
 
 > **macOS:** by default `ctrl+←/→/↑/↓` switch Spaces and open Mission
