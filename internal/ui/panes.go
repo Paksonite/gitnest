@@ -13,7 +13,8 @@ import (
 // pane is a full App with its own screen, selection, open repository,
 // prompts and editor; the config, themes, scanner and the commit clipboard
 // are shared. ctrl+n opens a pane, ctrl+w closes one, ctrl+arrows (or
-// alt+arrows) move the focus and ctrl+g changes the layout.
+// alt+arrows) move the focus and ctrl+g changes the layout. Up to maxTiled
+// panes are tiled; more are shown as tabs.
 type Shell struct {
 	panes  []*pane
 	focus  int
@@ -249,7 +250,11 @@ func (s *Shell) open() tea.Cmd {
 	s.panes = append(s.panes[:s.focus+1], append([]*pane{p}, s.panes[s.focus+1:]...)...)
 	s.focus++
 	s.resize()
-	a.setToast("new pane: pick a repository (ctrl+arrows switch, ctrl+w closes, ctrl+g layout)", false)
+	msg := "new pane: pick a repository (ctrl+arrows switch, ctrl+w closes, ctrl+g layout)"
+	if len(s.panes) == maxTiled+1 {
+		msg = fmt.Sprintf("more than %d panes are shown as tabs (ctrl+←/→ switch, ctrl+w closes)", maxTiled)
+	}
+	a.setToast(msg, false)
 	return wrap(p.id, tea.Batch(a.previewCmd(), repoTick()))
 }
 
@@ -292,12 +297,20 @@ func (a *App) visibleStatusCmd() tea.Cmd {
 
 type rect struct{ x, y, w, h int }
 
+// maxTiled is the most panes shown at once; more become tabs, since
+// smaller panes stop being readable.
+const maxTiled = 6
+
 // layout places n panes in a w×h window in the given arrangement, falling
 // back to the others when panes would be too small, and to tabs (only the
-// focused pane, a tab bar above it) when nothing fits.
+// focused pane, a tab bar above it) when nothing fits or there are more
+// than maxTiled panes.
 func layout(mode, n, w, h int) (rects []rect, tabs bool) {
 	if n <= 1 {
 		return []rect{{0, 0, w, h}}, false
+	}
+	if n > maxTiled {
+		return []rect{{0, 1, w, h - 1}}, true
 	}
 	fits := func(rs []rect) bool {
 		for _, r := range rs {
@@ -455,17 +468,11 @@ func (s *Shell) View() string {
 	}
 	rects, tabs := layout(s.mode, len(s.panes), s.w, s.h)
 	if tabs {
-		var parts []string
+		titles := make([]string, len(s.panes))
 		for i, p := range s.panes {
-			t := " " + p.title(i+1) + " "
-			if i == s.focus {
-				parts = append(parts, lipgloss.NewStyle().Bold(true).Background(cSel).Foreground(cText).Render(t))
-			} else {
-				parts = append(parts, fg(cDim, t))
-			}
+			titles[i] = p.title(i + 1)
 		}
-		bar := fit(strings.Join(parts, fg(cDim, "│"))+fg(cDim, "  ctrl+←/→ switch"), s.w)
-		return bar + "\n" + s.focused().app.View()
+		return tabBar(titles, s.focus, s.w) + "\n" + s.focused().app.View()
 	}
 	// Render each pane framed, then lay the frames out row by row.
 	type cell struct {
@@ -525,4 +532,69 @@ func frame(content string, w, h int, title string, focused bool) string {
 	}
 	out = append(out, b.Render(border.BottomLeft+strings.Repeat(border.Bottom, max(0, inner))+border.BottomRight))
 	return strings.Join(out, "\n")
+}
+
+// maxTabWidth caps one tab's title so several fit on the bar.
+const maxTabWidth = 30
+
+// tabBar renders the pane tabs in one line of width w. When they don't all
+// fit, it shows a run of tabs around the focused one, with "‹ 3" and "5 ›"
+// counting the tabs hidden on each side.
+func tabBar(titles []string, focus, w int) string {
+	n := len(titles)
+	labels := make([]string, n)
+	widths := make([]int, n)
+	for i, t := range titles {
+		if lipgloss.Width(t) > maxTabWidth {
+			t = strings.TrimRight(fit(t, maxTabWidth-1), " ") + "…"
+		}
+		labels[i] = " " + t + " "
+		widths[i] = lipgloss.Width(labels[i]) + 1 // and a separator
+	}
+	hint := "  ctrl+←/→ switch"
+	more := func(k int) int { // width of a "‹ k " / " k ›" marker
+		if k == 0 {
+			return 0
+		}
+		return len(fmt.Sprint(k)) + 3
+	}
+	// Grow the run [lo, hi] from the focused tab, alternating right and left,
+	// while it and the markers for what is left out still fit.
+	lo, hi := focus, focus
+	used := widths[focus]
+	fitsWith := func(lo, hi, used int) bool { return used+more(lo)+more(n-1-hi) <= w }
+	for grew := true; grew; {
+		grew = false
+		if hi+1 < n && fitsWith(lo, hi+1, used+widths[hi+1]) {
+			hi++
+			used += widths[hi]
+			grew = true
+		}
+		if lo > 0 && fitsWith(lo-1, hi, used+widths[lo-1]) {
+			lo--
+			used += widths[lo]
+			grew = true
+		}
+	}
+	var b strings.Builder
+	if lo > 0 {
+		b.WriteString(fg(cAccent, fmt.Sprintf("‹ %d ", lo)))
+	}
+	for i := lo; i <= hi; i++ {
+		if i > lo {
+			b.WriteString(fg(cDim, "│"))
+		}
+		if i == focus {
+			b.WriteString(lipgloss.NewStyle().Bold(true).Background(cSel).Foreground(cText).Render(labels[i]))
+		} else {
+			b.WriteString(fg(cDim, labels[i]))
+		}
+	}
+	if hi < n-1 {
+		b.WriteString(fg(cAccent, fmt.Sprintf(" %d ›", n-1-hi)))
+	}
+	if lo == 0 && hi == n-1 && used+len(hint) <= w {
+		b.WriteString(fg(cDim, hint))
+	}
+	return fit(b.String(), w)
 }

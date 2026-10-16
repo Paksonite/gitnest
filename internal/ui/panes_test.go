@@ -42,7 +42,7 @@ func TestLayout(t *testing.T) {
 		{paneGrid, 4, 220, 60, "2+2"},
 		{paneGrid, 4, 400, 40, "2+2"},
 		{paneGrid, 6, 240, 60, "3+3"},
-		{paneGrid, 9, 240, 60, "3+3+3"},
+		{paneGrid, 7, 400, 100, "tabs"}, // more than maxTiled: tabs however big the window
 		{paneGrid, 4, 100, 30, "tabs"},
 		{paneGrid, 4, 400, 20, "4"}, // too low for two rows: side by side
 		{paneColumns, 3, 300, 50, "3"},
@@ -184,7 +184,7 @@ func TestPanesRouting(t *testing.T) {
 
 func TestPanesFitAnyWindow(t *testing.T) {
 	sizes := [][2]int{{40, 10}, {80, 24}, {120, 40}, {160, 50}, {220, 60}, {300, 80}}
-	for n := 1; n <= 6; n++ {
+	for n := 1; n <= 8; n++ {
 		for _, sz := range sizes {
 			s := shellOf(t, sz[0], sz[1], "/r/a", "/r/b", "/r/c")
 			for len(s.panes) < n {
@@ -201,7 +201,7 @@ func TestPanesFitAnyWindow(t *testing.T) {
 					break
 				}
 			}
-			if n > 1 && !strings.Contains(view, "2 · repositories") {
+			if n > 1 && !strings.Contains(view, fmt.Sprintf("%d · repositories", n)) {
 				t.Errorf("%d panes at %dx%d: no pane title or tab", n, sz[0], sz[1])
 			}
 		}
@@ -270,5 +270,47 @@ func TestUpdateBadge(t *testing.T) {
 	}
 	if (&App{}).updateCheck() != nil {
 		t.Error("a development build must not look for updates")
+	}
+}
+
+func TestTabBar(t *testing.T) {
+	var titles []string
+	for i := 1; i <= 12; i++ {
+		titles = append(titles, fmt.Sprintf("%d · repository-%d · main", i, i))
+	}
+	titles[4] = "5 · a-repository-with-a-really-long-name-indeed · feature/long"
+	for _, w := range []int{40, 80, 160} {
+		for focus := range titles {
+			bar := tabBar(titles, focus, w)
+			if lipglossWidth(bar) > w {
+				t.Errorf("w %d focus %d: bar is %d wide", w, focus, lipglossWidth(bar))
+			}
+			want := fmt.Sprintf(" %d · ", focus+1)
+			if !strings.Contains(bar, want) {
+				t.Errorf("w %d focus %d: focused tab not shown: %q", w, focus, bar)
+			}
+			// Markers count exactly the tabs left out on each side.
+			shown := 0
+			for i := range titles {
+				if strings.Contains(bar, fmt.Sprintf(" %d · ", i+1)) {
+					shown++
+				}
+			}
+			left, right := 0, 0
+			fmt.Sscanf(bar[strings.Index(bar, "‹")+len("‹"):], "%d", &left)
+			if i := strings.LastIndex(bar, "›"); i >= 0 {
+				head := strings.TrimRight(bar[:i], " ")
+				fmt.Sscanf(head[strings.LastIndex(head, " ")+1:], "%d", &right)
+			}
+			if !strings.Contains(bar, "‹") {
+				left = 0
+			}
+			if shown+left+right != len(titles) {
+				t.Errorf("w %d focus %d: %d shown + ‹%d + %d› != %d: %q", w, focus, shown, left, right, len(titles), bar)
+			}
+		}
+	}
+	if bar := tabBar(titles[:3], 0, 200); !strings.Contains(bar, "ctrl+←/→") || strings.Contains(bar, "‹") || strings.Contains(bar, "›") {
+		t.Errorf("all tabs fit: %q", bar)
 	}
 }
