@@ -1,0 +1,76 @@
+# GoReleaser config: builds a universal macOS binary, publishes a GitHub Release
+# and updates the Homebrew cask in Paksonite/homebrew-tap.
+# Local dry run (nothing is published): make snapshot
+version: 2
+
+project_name: gitnest
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: gitnest
+    main: ./cmd/gitnest
+    binary: gitnest
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }} -X main.date={{ .Date }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+universal_binaries:
+  - id: gitnest
+    replace: true
+
+archives:
+  - id: gitnest
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_darwin_universal"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  github:
+    owner: Paksonite
+    name: gitnest
+
+homebrew_casks:
+  - name: gitnest
+    binaries: [gitnest]
+    homepage: https://github.com/Paksonite/gitnest
+    description: Terminal UI for managing many git repositories
+    directory: Casks
+    commit_msg_template: "gitnest {{ .Tag }}"
+    custom_block: |
+      depends_on macos: ">= :monterey"
+    commit_author:
+      name: gitnest-release-bot
+      email: noreply@github.com
+    repository:
+      owner: Paksonite
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    # The binary is not notarized: drop the quarantine flag so Gatekeeper
+    # doesn't report it as damaged.
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/gitnest"]
+          end
