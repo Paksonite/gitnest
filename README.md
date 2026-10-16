@@ -8,7 +8,7 @@ lazygit-style view for working inside a single repository.
 
 ## Install
 
-### Homebrew (macOS 12+, Apple Silicon and Intel)
+### Homebrew (macOS 13+, Apple Silicon and Intel)
 
 ```sh
 brew install --cask paksonite/tap/gitnest

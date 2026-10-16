@@ -58,7 +58,7 @@ homebrew_casks:
     directory: Casks
     commit_msg_template: "gitnest {{ .Tag }}"
     custom_block: |
-      depends_on macos: ">= :monterey"
+      depends_on macos: ">= :ventura"
     commit_author:
       name: gitnest-release-bot
       email: noreply@github.com
