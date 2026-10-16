@@ -138,22 +138,30 @@ END { if (n != 1) exit 3 }`
 const todoEditor = `sh -c 'awk -v h="$GITNEST_HASH" -v a="$GITNEST_ACTION" "$GITNEST_AWK" "$1" > "$1.gitnest" && mv "$1.gitnest" "$1"' sh`
 
 // Reword replaces the subject line of commit rev and keeps its body.
-// HEAD is amended with --only, so staged changes stay staged instead of
-// being folded into the commit; older commits go through an interactive rebase.
 func Reword(ctx context.Context, dir, rev, subject string) error {
 	subject = strings.TrimSpace(subject)
 	if subject == "" || strings.Contains(subject, "\n") {
 		return errors.New("reword: subject must be a single non-empty line")
 	}
+	full, err := Message(ctx, dir, rev)
+	if err != nil {
+		return err
+	}
+	return RewordMessage(ctx, dir, rev, replaceSubject(full, subject))
+}
+
+// RewordMessage replaces the whole message of commit rev. HEAD is amended
+// with --only, so staged changes stay staged instead of being folded into the
+// commit; older commits go through an interactive rebase.
+func RewordMessage(ctx context.Context, dir, rev, msg string) error {
+	msg = CleanMessage(msg)
+	if msg == "" {
+		return errors.New("reword: the message is empty")
+	}
 	hash, err := resolve(ctx, dir, rev)
 	if err != nil {
 		return err
 	}
-	full, err := Message(ctx, dir, hash)
-	if err != nil {
-		return err
-	}
-	msg := replaceSubject(full, subject)
 	head, err := resolve(ctx, dir, "HEAD")
 	if err != nil {
 		return err
@@ -169,6 +177,16 @@ func Reword(ctx context.Context, dir, rev, subject string) error {
 	}
 	_, err = run(ctx, kWrite, dir, nil, "commit", "--amend", "--only", "--allow-empty", "-m", msg)
 	return err
+}
+
+// CleanMessage trims trailing spaces from every line and drops blank lines
+// at the start and end of a commit message.
+func CleanMessage(msg string) string {
+	lines := strings.Split(strings.ReplaceAll(msg, "\r\n", "\n"), "\n")
+	for i, l := range lines {
+		lines[i] = strings.TrimRight(l, " \t")
+	}
+	return strings.Trim(strings.Join(lines, "\n"), "\n")
 }
 
 // AmendNoEdit folds the staged changes into HEAD, keeping its message.

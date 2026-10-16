@@ -22,7 +22,7 @@ install. If you download the archive from GitHub Releases by hand, run
 
 ### From source
 
-Requires Go 1.22+.
+Requires Go 1.24+.
 
 ```sh
 go install github.com/Paksonite/gitnest/cmd/gitnest@latest

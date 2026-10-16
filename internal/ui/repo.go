@@ -46,6 +46,9 @@ type repoState struct {
 	main       string
 	mainKey    string
 	mainOff    int
+	mainFocus  bool // keys scroll the main (diff) panel
+	mainH      int  // rows of the main panel on screen (set while rendering)
+	mainLen    int  // lines in the main panel
 }
 
 func (rp *repoState) branches() []gitx.Branch {
@@ -183,8 +186,15 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 	s := k.String()
 	half := clamp((a.h-3)/2, 3, 100)
 
+	if rp.mainFocus {
+		return a.mainKey(s)
+	}
+
 	// navigation
 	switch s {
+	case "enter":
+		rp.mainFocus = true
+		return nil
 	case "esc", "q":
 		a.scr = scrRepos
 		return a.gather(a.paths())
@@ -206,10 +216,10 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 	case "end":
 		return a.move(rp.count(rp.focus))
 	case "pgup", "ctrl+u", "K":
-		rp.mainOff = clamp(rp.mainOff-half, 0, 1<<30)
+		a.scrollMain(-half)
 		return nil
 	case "pgdown", "ctrl+d", "J":
-		rp.mainOff += half
+		a.scrollMain(half)
 		return nil
 	}
 
@@ -250,10 +260,15 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 	switch s {
 	case "f", "ctrl+f":
 		return a.do("fetch", func() error { return gitx.Fetch(ctx, dir) })
-	case "p":
+	case "p", "ctrl+p":
+		if !rp.info.Upstream {
+			a.setToast("no upstream for "+rp.info.Branch+" — set one in Branches with u", true)
+			return nil
+		}
+		if s == "ctrl+p" {
+			return a.do("pull --rebase", func() error { return gitx.Pull(ctx, dir, true) })
+		}
 		return a.do("pull", func() error { return gitx.Pull(ctx, dir, false) })
-	case "ctrl+p":
-		return a.do("pull --rebase", func() error { return gitx.Pull(ctx, dir, true) })
 	case "P":
 		up := rp.info.Upstream
 		return a.do("push", func() error { return gitx.Push(ctx, dir, false, up) })
@@ -308,8 +323,36 @@ func (a *App) filesKey(s string) (tea.Cmd, bool) {
 		}
 		return a.do("unstage all", func() error { return gitx.UnstageAll(ctx, dir) }), true
 	case "c":
-		a.ask("Commit message", "", func(msg string) tea.Cmd {
-			return a.do("commit", func() error { return gitx.CommitMsg(ctx, dir, msg) })
+		staged := false
+		for _, x := range rp.files {
+			if x.Staged() {
+				staged = true
+				break
+			}
+		}
+		if staged {
+			return a.openEditor("Commit", "", func(msg string) tea.Cmd {
+				return a.do("commit", func() error { return gitx.CommitMsg(ctx, dir, msg) })
+			}), true
+		}
+		if !has {
+			a.setToast("nothing to commit", false)
+			return nil, true
+		}
+		a.confirm("Nothing is staged. Stage all changes and commit?", func() tea.Cmd {
+			return a.openEditor("Commit all changes", "", func(msg string) tea.Cmd {
+				return a.do("commit", func() error {
+					if err := gitx.StageAll(ctx, dir); err != nil {
+						return err
+					}
+					return gitx.CommitMsg(ctx, dir, msg)
+				})
+			})
+		})
+		return nil, true
+	case "S":
+		a.ask("Stash staged changes — message", "", func(msg string) tea.Cmd {
+			return a.do("stash staged", func() error { return gitx.StashStaged(ctx, dir, msg) })
 		})
 		return nil, true
 	case "C":
@@ -399,6 +442,31 @@ func (a *App) branchesKey(s string) (tea.Cmd, bool) {
 			return a.do("rename", func() error { return gitx.RenameBranch(ctx, dir, b.Name, name) })
 		})
 		return nil, true
+	case "u":
+		if !has || b.Remote {
+			return nil, true
+		}
+		def := b.Upstream
+		if def == "" {
+			def = "origin/" + b.Name
+		}
+		a.ask("Upstream for "+b.Name, def, func(up string) tea.Cmd {
+			return a.do("set upstream", func() error { return gitx.SetUpstream(ctx, dir, b.Name, up) })
+		})
+		return nil, true
+	case "U":
+		if !has || b.Remote || b.Upstream == "" {
+			return nil, true
+		}
+		a.confirm("Stop tracking "+b.Upstream+" for "+b.Name+"?", func() tea.Cmd {
+			return a.do("unset upstream", func() error { return gitx.UnsetUpstream(ctx, dir, b.Name) })
+		})
+		return nil, true
+	case "f":
+		if !has || b.Remote {
+			return nil, true
+		}
+		return a.do("fast-forward "+b.Name, func() error { return gitx.FastForward(ctx, dir, b) }), true
 	case "M":
 		if !has || b.Current {
 			return nil, true
@@ -449,15 +517,20 @@ func (a *App) commitsKey(s string) (tea.Cmd, bool) {
 	case "d":
 		return meld(gitx.ActionDrop), true
 	case "r":
-		return a.check(func() ([]string, error) { return gitx.CheckRewrite(ctx, dir, c.Hash, gitx.ActionReword) },
-			func(pushed []string) tea.Cmd {
-				a.ask("Reword "+c.Short, c.Subject, func(msg string) tea.Cmd {
-					return a.confirmRewrite("", pushed, func() tea.Cmd {
-						return a.doUndoable("reword "+c.Short, func() error { return gitx.Reword(ctx, dir, c.Hash, msg) })
-					})
+		var current string // filled in by the check, read after it completes
+		return a.check(func() ([]string, error) {
+			pushed, err := gitx.CheckRewrite(ctx, dir, c.Hash, gitx.ActionReword)
+			if err == nil {
+				current, err = gitx.Message(ctx, dir, c.Hash)
+			}
+			return pushed, err
+		}, func(pushed []string) tea.Cmd {
+			return a.openEditor("Reword "+c.Short, gitx.CleanMessage(current), func(msg string) tea.Cmd {
+				return a.confirmRewrite("", pushed, func() tea.Cmd {
+					return a.doUndoable("reword "+c.Short, func() error { return gitx.RewordMessage(ctx, dir, c.Hash, msg) })
 				})
-				return nil
-			}), true
+			})
+		}), true
 	case "t":
 		a.confirm("Revert commit "+c.Short+"?", func() tea.Cmd {
 			return a.doUndoable("revert "+c.Short, func() error { return gitx.Revert(ctx, dir, c.Hash) })
@@ -486,6 +559,11 @@ func (a *App) stashKey(s string) (tea.Cmd, bool) {
 		return a.do("stash apply", func() error { return gitx.StashApply(ctx, dir, st.Ref) }), true
 	case "g":
 		return a.do("stash pop", func() error { return gitx.StashPop(ctx, dir, st.Ref) }), true
+	case "b":
+		a.ask("New branch from "+st.Ref, "", func(name string) tea.Cmd {
+			return a.do("stash branch", func() error { return gitx.StashBranch(ctx, dir, name, st.Ref) })
+		})
+		return nil, true
 	case "d":
 		a.confirm("Drop "+st.Ref+" ("+st.Msg+")?", func() tea.Cmd {
 			return a.do("stash drop", func() error { return gitx.StashDrop(ctx, dir, st.Ref) })
@@ -567,13 +645,13 @@ func (a *App) repoHints() string {
 	}
 	switch a.rp.focus {
 	case pFiles:
-		return "space stage  a all  c commit  C editor  A amend  d discard  s stash  e edit  ·  p pull  P push  ctrl+f fetch  L lazygit  esc back  ? help"
+		return "space stage  a all  c commit  C git editor  A amend  d discard  s stash  S stash staged  e edit  enter diff  ·  p pull  P push  ? help"
 	case pBranches:
-		return "space checkout  n new  d delete  r rename  M merge  R rebase  t local/remote  ·  p pull  P push  esc back  ? help"
+		return "space checkout  n new  d delete  r rename  u upstream  f fast-forward  M merge  R rebase  t local/remote  ·  ctrl+f fetch  ? help"
 	case pCommits:
 		return "s squash  f fixup  d drop  r reword  t revert  u undo last  z undo rewrite  ·  p pull  P push  esc back  ? help"
 	}
-	return "space apply  g pop  d drop  ·  p pull  P push  esc back  ? help"
+	return "space apply  g pop  d drop  b branch  enter diff  ·  p pull  P push  esc back  ? help"
 }
 
 func (a *App) viewRepo() string {
@@ -618,11 +696,17 @@ func (a *App) viewRepo() string {
 	mainTitle := [4]string{"Diff", "Log", "Commit", "Stash"}[rp.focus]
 	mainLines := strings.Split(strings.TrimRight(expandTabs(rp.main), "\n"), "\n")
 	mh := lipgloss.Height(left)
-	if rp.mainOff > len(mainLines)-1 {
-		rp.mainOff = clamp(len(mainLines)-1, 0, 1<<30)
+	rp.mainH = mh - 3
+	rp.mainLen = len(mainLines)
+	rp.mainOff = clamp(rp.mainOff, 0, rp.mainLen-rp.mainH)
+	if rp.mainLen > rp.mainH {
+		mainTitle += fmt.Sprintf(" · %d–%d of %d", rp.mainOff+1, min(rp.mainOff+rp.mainH, rp.mainLen), rp.mainLen)
+	}
+	if rp.mainFocus {
+		mainTitle += "  (j/k scroll · esc back)"
 	}
 	mainLines = mainLines[rp.mainOff:]
-	body := lipgloss.JoinHorizontal(lipgloss.Top, left, panel(mainTitle, mainLines, mainW, mh, false))
+	body := lipgloss.JoinHorizontal(lipgloss.Top, left, panel(mainTitle, mainLines, mainW, mh, rp.mainFocus))
 
 	return strings.Join([]string{fit(head, a.w), body, a.footer(a.repoHints())}, "\n")
 }
@@ -702,4 +786,32 @@ func panelHeights(total, focus int, counts [4]int) [4]int {
 	}
 	h[focus] += rest // nobody else needs them
 	return h
+}
+
+func (a *App) scrollMain(delta int) {
+	rp := &a.rp
+	rp.mainOff = clamp(rp.mainOff+delta, 0, rp.mainLen-rp.mainH)
+}
+
+// mainKey handles keys while the main (diff) panel is focused.
+func (a *App) mainKey(s string) tea.Cmd {
+	rp := &a.rp
+	half := clamp(rp.mainH/2, 1, 1<<30)
+	switch s {
+	case "esc", "q", "enter", "h", "left", "tab":
+		rp.mainFocus = false
+	case "j", "down":
+		a.scrollMain(1)
+	case "k", "up":
+		a.scrollMain(-1)
+	case "d", "ctrl+d", "pgdown", " ", "J":
+		a.scrollMain(half)
+	case "u", "ctrl+u", "pgup", "K":
+		a.scrollMain(-half)
+	case "g", "home":
+		rp.mainOff = 0
+	case "G", "end":
+		a.scrollMain(1 << 30)
+	}
+	return nil
 }

@@ -287,6 +287,10 @@ func Show(ctx context.Context, dir, hash string) string {
 }
 
 func CommitMsg(ctx context.Context, dir, msg string) error {
+	msg = CleanMessage(msg)
+	if msg == "" {
+		return errors.New("commit: the message is empty")
+	}
 	_, err := run(ctx, kWrite, dir, nil, "commit", "-m", msg)
 	return err
 }
@@ -348,13 +352,60 @@ func BranchLog(ctx context.Context, dir, name string) string {
 	return out
 }
 
+// Checkout switches to branch b. For a remote branch it checks out the local
+// branch of the same name, creating it to track the remote one if needed.
 func Checkout(ctx context.Context, dir string, b Branch) error {
-	var err error
-	if b.Remote {
-		_, err = run(ctx, kWrite, dir, nil, "checkout", "--track", b.Name)
-	} else {
-		_, err = run(ctx, kWrite, dir, nil, "checkout", b.Name)
+	if !b.Remote {
+		_, err := run(ctx, kWrite, dir, nil, "checkout", b.Name)
+		return err
 	}
+	_, local, ok := strings.Cut(b.Name, "/")
+	if !ok {
+		return errors.New("not a remote branch: " + b.Name)
+	}
+	if _, err := run(ctx, kRead, dir, nil, "show-ref", "--verify", "-q", "refs/heads/"+local); err == nil {
+		_, err = run(ctx, kWrite, dir, nil, "checkout", local)
+		return err
+	}
+	_, err := run(ctx, kWrite, dir, nil, "checkout", "--track", b.Name)
+	return err
+}
+
+// SetUpstream makes local branch track upstream (e.g. "origin/main").
+func SetUpstream(ctx context.Context, dir, branch, upstream string) error {
+	_, err := run(ctx, kWrite, dir, nil, "branch", "--set-upstream-to="+upstream, branch)
+	return err
+}
+
+// UnsetUpstream removes the tracking configuration of a local branch.
+func UnsetUpstream(ctx context.Context, dir, branch string) error {
+	_, err := run(ctx, kWrite, dir, nil, "branch", "--unset-upstream", branch)
+	return err
+}
+
+// FastForward updates local branch b to its upstream without checking it
+// out. The checked-out branch is pulled with --ff-only instead. Branches that
+// have diverged are left alone (git refuses the non-fast-forward update).
+func FastForward(ctx context.Context, dir string, b Branch) error {
+	if b.Remote {
+		return errors.New("fast-forward works on local branches")
+	}
+	if b.Upstream == "" {
+		return fmt.Errorf("%s has no upstream (set one with u)", b.Name)
+	}
+	if b.Current {
+		return Pull(ctx, dir, false)
+	}
+	remote, err := run(ctx, kRead, dir, nil, "config", "--get", "branch."+b.Name+".remote")
+	if err != nil {
+		return err
+	}
+	merge, err := run(ctx, kRead, dir, nil, "config", "--get", "branch."+b.Name+".merge")
+	if err != nil {
+		return err
+	}
+	_, err = run(ctx, kNet, dir, nil, "fetch", "-q", strings.TrimSpace(remote),
+		strings.TrimSpace(merge)+":refs/heads/"+b.Name)
 	return err
 }
 
@@ -465,6 +516,23 @@ func StashApply(ctx context.Context, dir, ref string) error {
 
 func StashPop(ctx context.Context, dir, ref string) error {
 	_, err := run(ctx, kWrite, dir, nil, "stash", "pop", ref)
+	return err
+}
+
+// StashStaged stashes only the staged changes (git 2.35+).
+func StashStaged(ctx context.Context, dir, msg string) error {
+	args := []string{"stash", "push", "--staged"}
+	if msg != "" {
+		args = append(args, "-m", msg)
+	}
+	_, err := run(ctx, kWrite, dir, nil, args...)
+	return err
+}
+
+// StashBranch creates branch name at the stash's base commit, checks it out
+// and applies the stash there (dropping it on success).
+func StashBranch(ctx context.Context, dir, name, ref string) error {
+	_, err := run(ctx, kWrite, dir, nil, "stash", "branch", name, ref)
 	return err
 }
 

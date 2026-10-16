@@ -70,7 +70,9 @@ type App struct {
 	rp   repoState
 
 	p        *prompt
-	report   *report // failures of the last bulk operation
+	report   *report // failures of the last bulk operation, or details of an error
+	ed       *editor // commit message editor
+	lastErr  *report // details of the last failed operation, shown with "!"
 	help     bool
 	toast    string
 	toastErr bool
@@ -105,6 +107,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.w, a.h = m.Width, m.Height
+		a.sizeEditor()
 	case reposMsg:
 		return a, a.onRepos(m)
 	case scanMsg:
@@ -143,6 +146,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.reloadCurrent()
 	case tea.KeyMsg:
 		return a, a.onKey(m)
+	default:
+		if a.ed != nil { // cursor blink and other textarea internals
+			var cmd tea.Cmd
+			a.ed.ta, cmd = a.ed.ta.Update(msg)
+			return a, cmd
+		}
 	}
 	return a, nil
 }
@@ -153,6 +162,9 @@ func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 		return tea.Quit
 	}
 	a.toast = ""
+	if a.ed != nil {
+		return a.editorKey(k)
+	}
 	if a.p != nil {
 		return a.promptKey(k)
 	}
@@ -168,6 +180,15 @@ func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 	}
 	if s == "?" {
 		a.help = true
+		return nil
+	}
+	if s == "!" {
+		if a.lastErr == nil {
+			a.setToast("no error to show", false)
+		} else {
+			a.report = a.lastErr
+			a.report.off = 0
+		}
 		return nil
 	}
 	if a.scr == scrRepos {
@@ -269,7 +290,12 @@ func (a *App) onOp(m opMsg) tea.Cmd {
 	a.busy = ""
 	switch {
 	case m.err != nil:
-		a.setToast(m.label+": "+m.err.Error(), true)
+		a.lastErr = errorReport(m.label, m.err)
+		msg := m.label + ": " + m.err.Error()
+		if len(a.lastErr.lines) > 3 {
+			msg += "  ·  ! details"
+		}
+		a.setToast(msg, true)
 	case m.msg != "":
 		a.setToast(m.msg, false)
 	default:
@@ -308,6 +334,8 @@ func (a *App) View() string {
 		return ""
 	}
 	switch {
+	case a.ed != nil:
+		return a.viewEditor()
 	case a.p != nil:
 		return a.viewPrompt()
 	case a.report != nil:
@@ -347,16 +375,18 @@ Repository list
 
 Repo view  (panels: 1 Files  2 Branches  3 Commits  4 Stash)
   tab / h l / 1-4 switch panel      j k move      J K / pgup pgdn scroll diff
-  Files     space stage/unstage  a all  c commit  C commit in editor
-            A amend  d discard  s stash  e edit file
-  Branches  space checkout  n new  d delete  D force delete  r rename
+  enter     focus the diff: j k scroll, d u half page, g G top/bottom, esc back
+  Files     space stage/unstage  a all  c commit (multi-line editor)
+            C commit in $EDITOR  A amend  d discard  s stash  S stash staged  e edit file
+  Branches  space checkout (remote → local tracking branch)  n new  r rename
+            d delete  D force delete  u set upstream  U unset  f fast-forward
             M merge into current  R rebase current onto  t local/remote
-  Commits   s squash  f fixup  d drop  r reword  t revert  u undo last (soft)
+  Commits   s squash  f fixup  d drop  r reword (full message)  t revert  u undo last (soft)
             (refused across merge commits; pushed commits ask twice)
-  Stash     space apply  g pop  d drop
+  Stash     space apply  g pop  d drop  b new branch from stash
   Global    p pull  ctrl+p pull --rebase  P push  F force push (lease)
             ctrl+f fetch  ctrl+r refresh  L open lazygit  esc/q back
-            z undo last history change (press again to redo)
+            z undo last history change (press again to redo)  ! last error in full
   In progress  C continue  S skip  X abort   (rebase, merge, cherry-pick, revert, bisect)
 
 press any key to close`
