@@ -24,6 +24,7 @@ const (
 	scOverlay               // report / help overlay
 	scEditor                // commit message editor
 	scPicker                // theme chooser
+	scReflog                // Commits panel showing the reflog
 	scopes
 )
 
@@ -41,6 +42,7 @@ var scopeTitles = [scopes]string{
 	scOverlay:  "Help and reports",
 	scEditor:   "Commit message editor",
 	scPicker:   "Theme chooser (T)",
+	scReflog:   "Reflog (] in the Commits panel)",
 }
 
 type action int
@@ -140,6 +142,9 @@ const (
 	actReword
 	actRevert
 	actUndoCommit
+	actToggleReflog
+	actCheckoutEntry
+	actResetHere
 
 	// stash
 	actApply
@@ -272,6 +277,12 @@ var keymap = [scopes][]binding{
 		b(actReword, "reword (full message editor)", "reword", "r"),
 		b(actRevert, "revert the commit", "revert", "t"),
 		b(actUndoCommit, "undo the last commit, keep changes staged", "undo last", "u"),
+		b(actToggleReflog, "show HEAD's reflog (every move, with a graph of what changed)", "reflog", "]", "["),
+	},
+	scReflog: {
+		b(actToggleReflog, "back to the commits", "commits", "[", "]"),
+		b(actCheckoutEntry, "check out the entry (detached HEAD)", "checkout", " "),
+		b(actResetHere, "reset the current branch to the entry (z undoes)", "reset here", "g"),
 	},
 	scStash: {
 		b(actApply, "apply", "apply", " "),
@@ -340,7 +351,7 @@ func hints(scs ...scope) string {
 
 // helpLines renders every scope's bindings for the help overlay.
 func helpLines() []string {
-	order := []scope{scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
+	order := []scope{scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
 	var out []string
 	for _, sc := range order {
 		if len(out) > 0 {

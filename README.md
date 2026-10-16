@@ -88,6 +88,14 @@ a full rescan.
 
 Press `?` in the app for every key binding.
 
+In a repository, the Commits panel draws the branch graph and marks each
+commit with an icon for its kind (● commit, ◆ merge, ↺ revert, ↯ fixup/squash,
+◎ root) and the author's initials in a per-author colour. `]` switches it to
+HEAD's reflog (● commit, ✎ amend, ↻ rebase, ↶ reset, → checkout, ◆ merge,
+↓ pull, ✚ cherry-pick); the diff panel then shows a graph of what each step
+changed (`<` only before, `>` only after). From the reflog, `space` checks out
+an entry and `g` resets the branch to it (`z` undoes).
+
 ## Themes
 
 Press `T` in the app to pick a theme: moving through the list previews it

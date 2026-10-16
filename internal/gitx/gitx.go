@@ -343,30 +343,200 @@ func Discard(ctx context.Context, dir string, f File) error {
 
 type Commit struct {
 	Hash, Short, Author, Rel, Subject, Refs string
-	Merge                                   bool
+	Merge                                   bool   // more than one parent
+	Root                                    bool   // no parent
+	Graph                                   string // git's --graph drawing before this commit ("* ", "| * ")
 }
 
-const logFormat = "--format=%H%x1f%h%x1f%an%x1f%ar%x1f%s%x1f%D%x1f%P"
+// CommitKind classifies a commit for its icon.
+type CommitKind int
+
+const (
+	KindCommit CommitKind = iota
+	KindMerge
+	KindRevert
+	KindFixup // fixup!, squash! or amend! commit waiting for an autosquash
+	KindRoot
+)
+
+// Kind tells what sort of change the commit is.
+func (c Commit) Kind() CommitKind {
+	switch {
+	case c.Merge:
+		return KindMerge
+	case strings.HasPrefix(c.Subject, "Revert \""):
+		return KindRevert
+	case strings.HasPrefix(c.Subject, "fixup! "), strings.HasPrefix(c.Subject, "squash! "), strings.HasPrefix(c.Subject, "amend! "):
+		return KindFixup
+	case c.Root:
+		return KindRoot
+	}
+	return KindCommit
+}
+
+// logFormat starts every commit line with a record separator, so the graph
+// drawn by --graph (everything before it) can be split off.
+const logFormat = "--format=%x1e%H%x1f%h%x1f%an%x1f%ar%x1f%s%x1f%D%x1f%P"
 
 func Log(ctx context.Context, dir string, n int) ([]Commit, error) {
-	out, err := run(ctx, kRead, dir, nil, "log", "-n", strconv.Itoa(n), logFormat)
+	out, err := run(ctx, kRead, dir, nil, "log", "--graph", "-n", strconv.Itoa(n), logFormat)
 	if err != nil {
 		return nil, err
 	}
 	return parseLog(out), nil
 }
 
+// parseLog reads logFormat output, with or without --graph. Graph-only
+// connector lines (no commit) are dropped.
 func parseLog(out string) []Commit {
 	var cs []Commit
 	for _, l := range strings.Split(out, "\n") {
-		f := strings.Split(l, "\x1f")
+		graph, rest, ok := strings.Cut(l, "\x1e")
+		if !ok {
+			continue
+		}
+		f := strings.Split(rest, "\x1f")
 		if len(f) < 7 {
 			continue
 		}
+		parents := strings.Fields(f[6])
 		cs = append(cs, Commit{Hash: f[0], Short: f[1], Author: f[2], Rel: f[3],
-			Subject: f[4], Refs: f[5], Merge: strings.Contains(strings.TrimSpace(f[6]), " ")})
+			Subject: f[4], Refs: f[5], Merge: len(parents) > 1, Root: len(parents) == 0, Graph: graph})
 	}
 	return cs
+}
+
+// ------------------------------------------------------------------ reflog
+
+// RefEntry is one entry of HEAD's reflog: a step that moved HEAD.
+type RefEntry struct {
+	Hash, Short string
+	Selector    string // HEAD@{3}
+	Action      string // "commit (amend)", "rebase (finish)", "checkout", "merge feature"…
+	Message     string // the rest: commit subject, "moving from a to b"…
+	Rel         string
+}
+
+// RefKind groups reflog actions for their icons.
+type RefKind int
+
+const (
+	RefOther RefKind = iota
+	RefCommit
+	RefAmend
+	RefMerge
+	RefRebase
+	RefReset
+	RefCheckout
+	RefPull
+	RefCherryPick
+	RefRevert
+	RefInitial
+)
+
+// Kind classifies the entry by its action.
+func (e RefEntry) Kind() RefKind {
+	word, _, _ := strings.Cut(e.Action, " ")
+	switch {
+	case e.Action == "commit (amend)":
+		return RefAmend
+	case e.Action == "commit (initial)" || word == "clone":
+		return RefInitial
+	case e.Action == "commit (merge)" || word == "merge":
+		return RefMerge
+	case word == "commit":
+		return RefCommit
+	case word == "rebase" || strings.HasPrefix(e.Action, "pull --rebase"):
+		return RefRebase
+	case word == "reset":
+		return RefReset
+	case word == "checkout" || word == "switch":
+		return RefCheckout
+	case word == "pull":
+		return RefPull
+	case word == "cherry-pick":
+		return RefCherryPick
+	case word == "revert":
+		return RefRevert
+	}
+	return RefOther
+}
+
+const reflogFormat = "--format=%H%x1f%h%x1f%gd%x1f%gs%x1f%ar"
+
+// Reflog lists the latest n moves of HEAD, newest first.
+func Reflog(ctx context.Context, dir string, n int) ([]RefEntry, error) {
+	out, err := run(ctx, kRead, dir, nil, "reflog", "-n", strconv.Itoa(n), reflogFormat)
+	if err != nil {
+		return nil, err
+	}
+	return parseReflog(out), nil
+}
+
+func parseReflog(out string) []RefEntry {
+	var es []RefEntry
+	for _, l := range strings.Split(out, "\n") {
+		f := strings.Split(l, "\x1f")
+		if len(f) < 5 {
+			continue
+		}
+		action, msg, ok := strings.Cut(f[3], ": ")
+		if !ok {
+			action, msg = strings.TrimSuffix(f[3], ":"), ""
+		}
+		es = append(es, RefEntry{Hash: f[0], Short: f[1], Selector: f[2], Action: action, Message: msg, Rel: f[4]})
+	}
+	return es
+}
+
+// ReflogChanges shows what a reflog step changed: the commits only in the
+// state before it (<) and only in the state after it (>), as a graph, and
+// the files that differ. prev is the entry before (older); empty for the
+// oldest entry.
+func ReflogChanges(ctx context.Context, dir string, e RefEntry, prev string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s  %s: %s  (%s)\n\n", e.Selector, e.Action, e.Message, e.Rel)
+	if prev == "" || prev == e.Hash {
+		b.WriteString("HEAD stayed on the same commit.\n\n")
+		out, _ := run(ctx, kRead, dir, nil, colored("log", "--graph", "--oneline", "--decorate", "-n", "20", e.Hash)...)
+		b.WriteString(out)
+		return limitLines(b.String(), 5000)
+	}
+	graph, _ := run(ctx, kRead, dir, nil, colored("log", "--graph", "--oneline", "--decorate", "--left-right", "--boundary",
+		"-n", "200", prev+"..."+e.Hash)...)
+	b.WriteString("< only before   > only after   - shared base\n\n")
+	b.WriteString(graph)
+	if stat, _ := run(ctx, kRead, dir, nil, colored("diff", "--stat", prev, e.Hash)...); stat != "" {
+		b.WriteString("\n" + stat)
+	}
+	return limitLines(b.String(), 5000)
+}
+
+// ResetHard moves the current branch (and the working tree) to rev, after
+// recording an undo point. It refuses with uncommitted changes to tracked
+// files or while an operation is in progress.
+func ResetHard(ctx context.Context, dir, rev, label string) error {
+	if err := requireNoOperation(ctx, dir); err != nil {
+		return err
+	}
+	dirty, err := run(ctx, kRead, dir, nil, "status", "--porcelain", "--untracked-files=no")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(dirty) != "" {
+		return errors.New("commit or stash your changes before resetting")
+	}
+	if err := savePoint(ctx, dir, label); err != nil {
+		return err
+	}
+	_, err = run(ctx, kWrite, dir, nil, "reset", "--hard", "-q", rev)
+	return err
+}
+
+// CheckoutDetached checks out rev without a branch (detached HEAD).
+func CheckoutDetached(ctx context.Context, dir, rev string) error {
+	_, err := run(ctx, kWrite, dir, nil, "checkout", "--detach", rev)
+	return err
 }
 
 // Unpushed returns the set of commit hashes not on the upstream (nil if no upstream).
