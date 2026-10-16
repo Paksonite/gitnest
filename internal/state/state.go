@@ -1,11 +1,10 @@
-// Package state persists "recently used" timestamps and the scanned repo list.
+// Package state persists "recently used" timestamps and locates the scan cache.
 package state
 
 import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -18,7 +17,9 @@ func dir(env, fallback string) string {
 }
 
 func statePath() string { return filepath.Join(dir("XDG_STATE_HOME", ".local/state"), "recent.json") }
-func cachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "repos.txt") }
+
+// ScanCachePath is where the repository scanner keeps its directory listings.
+func ScanCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "scan.json") }
 
 type State struct {
 	Recent map[string]int64 `json:"recent"`
@@ -70,26 +71,4 @@ func (s *State) save() error {
 		return err
 	}
 	return os.WriteFile(p, b, 0o644)
-}
-
-func LoadCache() []string {
-	b, err := os.ReadFile(cachePath())
-	if err != nil {
-		return nil
-	}
-	var out []string
-	for _, l := range strings.Split(string(b), "\n") {
-		if l != "" {
-			out = append(out, l)
-		}
-	}
-	return out
-}
-
-func SaveCache(paths []string) error {
-	p := cachePath()
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(p, []byte(strings.Join(paths, "\n")+"\n"), 0o644)
 }
