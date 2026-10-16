@@ -58,6 +58,7 @@ jobs: 8
 editor: ""
 # Icons: "nerd" for file-type and git icons (needs a Nerd Font in the
 # terminal, e.g. MesloLGS NF), "unicode" for plain symbols any font has.
+# T then i in the app switches and saves it.
 icons: unicode
 theme:
   # auto follows the terminal background; set dark or light if it guesses wrong.
@@ -283,4 +284,19 @@ func editFile(b []byte, path []string, value *yaml.Node) error {
 		return err
 	}
 	return os.WriteFile(Path(), out.Bytes(), 0o644)
+}
+
+// Icons decides the icon set, "nerd" or "unicode", and where that came
+// from: GITNEST_ICONS overrides the config; without either it is unicode,
+// which any font can show.
+func Icons(cfg Config) (mode, source string) {
+	for _, c := range []struct{ v, src string }{{os.Getenv("GITNEST_ICONS"), "GITNEST_ICONS"}, {cfg.Icons, "config"}} {
+		switch strings.ToLower(strings.TrimSpace(c.v)) {
+		case "nerd":
+			return "nerd", c.src
+		case "unicode", "none", "plain":
+			return "unicode", c.src
+		}
+	}
+	return "unicode", "default"
 }

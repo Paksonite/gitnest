@@ -11,7 +11,7 @@ import (
 )
 
 // staging is the line-by-line staging view of one file (enter on a file in
-// the Files panel), like lazygit's: the unstaged or the staged changes,
+// the Files panel): the unstaged or the staged changes,
 // with a cursor on change lines; space moves the selected line, range (v)
 // or hunk (a) to the other side.
 type staging struct {

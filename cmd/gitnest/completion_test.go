@@ -31,6 +31,9 @@ func TestZshCompletionParses(t *testing.T) {
 }
 
 func TestCompletionCommand(t *testing.T) {
+	if err := completionCmd([]string{"bash"}); err != nil {
+		t.Errorf("bash: %v", err)
+	}
 	if err := completionCmd([]string{"fish"}); err == nil {
 		t.Error("unsupported shell accepted")
 	}
@@ -62,7 +65,16 @@ func TestShellScriptParses(t *testing.T) {
 	if out, err := exec.Command(zsh, "-n", f).CombinedOutput(); err != nil {
 		t.Fatalf("zsh -n: %v\n%s", err, out)
 	}
-	if shellCmd([]string{"bash"}) == nil {
-		t.Error("bash accepted")
+	if shellCmd([]string{"fish"}) == nil {
+		t.Error("fish accepted")
+	}
+	if bash, err := exec.LookPath("bash"); err == nil {
+		for name, script := range map[string]string{"completion": bashCompletion, "gn": bashShell} {
+			f := filepath.Join(t.TempDir(), name+".bash")
+			os.WriteFile(f, []byte(script), 0o644)
+			if out, err := exec.Command(bash, "-n", f).CombinedOutput(); err != nil {
+				t.Errorf("bash -n %s: %v\n%s", name, err, out)
+			}
+		}
 	}
 }

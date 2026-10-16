@@ -65,7 +65,7 @@ func authorColor(name string) lipgloss.TerminalColor {
 
 // graph colours git's --graph drawing: commits in the accent, lines dimmed.
 
-// hashState says how far a commit has travelled, coloured like lazygit:
+// hashState says how far a commit has travelled:
 // on the main line (green), pushed (yellow), only local (red).
 type hashState int
 

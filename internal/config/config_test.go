@@ -133,3 +133,18 @@ func TestSetValueNested(t *testing.T) {
 		}
 	}
 }
+
+func TestIconsResolution(t *testing.T) {
+	sandbox(t)
+	t.Setenv("GITNEST_ICONS", "")
+	if mode, src := Icons(Config{}); mode != "unicode" || src != "default" {
+		t.Errorf("default: %s %s", mode, src)
+	}
+	if mode, src := Icons(Config{Icons: "nerd"}); mode != "nerd" || src != "config" {
+		t.Errorf("config: %s %s", mode, src)
+	}
+	t.Setenv("GITNEST_ICONS", "nerd")
+	if mode, src := Icons(Config{Icons: "unicode"}); mode != "nerd" || src != "GITNEST_ICONS" {
+		t.Errorf("env: %s %s", mode, src)
+	}
+}

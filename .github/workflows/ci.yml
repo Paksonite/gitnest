@@ -7,7 +7,11 @@ on:
 
 jobs:
   test:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -16,5 +20,58 @@ jobs:
       - name: gofmt
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
       - run: go vet ./...
-      - run: go test ./...
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
+      - run: go test -race ./...
       - run: make build && ./bin/gitnest version
+      - name: shell scripts
+        if: runner.os == 'Linux'
+        run: |
+          shellcheck install.sh
+          ./bin/gitnest completion bash | bash -n
+          ./bin/gitnest shell bash | bash -n
+
+  # The tests again on Debian 12 (git 2.39, like the systems users run).
+  debian:
+    runs-on: ubuntu-latest
+    container: debian:12
+    steps:
+      - name: system packages
+        run: apt-get update && apt-get install -y --no-install-recommends git ca-certificates curl zsh tar
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27.x"
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - run: go test ./...
+      - name: go install works and reports a version
+        run: |
+          go install ./cmd/gitnest
+          "$(go env GOPATH)/bin/gitnest" version
+
+  # Build the release packages and install the .deb on a clean Debian.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27.x"
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --snapshot --clean --skip=publish
+        env:
+          HOMEBREW_TAP_TOKEN: unused
+      - name: install the .deb on Debian 12
+        run: |
+          deb=$(ls dist/*_amd64.deb)
+          docker run --rm -v "$PWD/dist:/dist" debian:12 sh -c "
+            apt-get update -q && apt-get install -y -q /dist/$(basename "$deb") &&
+            gitnest version &&
+            test -f /usr/share/bash-completion/completions/gitnest &&
+            mkdir -p /root/repos/demo && git -C /root/repos/demo init -q &&
+            gitnest roots add /root/repos && gitnest scan && gitnest doctor"

@@ -138,19 +138,6 @@ END { if (n != 1) exit 3 }`
 
 const todoEditor = `sh -c 'awk -v h="$GITNEST_HASH" -v a="$GITNEST_ACTION" "$GITNEST_AWK" "$1" > "$1.gitnest" && mv "$1.gitnest" "$1"' sh`
 
-// Reword replaces the subject line of commit rev and keeps its body.
-func Reword(ctx context.Context, dir, rev, subject string) error {
-	subject = strings.TrimSpace(subject)
-	if subject == "" || strings.Contains(subject, "\n") {
-		return errors.New("reword: subject must be a single non-empty line")
-	}
-	full, err := Message(ctx, dir, rev)
-	if err != nil {
-		return err
-	}
-	return RewordMessage(ctx, dir, rev, replaceSubject(full, subject))
-}
-
 // RewordMessage replaces the whole message of commit rev. HEAD is amended
 // with --only, so staged changes stay staged instead of being folded into the
 // commit; older commits go through an interactive rebase.

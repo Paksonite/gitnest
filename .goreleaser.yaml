@@ -1,5 +1,6 @@
-# GoReleaser config: builds a universal macOS binary, publishes a GitHub Release
-# and updates the Homebrew cask in Paksonite/homebrew-tap.
+# GoReleaser config: a universal macOS binary (Homebrew cask in
+# Paksonite/homebrew-tap), Linux binaries for amd64/arm64 as archives and
+# .deb/.rpm packages, all attached to a GitHub Release.
 # Local dry run (nothing is published): make snapshot
 version: 2
 
@@ -8,10 +9,10 @@ project_name: gitnest
 before:
   hooks:
     - go mod download
-    - sh -c "mkdir -p completions && go run ./cmd/gitnest completion zsh > completions/_gitnest"
+    - sh -c "mkdir -p completions && go run ./cmd/gitnest completion zsh > completions/_gitnest && go run ./cmd/gitnest completion bash > completions/gitnest.bash"
 
 builds:
-  - id: gitnest
+  - id: darwin
     main: ./cmd/gitnest
     binary: gitnest
     env:
@@ -22,19 +23,60 @@ builds:
     ldflags:
       - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }} -X main.date={{ .Date }}
     mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: linux
+    main: ./cmd/gitnest
+    binary: gitnest
+    env:
+      - CGO_ENABLED=0
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }} -X main.date={{ .Date }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
 
 universal_binaries:
-  - id: gitnest
+  - id: darwin-universal
+    ids: [darwin]
     replace: true
 
 archives:
-  - id: gitnest
+  - id: darwin
+    ids: [darwin-universal]
     formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_darwin_universal"
     files:
       - LICENSE
       - README.md
       - completions/*
+  - id: linux
+    ids: [linux]
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_linux_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - completions/*
+
+nfpms:
+  - id: packages
+    ids: [linux]
+    package_name: gitnest
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}"
+    vendor: Paksonite
+    homepage: https://github.com/Paksonite/gitnest
+    maintainer: gitnest maintainers <noreply@github.com>
+    description: Terminal UI for managing many git repositories
+    license: MIT
+    formats: [deb, rpm]
+    dependencies: [git]
+    contents:
+      - src: completions/gitnest.bash
+        dst: /usr/share/bash-completion/completions/gitnest
+      - src: completions/_gitnest
+        dst: /usr/share/zsh/vendor-completions/_gitnest
+      - src: LICENSE
+        dst: /usr/share/doc/gitnest/LICENSE
 
 checksum:
   name_template: checksums.txt
@@ -54,6 +96,7 @@ release:
 
 homebrew_casks:
   - name: gitnest
+    ids: [darwin]
     binaries: [gitnest]
     completions:
       zsh: completions/_gitnest

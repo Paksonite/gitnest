@@ -1,4 +1,4 @@
-// Package ui is the bubbletea TUI: a repository list screen and a lazygit-style repo screen.
+// Package ui is the bubbletea TUI: the repository list and the repository view.
 package ui
 
 import (
@@ -105,7 +105,8 @@ func Run(cfg config.Config, noConfig bool, startDir, cdFile string) error {
 	a := &App{ctx: ctx, cfg: cfg, st: state.Load(), noConfig: noConfig, startDir: startDir, cdFile: cdFile,
 		scanner: scan.NewScanner(scan.FromConfig(cfg))}
 	a.loadThemes()
-	setIcons(cfg.Icons)
+	mode, _ := config.Icons(cfg)
+	setIcons(mode)
 	a.rs.marked = map[string]bool{}
 	a.rs.isNew = map[string]bool{}
 	a.rs.collapsed = map[string]bool{}

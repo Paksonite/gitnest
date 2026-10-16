@@ -34,6 +34,7 @@ Usage:
   gitnest completion zsh  print the zsh completion script
   gitnest shell zsh       print the gn function: gitnest, then cd into the repo you leave with o
   gitnest version         print version information
+  gitnest doctor          check git, config, icons, terminal and shell setup
   gitnest help            show this help
 `
 
@@ -55,7 +56,8 @@ func run(args []string) error {
 			fmt.Printf(usage, config.Path())
 			return nil
 		case "version", "-v", "--version":
-			fmt.Printf("gitnest %s (commit %s, built %s)\n", version, commit, date)
+			v, c, d := buildVersion()
+			fmt.Printf("gitnest %s (commit %s, built %s)\n", v, c, d)
 			return nil
 		case "init":
 			return initConfig(args[1:])
@@ -69,6 +71,8 @@ func run(args []string) error {
 			return themeCmd(args[1:])
 		case "shell":
 			return shellCmd(args[1:])
+		case "doctor":
+			return doctorCmd(args[1:])
 		}
 		if len(args) > 1 {
 			return fmt.Errorf("unexpected arguments: %v (see `gitnest help`)", args[1:])

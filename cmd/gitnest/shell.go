@@ -13,7 +13,7 @@ const zshShell = `# gitnest shell integration. Add to ~/.zshrc:  eval "$(gitnest
 # gn [path]   open gitnest; press o on a repository to quit and cd into it.
 gn() {
   local tmp dir rc
-  tmp=$(mktemp -t gitnest-cd.XXXXXX) || return 1
+  tmp=$(mktemp "${TMPDIR:-/tmp}/gitnest-cd.XXXXXX") || return 1
   command gitnest --cd-file "$tmp" "$@"
   rc=$?
   dir=$(<"$tmp")
@@ -26,13 +26,36 @@ gn() {
 (( $+functions[compdef] )) && compdef gn=gitnest
 `
 
+// bashShell is gn for bash, plus completion for gitnest and gn.
+const bashShell = `# gitnest shell integration. Add to ~/.bashrc:  eval "$(gitnest shell bash)"
+# gn [path]   open gitnest; press o on a repository to quit and cd into it.
+gn() {
+  local tmp dir rc
+  tmp=$(mktemp "${TMPDIR:-/tmp}/gitnest-cd.XXXXXX") || return 1
+  command gitnest --cd-file "$tmp" "$@"
+  rc=$?
+  dir=$(cat -- "$tmp")
+  command rm -f -- "$tmp"
+  if [ -n "$dir" ] && [ -d "$dir" ]; then
+    builtin cd -- "$dir" || return
+  fi
+  return $rc
+}
+`
+
 func shellCmd(args []string) error {
 	if len(args) != 1 {
-		return errors.New(`usage: eval "$(gitnest shell zsh)"`)
+		return errors.New(`usage: eval "$(gitnest shell zsh)"  or  eval "$(gitnest shell bash)"`)
 	}
-	if args[0] != "zsh" {
-		return fmt.Errorf("no shell integration for %q (only zsh is supported)", args[0])
+	switch args[0] {
+	case "zsh":
+		// Completion first (it registers itself with compdef when compinit
+		// has run), then gn.
+		fmt.Print(zshCompletion, "\n", zshShell)
+	case "bash":
+		fmt.Print(bashCompletion, "\n", bashShell, "complete -o filenames -o bashdefault -F _gitnest gn\n")
+	default:
+		return fmt.Errorf("no shell integration for %q (zsh and bash are supported)", args[0])
 	}
-	fmt.Print(zshShell)
 	return nil
 }

@@ -112,6 +112,33 @@ func fileIcon(path string, dir, collapsed bool) string {
 	return nfFile + " "
 }
 
+// fileIconStyled is fileIcon in a colour for its kind of file: code, config,
+// docs, shell, images, folders.
+func fileIconStyled(path string, dir, collapsed bool) (plain, styled string) {
+	plain = fileIcon(path, dir, collapsed)
+	if plain == "" {
+		return "", ""
+	}
+	c := cDim
+	if dir {
+		c = cCyan
+	} else {
+		switch strings.TrimSpace(plain) {
+		case nfGo, nfPython, nfJS, nfTS, nfRuby, nfRust, nfJava, nfFileCode, nfHTML, nfCSS:
+			c = cCyan
+		case nfJSON, nfConfig, nfCubes, nfDocker, nfGnu:
+			c = cYellow
+		case nfMarkdown, nfFileText, nfLicense:
+			c = cAccent
+		case nfTerminal, nfGit:
+			c = cGreen
+		case nfFileImage, nfFilePDF, nfFileArchive, nfLock, nfKey:
+			c = cRed
+		}
+	}
+	return plain, fg(c, plain)
+}
+
 // refGlyph is the icon for a reflog action.
 func refGlyph(k gitx.RefKind) string {
 	if nerdIcons {

@@ -104,7 +104,7 @@ func TestRewordHeadKeepsStagedChangesAndBody(t *testing.T) {
 	writeFile(t, dir, "staged.txt", "not part of the commit\n")
 	git(t, dir, "add", "staged.txt")
 
-	if err := Reword(bg, dir, head, "new subject"); err != nil {
+	if err := RewordMessage(bg, dir, head, "new subject\n\nbody stays"); err != nil {
 		t.Fatal(err)
 	}
 	if got := git(t, dir, "log", "-1", "--format=%B"); got != "new subject\n\nbody stays" {
@@ -124,7 +124,7 @@ func TestRewordOlderCommit(t *testing.T) {
 	mid := commit(t, dir, "b.txt", "b\n", "second\n\nmiddle body\n")
 	commit(t, dir, "c.txt", "c\n", "third")
 
-	if err := Reword(bg, dir, mid, "second, reworded"); err != nil {
+	if err := RewordMessage(bg, dir, mid, "second, reworded\n\nmiddle body"); err != nil {
 		t.Fatal(err)
 	}
 	if got := git(t, dir, "log", "--format=%s", "-3"); got != "third\nsecond, reworded\nfirst" {
@@ -139,8 +139,8 @@ func TestRewordOlderCommit(t *testing.T) {
 func TestRewordRejectsBadSubject(t *testing.T) {
 	dir := newRepo(t)
 	head := commit(t, dir, "a.txt", "a\n", "subject")
-	for _, s := range []string{"", "  ", "two\nlines"} {
-		if err := Reword(bg, dir, head, s); err == nil {
+	for _, s := range []string{"", "  ", "\n \n"} {
+		if err := RewordMessage(bg, dir, head, s); err == nil {
 			t.Errorf("Reword(%q) succeeded", s)
 		}
 	}

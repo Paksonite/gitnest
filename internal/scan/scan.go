@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
-	"sync/atomic"
 
 	"github.com/Paksonite/gitnest/internal/gitx"
 )
@@ -120,15 +119,4 @@ func Cached(path string, paths []string, recent map[string]int64) []Repo {
 		out[i] = r
 	}
 	return out
-}
-
-// RunAll runs fn on every path in parallel and returns how many calls failed.
-func RunAll(paths []string, jobs int, fn func(path string) error) int {
-	var failed int32
-	ForEach(len(paths), jobs, func(i int) {
-		if err := fn(paths[i]); err != nil {
-			atomic.AddInt32(&failed, 1)
-		}
-	})
-	return int(failed)
 }
