@@ -265,7 +265,7 @@ func DiffFile(ctx context.Context, dir string, f File) string {
 	var b strings.Builder
 	if f.Untracked() {
 		out, _ := run(ctx, kRead, dir, nil, colored("diff", "--no-index", "--", "/dev/null", f.Path)...)
-		return limitLines(out, 5000)
+		return limitOutput(out)
 	}
 	if f.Staged() {
 		if o, _ := run(ctx, kRead, dir, nil, colored("diff", "--cached", "--", f.Path)...); o != "" {
@@ -280,7 +280,7 @@ func DiffFile(ctx context.Context, dir string, f File) string {
 	if b.Len() == 0 {
 		return "(no diff)"
 	}
-	return limitLines(b.String(), 5000)
+	return limitOutput(b.String())
 }
 
 // DiffDir shows the staged and unstaged changes below directory path, and
@@ -299,7 +299,7 @@ func DiffDir(ctx context.Context, dir, path string, untracked []string) string {
 	if b.Len() == 0 {
 		return "(no diff)"
 	}
-	return limitLines(b.String(), 5000)
+	return limitOutput(b.String())
 }
 
 // Stage adds a file or a whole directory to the index.
@@ -334,7 +334,11 @@ func Discard(ctx context.Context, dir string, f File) error {
 	case f.X == 'A':
 		_, err = run(ctx, kWrite, dir, nil, "rm", "-f", "-q", "--", f.Path)
 	default:
-		_, err = run(ctx, kWrite, dir, nil, "restore", "--source=HEAD", "--staged", "--worktree", "--", f.Path)
+		paths := []string{f.Path}
+		if f.Orig != "" { // a rename: bring the old name back too
+			paths = append(paths, f.Orig)
+		}
+		_, err = run(ctx, kWrite, dir, nil, append([]string{"restore", "--source=HEAD", "--staged", "--worktree", "--"}, paths...)...)
 	}
 	return err
 }
@@ -501,7 +505,7 @@ func ReflogChanges(ctx context.Context, dir string, e RefEntry, prev string) str
 		b.WriteString("HEAD stayed on the same commit.\n\n")
 		out, _ := run(ctx, kRead, dir, nil, colored("log", "--graph", "--oneline", "--decorate", "-n", "20", e.Hash)...)
 		b.WriteString(out)
-		return limitLines(b.String(), 5000)
+		return limitOutput(b.String())
 	}
 	graph, _ := run(ctx, kRead, dir, nil, colored("log", "--graph", "--oneline", "--decorate", "--left-right", "--boundary",
 		"-n", "200", prev+"..."+e.Hash)...)
@@ -510,7 +514,7 @@ func ReflogChanges(ctx context.Context, dir string, e RefEntry, prev string) str
 	if stat, _ := run(ctx, kRead, dir, nil, colored("diff", "--stat", prev, e.Hash)...); stat != "" {
 		b.WriteString("\n" + stat)
 	}
-	return limitLines(b.String(), 5000)
+	return limitOutput(b.String())
 }
 
 // ResetHard moves the current branch (and the working tree) to rev, after
@@ -587,7 +591,7 @@ func Unpushed(ctx context.Context, dir string) map[string]bool {
 
 func Show(ctx context.Context, dir, hash string) string {
 	out, _ := run(ctx, kRead, dir, nil, colored("show", "--stat", "--patch", hash)...)
-	return limitLines(out, 5000)
+	return limitOutput(out)
 }
 
 func CommitMsg(ctx context.Context, dir, msg string) error {
@@ -785,36 +789,49 @@ func DeleteTag(ctx context.Context, dir, name string) error {
 	return err
 }
 
+// ErrNoRemote is returned by pushes in a repository without remotes.
+var ErrNoRemote = errors.New("no remote to push to — add one with: git remote add origin <url>")
+
 // defaultRemote is origin, or the first remote.
-func defaultRemote(ctx context.Context, dir string) string {
-	if o, err := run(ctx, kRead, dir, nil, "remote"); err == nil {
-		f := strings.Fields(o)
-		for _, r := range f {
-			if r == "origin" {
-				return r
-			}
-		}
-		if len(f) > 0 {
-			return f[0]
+func defaultRemote(ctx context.Context, dir string) (string, error) {
+	o, err := run(ctx, kRead, dir, nil, "remote")
+	if err != nil {
+		return "", err
+	}
+	f := strings.Fields(o)
+	for _, r := range f {
+		if r == "origin" {
+			return r, nil
 		}
 	}
-	return "origin"
+	if len(f) == 0 {
+		return "", ErrNoRemote
+	}
+	return f[0], nil
 }
 
 func PushTag(ctx context.Context, dir, name string) error {
-	_, err := run(ctx, kNet, dir, nil, "push", defaultRemote(ctx, dir), "refs/tags/"+name)
+	remote, err := defaultRemote(ctx, dir)
+	if err != nil {
+		return err
+	}
+	_, err = run(ctx, kNet, dir, nil, "push", remote, "refs/tags/"+name)
 	return err
 }
 
 func DeleteRemoteTag(ctx context.Context, dir, name string) error {
-	_, err := run(ctx, kNet, dir, nil, "push", defaultRemote(ctx, dir), "--delete", "refs/tags/"+name)
+	remote, err := defaultRemote(ctx, dir)
+	if err != nil {
+		return err
+	}
+	_, err = run(ctx, kNet, dir, nil, "push", remote, "--delete", "refs/tags/"+name)
 	return err
 }
 
 // TagInfo shows a tag: its annotation (if any) and the tagged commit.
 func TagInfo(ctx context.Context, dir, name string) string {
 	out, _ := run(ctx, kRead, dir, nil, colored("show", "--stat", "refs/tags/"+name)...)
-	return limitLines(out, 5000)
+	return limitOutput(out)
 }
 
 // ------------------------------------------------------------ remote sync
@@ -835,17 +852,20 @@ func Pull(ctx context.Context, dir string, rebase bool) error {
 	return err
 }
 
+// Push pushes the current branch; without an upstream it pushes to origin
+// (or the only remote) and sets the upstream.
 func Push(ctx context.Context, dir string, force, hasUpstream bool) error {
 	args := []string{"push"}
 	if force {
 		args = append(args, "--force-with-lease")
 	}
 	if !hasUpstream {
-		remote := "origin"
-		if o, err := run(ctx, kRead, dir, nil, "remote"); err == nil {
-			if f := strings.Fields(o); len(f) > 0 {
-				remote = f[0]
-			}
+		if _, err := run(ctx, kRead, dir, nil, "symbolic-ref", "-q", "HEAD"); err != nil {
+			return errors.New("HEAD is detached: check out a branch to push")
+		}
+		remote, err := defaultRemote(ctx, dir)
+		if err != nil {
+			return err
 		}
 		args = append(args, "-u", remote, "HEAD")
 	}
@@ -957,7 +977,7 @@ func StashDrop(ctx context.Context, dir, ref string) error {
 
 func StashShow(ctx context.Context, dir, ref string) string {
 	out, _ := run(ctx, kRead, dir, nil, colored("stash", "show", "-p", ref)...)
-	return limitLines(out, 5000)
+	return limitOutput(out)
 }
 
 // ---------------------------------------------------------------- preview

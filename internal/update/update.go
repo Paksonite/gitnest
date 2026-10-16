@@ -30,7 +30,12 @@ var (
 	Module       = "github.com/Paksonite/gitnest/cmd/gitnest"
 )
 
-var client = &http.Client{Timeout: 30 * time.Second}
+// client asks the GitHub API; downloadClient fetches release assets, which
+// can take minutes on a slow connection.
+var (
+	client         = &http.Client{Timeout: 30 * time.Second}
+	downloadClient = &http.Client{Timeout: 10 * time.Minute}
+)
 
 // Release is a published gitnest release.
 type Release struct {
@@ -356,7 +361,7 @@ func get(ctx context.Context, url string) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "gitnest-update")
-	resp, err := client.Do(req)
+	resp, err := downloadClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

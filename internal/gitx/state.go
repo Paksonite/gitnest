@@ -40,11 +40,6 @@ func (s State) String() string {
 	return ""
 }
 
-// CanSkip reports whether the current step of s can be skipped.
-func (s State) CanSkip() bool {
-	return s == StateRebasing || s == StateCherryPicking || s == StateReverting || s == StateApplying
-}
-
 // GetState inspects the repository's git dir for an operation in progress.
 // It works for linked worktrees, whose state lives in their own git dir.
 func GetState(ctx context.Context, dir string) (State, error) {
@@ -98,68 +93,49 @@ func sequencerState(todo string) State {
 	return StateNone
 }
 
+// commands are the git subcommands that continue, abort and skip each
+// operation; a missing entry means the step isn't possible.
+var commands = map[State]struct{ cmd, cont, abort, skip string }{
+	StateRebasing:      {"rebase", "--continue", "--abort", "--skip"},
+	StateApplying:      {"am", "--continue", "--abort", "--skip"},
+	StateMerging:       {"merge", "--continue", "--abort", ""},
+	StateCherryPicking: {"cherry-pick", "--continue", "--abort", "--skip"},
+	StateReverting:     {"revert", "--continue", "--abort", "--skip"},
+	StateBisecting:     {"bisect", "", "reset", ""},
+}
+
 // Continue resumes the operation in progress after conflicts were resolved.
 func Continue(ctx context.Context, dir string, s State) error {
-	var args []string
-	switch s {
-	case StateRebasing:
-		args = []string{"rebase", "--continue"}
-	case StateApplying:
-		args = []string{"am", "--continue"}
-	case StateMerging:
-		args = []string{"merge", "--continue"}
-	case StateCherryPicking:
-		args = []string{"cherry-pick", "--continue"}
-	case StateReverting:
-		args = []string{"revert", "--continue"}
-	default:
+	c := commands[s]
+	if c.cont == "" {
 		return fmt.Errorf("nothing to continue (%s)", stateName(s))
 	}
-	_, err := run(ctx, kWrite, dir, nil, args...)
+	_, err := run(ctx, kWrite, dir, nil, c.cmd, c.cont)
 	return err
 }
 
 // Abort cancels the operation in progress and restores the previous state.
 func Abort(ctx context.Context, dir string, s State) error {
-	var args []string
-	switch s {
-	case StateRebasing:
-		args = []string{"rebase", "--abort"}
-	case StateApplying:
-		args = []string{"am", "--abort"}
-	case StateMerging:
-		args = []string{"merge", "--abort"}
-	case StateCherryPicking:
-		args = []string{"cherry-pick", "--abort"}
-	case StateReverting:
-		args = []string{"revert", "--abort"}
-	case StateBisecting:
-		args = []string{"bisect", "reset"}
-	default:
+	c := commands[s]
+	if c.abort == "" {
 		return fmt.Errorf("nothing to abort (%s)", stateName(s))
 	}
-	_, err := run(ctx, kWrite, dir, nil, args...)
+	_, err := run(ctx, kWrite, dir, nil, c.cmd, c.abort)
 	return err
 }
 
-// Skip drops the current step of a rebase, cherry-pick or revert.
+// Skip drops the current step of a rebase, cherry-pick, revert or am.
 func Skip(ctx context.Context, dir string, s State) error {
-	var args []string
-	switch s {
-	case StateRebasing:
-		args = []string{"rebase", "--skip"}
-	case StateApplying:
-		args = []string{"am", "--skip"}
-	case StateCherryPicking:
-		args = []string{"cherry-pick", "--skip"}
-	case StateReverting:
-		args = []string{"revert", "--skip"}
-	default:
+	c := commands[s]
+	if c.skip == "" {
 		return fmt.Errorf("can't skip while %s", stateName(s))
 	}
-	_, err := run(ctx, kWrite, dir, nil, args...)
+	_, err := run(ctx, kWrite, dir, nil, c.cmd, c.skip)
 	return err
 }
+
+// CanSkip reports whether the current step of s can be skipped.
+func (s State) CanSkip() bool { return commands[s].skip != "" }
 
 func stateName(s State) string {
 	if s == StateNone {

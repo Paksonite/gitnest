@@ -3,6 +3,7 @@ package ui
 import (
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Paksonite/gitnest/internal/config"
@@ -50,19 +51,10 @@ func (a *App) buildRows() {
 	roots := a.cfg.Roots
 	root := &dirNode{children: map[string]*dirNode{}}
 	for _, idx := range rs.view {
-		p := rs.all[idx].Path
 		var parts []string
-		base := ""
-		for _, r := range roots {
-			if strings.HasPrefix(p, r+string(filepath.Separator)) && len(r) > len(base) {
-				base = r
-			}
-		}
-		if base != "" {
-			rel := strings.TrimPrefix(p, base+string(filepath.Separator))
-			parts = strings.Split(filepath.ToSlash(filepath.Dir(rel)), "/")
-			if parts[0] == "." {
-				parts = nil
+		if base, rel, ok := a.underRoot(rs.all[idx].Path); ok {
+			if rel != "" {
+				parts = strings.Split(rel, "/")
 			}
 			if len(roots) > 1 {
 				parts = append([]string{config.Abbrev(base)}, parts...)
@@ -136,21 +128,29 @@ func (a *App) reposUnder(i int) []string {
 	return out
 }
 
-// rowDir is the directory key a repository falls under in tree mode.
-func (a *App) rowDir(idx int) string {
-	p := a.rs.all[idx].Path
-	base := ""
+// underRoot finds the scan root p lives under (the longest that matches) and
+// p's directory relative to it, with slashes ("" directly in the root).
+func (a *App) underRoot(p string) (base, rel string, ok bool) {
 	for _, r := range a.cfg.Roots {
 		if strings.HasPrefix(p, r+string(filepath.Separator)) && len(r) > len(base) {
 			base = r
 		}
 	}
 	if base == "" {
-		return ""
+		return "", "", false
 	}
-	d := filepath.ToSlash(filepath.Dir(strings.TrimPrefix(p, base+string(filepath.Separator))))
-	if d == "." {
-		d = ""
+	rel = filepath.ToSlash(filepath.Dir(strings.TrimPrefix(p, base+string(filepath.Separator))))
+	if rel == "." {
+		rel = ""
+	}
+	return base, rel, true
+}
+
+// rowDir is the directory key a repository falls under in tree mode.
+func (a *App) rowDir(idx int) string {
+	base, d, ok := a.underRoot(a.rs.all[idx].Path)
+	if !ok {
+		return ""
 	}
 	if len(a.cfg.Roots) > 1 {
 		if d == "" {
@@ -170,23 +170,11 @@ func dirRow(r listRow, collapsed bool, w int) rowItem {
 	icon := fileIcon(r.dir, true, collapsed)
 	plain := indent + "  " + arrow + " " + icon + r.name + "/"
 	styled := indent + "  " + fg(cDim, arrow) + " " + fg(cCyan, icon) + bold(r.name+"/")
-	info := " " + itoa(r.count)
+	info := " " + strconv.Itoa(r.count)
 	sinfo := fg(cDim, info)
 	if r.dirty > 0 {
-		info += " ●" + itoa(r.dirty)
-		sinfo += fg(cYellow, " ●"+itoa(r.dirty))
+		info += " ●" + strconv.Itoa(r.dirty)
+		sinfo += fg(cYellow, " ●"+strconv.Itoa(r.dirty))
 	}
 	return rowItem{plain: fit(plain+info, w), styled: styled + sinfo}
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b []byte
-	for n > 0 {
-		b = append([]byte{byte('0' + n%10)}, b...)
-		n /= 10
-	}
-	return string(b)
 }

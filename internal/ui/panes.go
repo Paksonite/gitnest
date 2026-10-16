@@ -593,7 +593,7 @@ func tabBar(titles []string, focus, w int) string {
 	if hi < n-1 {
 		b.WriteString(fg(cAccent, fmt.Sprintf(" %d ›", n-1-hi)))
 	}
-	if lo == 0 && hi == n-1 && used+len(hint) <= w {
+	if lo == 0 && hi == n-1 && used+lipgloss.Width(hint) <= w {
 		b.WriteString(fg(cDim, hint))
 	}
 	return fit(b.String(), w)

@@ -367,7 +367,11 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 	case actFetch:
 		return a.do("fetch", func() error { return gitx.Fetch(ctx, dir) })
 	case actPull, actPullRebase:
-		if !rp.info.Upstream {
+		switch {
+		case rp.info.Detached:
+			a.setToast("HEAD is detached: check out a branch to pull", true)
+			return nil
+		case !rp.info.Upstream:
 			a.setToast("no upstream for "+rp.info.Branch+" — set one in Branches with u", true)
 			return nil
 		}
@@ -779,8 +783,8 @@ func (a *App) panelItems(panel int) []rowItem {
 	default:
 		for _, s := range rp.stashes {
 			items = append(items, rowItem{
-				plain:  s.Ref + " " + s.Msg,
-				styled: fg(cYellow, s.Ref) + " " + s.Msg,
+				plain:  s.Ref + " " + printable(s.Msg),
+				styled: fg(cYellow, s.Ref) + " " + printable(s.Msg),
 			})
 		}
 	}
@@ -875,7 +879,6 @@ func (a *App) viewRepo() string {
 	return strings.Join([]string{fit(head, a.w), body, a.footer(a.repoHints())}, "\n")
 }
 
-// stateKeys lists the keys that act on an operation in progress.
 // stateKeys lists the keys that act on an operation in progress.
 func stateKeys(st gitx.State) string {
 	var k []string
@@ -1126,8 +1129,9 @@ func tagRow(tg gitx.Tag) rowItem {
 	if nerdIcons {
 		glyph = nfTag + " "
 	}
-	plain := glyph + tg.Name + " " + tg.Short + " " + tg.Subject
-	styled := fg(cYellow, glyph) + bold(tg.Name) + " " + fg(cDim, tg.Short) + " " + tg.Subject
+	subject := printable(tg.Subject)
+	plain := glyph + tg.Name + " " + tg.Short + " " + subject
+	styled := fg(cYellow, glyph) + bold(tg.Name) + " " + fg(cDim, tg.Short) + " " + subject
 	return rowItem{plain: plain, styled: styled}
 }
 

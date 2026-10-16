@@ -106,7 +106,7 @@ func TestBranchTabsAndTags(t *testing.T) {
 	if a.rp.branchTab != tabTags || a.rp.count(pBranches) != 1 {
 		t.Fatalf("tags tab: %d count %d", a.rp.branchTab, a.rp.count(pBranches))
 	}
-	if !strings.Contains(a.repoHints(), "push") || !strings.Contains(stripStyles(a.panelItems(pBranches)[0].plain), "v1.0.0") {
+	if !strings.Contains(a.repoHints(), "push") || !strings.Contains(a.panelItems(pBranches)[0].plain, "v1.0.0") {
 		t.Errorf("hints %q / rows %+v", a.repoHints(), a.panelItems(pBranches))
 	}
 	a.repoKey(key("n"))
@@ -119,8 +119,6 @@ func TestBranchTabsAndTags(t *testing.T) {
 		t.Fatal("the message prompt should accept an empty answer (lightweight tag)")
 	}
 }
-
-func stripStyles(s string) string { return s }
 
 func TestCdQuit(t *testing.T) {
 	a := testApp("/r/one")

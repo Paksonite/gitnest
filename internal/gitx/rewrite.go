@@ -186,9 +186,19 @@ func AmendNoEdit(ctx context.Context, dir string) error {
 	return err
 }
 
-// UndoCommit removes the last commit and keeps its changes staged.
+// UndoCommit removes the last commit and keeps its changes staged. Undoing
+// the first commit leaves the branch without commits, as before it.
 func UndoCommit(ctx context.Context, dir string) error {
 	if err := savePoint(ctx, dir, "undo commit"); err != nil {
+		return err
+	}
+	if _, err := resolve(ctx, dir, "HEAD~1"); err != nil {
+		// The first commit: delete the branch ref, HEAD stays on it.
+		branch, err := run(ctx, kRead, dir, nil, "symbolic-ref", "-q", "HEAD")
+		if err != nil {
+			return errors.New("the first commit can only be undone on a branch")
+		}
+		_, err = run(ctx, kWrite, dir, nil, "update-ref", "-d", strings.TrimSpace(branch))
 		return err
 	}
 	_, err := run(ctx, kWrite, dir, nil, "reset", "--soft", "HEAD~1")

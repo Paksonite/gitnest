@@ -4,7 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestParseStatusV2(t *testing.T) {
@@ -173,5 +175,22 @@ func TestPickRemote(t *testing.T) {
 	}
 	if got := pickRemote(""); got != "" {
 		t.Errorf("empty: %q", got)
+	}
+}
+
+func TestLimitOutput(t *testing.T) {
+	if got := limitOutput("a\nb\n"); got != "a\nb\n" {
+		t.Errorf("short output changed: %q", got)
+	}
+	lines := strings.Repeat("x\n", maxShownLines+10)
+	got := limitOutput(lines)
+	if n := strings.Count(got, "x"); n != maxShownLines || !strings.HasSuffix(got, "… (truncated)") {
+		t.Errorf("lines: %d kept, ends %q", n, got[len(got)-20:])
+	}
+	// One huge line is cut at a character boundary.
+	long := strings.Repeat("ż", maxShownBytes)
+	got = limitOutput(long)
+	if len(got) > maxShownBytes+40 || !utf8.ValidString(got) || !strings.HasSuffix(got, "… (truncated)") {
+		t.Errorf("long line: %d bytes, valid %v", len(got), utf8.ValidString(got))
 	}
 }

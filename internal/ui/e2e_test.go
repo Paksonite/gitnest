@@ -76,47 +76,48 @@ func drive(t *testing.T, a tea.Model, cmd tea.Cmd) {
 	}
 }
 
-// press sends keys: single runes, or names like "enter", "esc", "tab",
-// "space", "ctrl+s"; "type:text" types text.
+// keyTypes maps key names as Bubble Tea prints them ("enter", "shift+tab",
+// "ctrl+j", "pgdown") to their key types.
+var keyTypes = func() map[string]tea.KeyType {
+	m := map[string]tea.KeyType{}
+	for kt := tea.KeyType(-100); kt <= 127; kt++ {
+		if name := kt.String(); name != "" && name != "runes" {
+			m[name] = kt
+		}
+	}
+	return m
+}()
+
+// keyMsg builds the key message for a name: a single rune, a key name like
+// "enter", "esc", "space", "ctrl+s", "shift+tab", with an optional "alt+".
+func keyMsg(k string) tea.KeyMsg {
+	alt := false
+	if rest, ok := strings.CutPrefix(k, "alt+"); ok && len(rest) > 0 {
+		alt, k = true, rest
+	}
+	if k == "space" {
+		return tea.KeyMsg{Type: tea.KeySpace, Runes: []rune(" "), Alt: alt}
+	}
+	if kt, ok := keyTypes[k]; ok && len([]rune(k)) > 1 {
+		return tea.KeyMsg{Type: kt, Alt: alt}
+	}
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k), Alt: alt}
+}
+
+// press sends keys (see keyMsg); "type:text" types text.
 func press(t *testing.T, a tea.Model, keys ...string) {
 	t.Helper()
 	for _, k := range keys {
-		var msg tea.KeyMsg
-		switch {
-		case strings.HasPrefix(k, "type:"):
-			for _, r := range strings.TrimPrefix(k, "type:") {
+		if text, ok := strings.CutPrefix(k, "type:"); ok {
+			for _, r := range text {
 				_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 				drive(t, a, cmd)
 			}
 			continue
-		case k == "enter":
-			msg = tea.KeyMsg{Type: tea.KeyEnter}
-		case k == "esc":
-			msg = tea.KeyMsg{Type: tea.KeyEsc}
-		case k == "tab":
-			msg = tea.KeyMsg{Type: tea.KeyTab}
-		case k == "space":
-			msg = tea.KeyMsg{Type: tea.KeySpace, Runes: []rune(" ")}
-		case k == "ctrl+s":
-			msg = tea.KeyMsg{Type: tea.KeyCtrlS}
-		case k == "ctrl+n":
-			msg = tea.KeyMsg{Type: tea.KeyCtrlN}
-		case k == "ctrl+w":
-			msg = tea.KeyMsg{Type: tea.KeyCtrlW}
-		case k == "ctrl+g":
-			msg = tea.KeyMsg{Type: tea.KeyCtrlG}
-		case k == "ctrl+left":
-			msg = tea.KeyMsg{Type: tea.KeyCtrlLeft}
-		case k == "ctrl+right":
-			msg = tea.KeyMsg{Type: tea.KeyCtrlRight}
-		case k == "ctrl+up":
-			msg = tea.KeyMsg{Type: tea.KeyCtrlUp}
-		case k == "ctrl+down":
-			msg = tea.KeyMsg{Type: tea.KeyCtrlDown}
-		case k == "alt+right":
-			msg = tea.KeyMsg{Type: tea.KeyRight, Alt: true}
-		default:
-			msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
+		}
+		msg := keyMsg(k)
+		if msg.String() != k && !(k == "space" && msg.String() == " ") {
+			t.Fatalf("press: %q is sent as %q", k, msg.String())
 		}
 		_, cmd := a.Update(msg)
 		drive(t, a, cmd)

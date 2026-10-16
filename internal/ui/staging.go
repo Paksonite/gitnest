@@ -248,7 +248,7 @@ func (a *App) stagingLines(h, w int) (title string, lines []string) {
 	case st.anchor >= 0:
 		mode = "range"
 	}
-	title = fmt.Sprintf("%s · %s · %s", side, st.path, mode)
+	title = fmt.Sprintf("%s · %s · %s", side, printable(st.path), mode)
 	sel := st.selection()
 	st.off = scrollTo(st.cur, st.off, h)
 	selStyle := lipgloss.NewStyle().Background(cSelDim)

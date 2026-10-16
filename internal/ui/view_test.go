@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/Paksonite/gitnest/internal/gitx"
-	"github.com/Paksonite/gitnest/internal/scan"
 	"github.com/Paksonite/gitnest/internal/theme"
 )
 
@@ -98,8 +97,6 @@ func TestListRendersOnlyVisibleRows(t *testing.T) {
 		t.Fatalf("listH = %d", a.rs.listH)
 	}
 }
-
-var _ = scan.Repo{}
 
 // BenchmarkListFrame measures one frame of the list and one search
 // keystroke with 300 repositories.

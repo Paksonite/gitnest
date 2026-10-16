@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -65,5 +67,88 @@ func TestHelpOverlay(t *testing.T) {
 	a.onKey(key("q"))
 	if a.report != nil {
 		t.Error("q should close the overlay")
+	}
+}
+
+// readmeKeys reads the key tables of README.md: for each row, its first
+// column and the keys written in backticks anywhere in it.
+func readmeKeys(t *testing.T) map[string][]string {
+	t.Helper()
+	b, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tick := regexp.MustCompile("``\\s?(.+?)\\s?``|`([^`]+)`")
+	arrows := strings.NewReplacer("←", "left", "→", "right", "↑", "up", "↓", "down")
+	rows := map[string][]string{}
+	section := ""
+	for _, l := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(l, "#") {
+			section = strings.TrimSpace(strings.TrimLeft(l, "#"))
+			continue
+		}
+		if !strings.HasPrefix(l, "| ") || strings.HasPrefix(l, "| Key") || strings.HasPrefix(l, "| Panel") {
+			continue
+		}
+		label := section
+		if section == "Inside a repository" {
+			label = strings.TrimSpace(strings.Split(l, "|")[1])
+		}
+		for _, m := range tick.FindAllStringSubmatch(l, -1) {
+			k := m[1] + m[2]
+			if strings.ContainsAny(k, "@$ ") || strings.HasPrefix(k, "alt+arrows") || k == "gn" {
+				continue // @text, $EDITOR, the gn function, prose
+			}
+			if k == "space" {
+				k = " "
+			}
+			rows[label] = append(rows[label], arrows.Replace(k))
+		}
+	}
+	return rows
+}
+
+// The README's key tables and the keymap must agree: every key the README
+// names is bound where it says, and every key the footer shows is in the
+// README.
+func TestReadmeKeyTablesMatchKeymap(t *testing.T) {
+	where := map[string][]scope{
+		"The repository list":               {scList, scFilter, scGlobal, scPanes},
+		"Several repositories side by side": {scPanes, scList},
+		"Files":                             {scFiles},
+		"Line staging":                      {scStaging},
+		"Branches":                          {scBranches},
+		"Tags":                              {scTags},
+		"Commits":                           {scCommits},
+		"Interactive rebase":                {scPlan},
+		"Reflog":                            {scReflog},
+		"Stash":                             {scStash},
+		"Anywhere":                          {scRepo, scGlobal},
+	}
+	rows := readmeKeys(t)
+	for label, scs := range where {
+		keys := rows[label]
+		if len(keys) == 0 {
+			t.Errorf("README has no key table row %q", label)
+			continue
+		}
+		have := map[string]bool{}
+		for _, k := range keys {
+			have[k] = true
+			bound := false
+			for _, sc := range scs {
+				bound = bound || lookup(sc, k) != actNone
+			}
+			if !bound {
+				t.Errorf("README %q: %q is not bound", label, k)
+			}
+		}
+		for _, sc := range scs[:1] {
+			for _, bd := range keymap[sc] {
+				if bd.hint != "" && !have[bd.keys[0]] {
+					t.Errorf("README %q lacks %q (%s), shown in the footer", label, keyLabel(bd.keys[0]), bd.help)
+				}
+			}
+		}
 	}
 }
