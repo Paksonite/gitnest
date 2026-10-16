@@ -17,26 +17,61 @@ func typeText(a *App, s string) {
 	}
 }
 
-func TestEditorSavesCleanMultilineMessage(t *testing.T) {
+func TestEditorEnterSavesSubjectOnly(t *testing.T) {
 	a := testApp()
 	a.w, a.h = 100, 30
 	var saved string
 	a.openEditor("Commit", "", func(msg string) tea.Cmd { saved = msg; return nil })
-
-	a.onKey(tea.KeyMsg{Type: tea.KeyCtrlS})
+	a.onKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if a.ed == nil || a.ed.errorMsg == "" {
-		t.Fatal("empty message should be refused and keep the editor open")
+		t.Fatal("an empty subject should be refused and keep the editor open")
 	}
-	typeText(a, "Add feature  \n\nWhy it matters.\nMore detail.\n\n")
-	if !strings.Contains(a.viewEditor(), "subject 11/72") {
-		t.Errorf("editor view lacks subject counter:\n%s", a.viewEditor())
+	typeText(a, "Add feature  ")
+	if !strings.Contains(a.viewEditor(), "11/72") {
+		t.Errorf("no subject counter:\n%s", a.viewEditor())
+	}
+	a.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if a.ed != nil || saved != "Add feature" {
+		t.Fatalf("open=%v saved=%q", a.ed != nil, saved)
+	}
+}
+
+func TestEditorSubjectAndBody(t *testing.T) {
+	a := testApp()
+	a.w, a.h = 100, 30
+	var saved string
+	a.openEditor("Commit", "", func(msg string) tea.Cmd { saved = msg; return nil })
+	typeText(a, "Add feature")
+	a.onKey(tea.KeyMsg{Type: tea.KeyTab})
+	if !a.ed.inBody {
+		t.Fatal("tab should move to the body")
+	}
+	typeText(a, "Why it matters.\nMore detail.\n\n") // enter adds lines in the body
+	if a.ed == nil {
+		t.Fatal("enter in the body must not save")
+	}
+	a.onKey(tea.KeyMsg{Type: tea.KeyShiftTab})
+	if a.ed.inBody {
+		t.Fatal("shift+tab should go back to the subject")
 	}
 	a.onKey(tea.KeyMsg{Type: tea.KeyCtrlS})
-	if a.ed != nil {
-		t.Fatal("editor still open after save")
-	}
 	if saved != "Add feature\n\nWhy it matters.\nMore detail." {
 		t.Errorf("saved %q", saved)
+	}
+}
+
+func TestEditorPrefillsSubjectAndBody(t *testing.T) {
+	a := testApp()
+	a.w, a.h = 100, 30
+	a.openEditor("Reword", "Old subject\n\nOld body\nline two\n", func(string) tea.Cmd { return nil })
+	if a.ed.subject.Value() != "Old subject" || a.ed.body.Value() != "Old body\nline two" {
+		t.Errorf("subject %q body %q", a.ed.subject.Value(), a.ed.body.Value())
+	}
+	a.onKey(tea.KeyMsg{Type: tea.KeyTab})
+	a.onKey(tea.KeyMsg{Type: tea.KeyCtrlU}) // textarea: delete to line start
+	a.onKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if a.ed == nil || !a.ed.discard {
+		t.Error("an edited message should ask before discarding")
 	}
 }
 
@@ -68,16 +103,22 @@ func TestEditorEscAsksBeforeDiscarding(t *testing.T) {
 }
 
 func TestSubjectInfo(t *testing.T) {
-	cases := []struct{ msg, want string }{
-		{"short", "subject 5/72"},
-		{strings.Repeat("x", 60), "subject 60/72"},
+	cases := []struct{ subject, want string }{
+		{"short", "5/72"},
+		{strings.Repeat("x", 60), "60/72"},
 		{strings.Repeat("x", 80), "too long"},
-		{"subject\nbody right away", "add a blank line"},
+		{"  padded  ", "6/72"},
 	}
 	for _, c := range cases {
-		if got, _ := subjectInfo(c.msg); !strings.Contains(got, c.want) {
-			t.Errorf("subjectInfo(%q) = %q, want %q", c.msg, got, c.want)
+		if got, _ := subjectInfo(c.subject); !strings.Contains(got, c.want) {
+			t.Errorf("subjectInfo(%q) = %q, want %q", c.subject, got, c.want)
 		}
+	}
+	if s, b := splitMessage("\nsubj\n\n\nbody\n"); s != "subj" || b != "body" {
+		t.Errorf("split: %q %q", s, b)
+	}
+	if got := joinMessage(" subj ", "\n\n"); got != "subj" {
+		t.Errorf("join without body: %q", got)
 	}
 }
 

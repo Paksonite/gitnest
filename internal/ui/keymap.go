@@ -114,6 +114,8 @@ const (
 	actStash
 	actStashStaged
 	actEdit
+	actToggleDir
+	actToggleTree
 
 	// branches
 	actToggleRemote
@@ -144,6 +146,9 @@ const (
 
 	// editor
 	actSave
+	actEditorEnter
+	actNextField
+	actPrevField
 	actCancel
 )
 
@@ -232,6 +237,8 @@ var keymap = [scopes][]binding{
 		b(actStash, "stash all changes", "stash", "s"),
 		b(actStashStaged, "stash staged changes only", "", "S"),
 		b(actEdit, "edit the file", "edit", "e"),
+		b(actToggleDir, "collapse / expand a directory (on files: focus the diff)", "", "enter"),
+		b(actToggleTree, "show files as a tree or a flat list", "tree", "`"),
 	},
 	scBranches: {
 		b(actCheckout, "check out (remote: local tracking branch)", "checkout", " "),
@@ -277,7 +284,10 @@ var keymap = [scopes][]binding{
 		b(actPageUp, "page up", "", "pgup", "ctrl+u"),
 	},
 	scEditor: {
-		b(actSave, "save", "save", "ctrl+s", "alt+enter"),
+		b(actEditorEnter, "in the subject: save (the body is optional)", "", "enter"),
+		b(actNextField, "move to the body", "", "tab"),
+		b(actPrevField, "back to the subject", "", "shift+tab"),
+		b(actSave, "save from either field", "save", "ctrl+s", "alt+enter"),
 		b(actCancel, "cancel (twice when edited)", "cancel", "esc"),
 	},
 }

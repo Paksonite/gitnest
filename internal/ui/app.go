@@ -94,12 +94,12 @@ func Run(cfg config.Config, noConfig bool, startDir string) error {
 		scanner: scan.NewScanner(scan.FromConfig(cfg))}
 	a.rs.marked = map[string]bool{}
 	a.rs.isNew = map[string]bool{}
-	_, err := tea.NewProgram(a, tea.WithAltScreen()).Run()
+	_, err := tea.NewProgram(a, tea.WithAltScreen(), tea.WithReportFocus()).Run()
 	return err
 }
 
 func (a *App) Init() tea.Cmd {
-	cmds := []tea.Cmd{a.loadRepos(), a.rescanTick(), a.statusTick()}
+	cmds := []tea.Cmd{a.loadRepos(), a.rescanTick(), a.statusTick(), repoTick()}
 	if a.startDir != "" {
 		cmds = append(cmds, a.openDir(a.startDir))
 	}
@@ -120,6 +120,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.onScan(m)
 	case statusMsg:
 		return a, a.onStatus(m)
+	case repoTickMsg:
+		return a, a.onRepoTick()
+	case repoRefreshMsg:
+		return a, a.onRepoRefresh(m)
+	case tea.FocusMsg:
+		// Back from another window: whatever happened there shows up now.
+		if a.scr == scrRepo {
+			return a, loadRepoData(a.ctx, a.rp.dir)
+		}
+		return a, a.statusCmd(a.visiblePaths(), false)
 	case rescanTickMsg:
 		return a, a.onRescanTick()
 	case statusTickMsg:
@@ -138,6 +148,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.onOp(m)
 	case bulkMsg:
 		return a, a.onBulk(m)
+	case afterMsg:
+		a.busy = ""
+		if m.err != nil {
+			a.setToast(m.err.Error(), true)
+			return a, nil
+		}
+		return a, m.next(m.ok)
 	case checkMsg:
 		a.busy = ""
 		if m.err != nil {
@@ -153,10 +170,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return a, a.onKey(m)
 	default:
-		if a.ed != nil { // cursor blink and other textarea internals
-			var cmd tea.Cmd
-			a.ed.ta, cmd = a.ed.ta.Update(msg)
-			return a, cmd
+		if a.ed != nil { // cursor blink and other input internals
+			return a, a.ed.update(msg)
 		}
 	}
 	return a, nil
@@ -268,6 +283,22 @@ func (a *App) check(fn func() ([]string, error), next func(pushed []string) tea.
 	}
 }
 
+// afterMsg carries the result of a background yes/no check started by App.after.
+type afterMsg struct {
+	ok   bool
+	err  error
+	next func(bool) tea.Cmd
+}
+
+// after runs a quick check in the background and hands its answer to next.
+func (a *App) after(fn func() (bool, error), next func(bool) tea.Cmd) tea.Cmd {
+	a.busy = "checking…"
+	return func() tea.Msg {
+		ok, err := fn()
+		return afterMsg{ok: ok, err: err, next: next}
+	}
+}
+
 // confirmRewrite asks question (skipped when empty) and, if the commits are
 // already pushed, asks a second time with a force-push warning.
 func (a *App) confirmRewrite(question string, pushed []string, run func() tea.Cmd) tea.Cmd {
@@ -275,7 +306,7 @@ func (a *App) confirmRewrite(question string, pushed []string, run func() tea.Cm
 		if len(pushed) == 0 {
 			return run()
 		}
-		a.confirm("⚠ Already pushed to "+strings.Join(pushed, ", ")+". Rewriting will need a force push (F). Continue?", run)
+		a.confirm("⚠ Already pushed to "+strings.Join(pushed, ", ")+". Rewriting will need a force push (P offers it afterwards). Continue?", run)
 		return nil
 	}
 	if question == "" {

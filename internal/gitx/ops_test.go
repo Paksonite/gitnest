@@ -166,3 +166,42 @@ func TestRemoteOps(t *testing.T) {
 		t.Errorf("remote branch left: %q", got)
 	}
 }
+
+func TestUpstreamSeenLocally(t *testing.T) {
+	seed := newRepo(t)
+	commit(t, seed, "a.txt", "a\n", "first")
+	origin := t.TempDir()
+	git(t, origin, "clone", "-q", "--bare", seed, ".")
+	dir := t.TempDir()
+	git(t, dir, "clone", "-q", origin, ".")
+	commit(t, dir, "b.txt", "b\n", "pushed work")
+	git(t, dir, "push", "-q")
+	// A clone has origin/HEAD; it must not be reported as a branch named "origin".
+	if got, _ := CheckRewrite(bg, dir, "HEAD", ActionReword); len(got) != 1 || got[0] != "origin/main" {
+		t.Errorf("pushed to %v, want [origin/main]", got)
+	}
+
+	// Reword the pushed commit: diverged, but only through our own rewrite.
+	if err := RewordMessage(bg, dir, "HEAD", "pushed work, reworded"); err != nil {
+		t.Fatal(err)
+	}
+	if seen, err := UpstreamSeenLocally(bg, dir); err != nil || !seen {
+		t.Fatalf("after reword: seen=%v err=%v", seen, err)
+	}
+	if err := Push(bg, dir, false, true); err == nil || !PushRejected(err) {
+		t.Fatalf("plain push after rewrite: err=%v", err)
+	}
+	if err := Push(bg, dir, true, true); err != nil {
+		t.Fatalf("force push with lease: %v", err)
+	}
+
+	// Someone else pushes; after a fetch the remote has a commit we never had.
+	other := t.TempDir()
+	git(t, other, "clone", "-q", origin, ".")
+	commit(t, other, "c.txt", "c\n", "their work")
+	git(t, other, "push", "-q")
+	git(t, dir, "fetch", "-q")
+	if seen, err := UpstreamSeenLocally(bg, dir); err != nil || seen {
+		t.Fatalf("after their push: seen=%v err=%v", seen, err)
+	}
+}
