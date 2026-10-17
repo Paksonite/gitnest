@@ -26,11 +26,18 @@ gitnest theme export nord > ~/.config/gitnest/themes/my-nord.yaml   # a full tem
 gitnest theme check my-nord                      # unknown roles, bad colours, low contrast
 ```
 
-## Icons (Nerd Font)
+## Icons
 
-By default gitnest uses plain symbols that every font has. With a
-[Nerd Font](https://www.nerdfonts.com) in your terminal you get file-type
-icons in the Files tree and git icons for branches, tags and the reflog.
+gitnest has three icon sets; press `T`, then `i` to switch (it is saved), or
+set `icons:` in the config:
+
+| `icons:` | |
+|---|---|
+| `symbols` (default) | Unicode symbols that the fonts every system ships have (DejaVu Sans Mono on Debian and Ubuntu, Menlo or SF Mono on macOS): `▾ src/`, `◇ main.go`, `≡ config.yaml`, `¶ README.md`, `$ deploy.sh`, `⌥ main` — no font to install, no emoji |
+| `nerd` | [Nerd Font](https://www.nerdfonts.com) glyphs: a separate icon per language and git icons for branches, tags and the reflog; needs a Nerd Font |
+| `plain` | no file or branch icons |
+
+To use the Nerd Font set:
 
 1. **Install a Nerd Font**, for example MesloLGS NF:
    - macOS: `brew install --cask font-meslo-lg-nerd-font`
@@ -44,8 +51,8 @@ icons in the Files tree and git icons for branches, tags and the reflog.
    Terminal.app: Settings → Profiles → Text; GNOME Terminal: Preferences →
    your profile → Custom font). Over SSH, the font of the terminal on your own
    computer is what counts.
-3. **Turn icons on in gitnest:** press `T`, then `i` (it is saved), or set
-   `icons: nerd` in the config.
+3. **Switch gitnest to it:** press `T`, then `i` until it says Nerd Font, or
+   set `icons: nerd` in the config.
 
 ---
 

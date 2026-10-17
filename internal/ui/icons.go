@@ -7,13 +7,58 @@ import (
 	"github.com/Paksonite/gitnest/internal/gitx"
 )
 
-// Icons come in two sets: plain Unicode symbols that every font has, and
-// Nerd Font glyphs (config "icons: nerd") for fonts such as MesloLGS NF.
-// Only glyphs from the Font Awesome, Octicons, Devicons and Seti ranges are
-// used, which are present in both Nerd Fonts v2 and v3.
-var nerdIcons bool
+// Icons come in three sets (config "icons"):
+//   - symbols (the default): Unicode symbols found in the fonts every system
+//     ships, e.g. DejaVu Sans Mono on Debian and Ubuntu, Menlo on macOS — no
+//     emoji, each one cell wide;
+//   - nerd: Nerd Font glyphs for fonts such as MesloLGS NF. Only glyphs from
+//     the Font Awesome, Octicons, Devicons and Seti ranges are used, which
+//     are present in both Nerd Fonts v2 and v3;
+//   - plain: no file, branch or folder icons at all.
+const (
+	iconsSymbols = iota
+	iconsNerd
+	iconsPlain
+)
 
-func setIcons(mode string) { nerdIcons = strings.EqualFold(mode, "nerd") }
+var iconSet = iconsSymbols
+
+// iconModes are the config names of the sets, in the order i cycles them.
+var iconModes = [...]string{iconsSymbols: "symbols", iconsNerd: "nerd", iconsPlain: "plain"}
+
+func setIcons(mode string) {
+	iconSet = iconsSymbols
+	for i, m := range iconModes {
+		if strings.EqualFold(mode, m) {
+			iconSet = i
+		}
+	}
+}
+
+// symbols stand in for the Nerd Font glyphs in the symbols set: one shape
+// per kind of file (the colour from fileIconStyled tells kinds apart too).
+// Folders get none: no font every system ships has a folder that isn't an
+// emoji, and ▸/▾, the colour and the trailing slash already mark them.
+var symbols = map[string]string{
+	nfGo: "◇", nfPython: "◇", nfJS: "◇", nfTS: "◇", nfRuby: "◇", nfRust: "◇", nfJava: "◇",
+	nfFileCode: "◇", nfHTML: "◇", nfCSS: "◇",
+	nfJSON: "≡", nfConfig: "≡", nfCubes: "≡", nfDocker: "≡", nfGnu: "≡",
+	nfMarkdown: "¶", nfFileText: "¶", nfLicense: "¶",
+	nfFile: "○", nfTerminal: "$", nfGit: "±", nfDatabase: "◈",
+	nfFileImage: "▧", nfFilePDF: "▤", nfFileArchive: "▦", nfLock: "⊘", nfKey: "⊗",
+	nfBranchIcon: "⌥", nfRemoteBranch: "⇅", nfTag: "⚑",
+}
+
+// glyph renders a Nerd Font glyph in the current set ("" for plain).
+func glyph(nf string) string {
+	switch iconSet {
+	case iconsNerd:
+		return nf
+	case iconsSymbols:
+		return symbols[nf]
+	}
+	return ""
+}
 
 const (
 	nfFolder       = ""
@@ -87,29 +132,35 @@ var nfByName = map[string]string{
 	"go.mod": nfGo, "go.sum": nfGo, "readme": nfMarkdown,
 }
 
-// fileIcon is the icon shown before a file or directory in the Files panel,
-// followed by a space; empty without Nerd Font icons.
-func fileIcon(path string, dir, collapsed bool) string {
-	if !nerdIcons {
-		return ""
-	}
+// fileKind is the Nerd Font glyph for a file or directory, which names its
+// kind in every icon set.
+func fileKind(path string, dir, collapsed bool) string {
 	if dir {
 		if collapsed {
-			return nfFolder + " "
+			return nfFolder
 		}
-		return nfFolderOpen + " "
+		return nfFolderOpen
 	}
 	base := strings.ToLower(filepath.Base(path))
 	if ic, ok := nfByName[base]; ok {
-		return ic + " "
+		return ic
 	}
 	if strings.HasPrefix(base, "dockerfile") {
-		return nfDocker + " "
+		return nfDocker
 	}
 	if ic, ok := nfByExt[filepath.Ext(base)]; ok {
-		return ic + " "
+		return ic
 	}
-	return nfFile + " "
+	return nfFile
+}
+
+// fileIcon is the icon shown before a file or directory, followed by a
+// space; empty with plain icons.
+func fileIcon(path string, dir, collapsed bool) string {
+	if g := glyph(fileKind(path, dir, collapsed)); g != "" {
+		return g + " "
+	}
+	return ""
 }
 
 // fileIconStyled is fileIcon in a colour for its kind of file: code, config,
@@ -123,7 +174,7 @@ func fileIconStyled(path string, dir, collapsed bool) (plain, styled string) {
 	if dir {
 		c = cCyan
 	} else {
-		switch strings.TrimSpace(plain) {
+		switch fileKind(path, false, false) {
 		case nfGo, nfPython, nfJS, nfTS, nfRuby, nfRust, nfJava, nfFileCode, nfHTML, nfCSS:
 			c = cCyan
 		case nfJSON, nfConfig, nfCubes, nfDocker, nfGnu:
@@ -141,7 +192,7 @@ func fileIconStyled(path string, dir, collapsed bool) (plain, styled string) {
 
 // refGlyph is the icon for a reflog action.
 func refGlyph(k gitx.RefKind) string {
-	if nerdIcons {
+	if iconSet == iconsNerd {
 		switch k {
 		case gitx.RefCommit:
 			return nfCommit
@@ -193,11 +244,20 @@ func refGlyph(k gitx.RefKind) string {
 
 // branchGlyph prefixes branch names: local or remote.
 func branchGlyph(remote bool) string {
-	if !nerdIcons {
+	g := glyph(nfBranchIcon)
+	if remote {
+		g = glyph(nfRemoteBranch)
+	}
+	if g == "" {
 		return ""
 	}
-	if remote {
-		return nfRemoteBranch + " "
+	return g + " "
+}
+
+// tagGlyph prefixes tag names.
+func tagGlyph() string {
+	if g := glyph(nfTag); g != "" {
+		return g + " "
 	}
-	return nfBranchIcon + " "
+	return "⚑ "
 }

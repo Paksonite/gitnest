@@ -1154,10 +1154,7 @@ func currentFirst(bs []gitx.Branch) []gitx.Branch {
 }
 
 func tagRow(tg gitx.Tag) rowItem {
-	glyph := "⚑ "
-	if nerdIcons {
-		glyph = nfTag + " "
-	}
+	glyph := tagGlyph()
 	subject := printable(tg.Subject)
 	plain := glyph + tg.Name + " " + tg.Short + " " + subject
 	styled := fg(cYellow, glyph) + bold(tg.Name) + " " + fg(cDim, tg.Short) + " " + subject

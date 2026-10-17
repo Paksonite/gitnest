@@ -5,9 +5,9 @@ folders, themes, icons, colour support and the shell setup, and says what to
 do.
 
 - **"No directories to scan"** — `gitnest roots add ~/your/projects`.
-- **Boxes or question marks instead of icons** — the terminal font is not a
-  Nerd Font: install one (see [Icons](THEMES.md#icons-nerd-font)) or press `T` then `i`
-  to go back to plain symbols.
+- **Boxes or question marks instead of icons** — with `icons: nerd` the
+  terminal font is not a Nerd Font: install one (see [Icons](THEMES.md#icons)) or press `T` then `i`
+  to go back to `symbols`, which any font shows.
 - **Colours look off** — your terminal may not report its background: set
   `theme.mode: dark` or `light`. Without true colour, try the `terminal`
   theme.

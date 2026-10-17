@@ -88,10 +88,13 @@ func doctorCmd(args []string) error {
 		orDefault(cfg.Theme.Light, "catppuccin-latte"), orAuto(cfg.Theme.Mode)))
 
 	mode, src := config.Icons(cfg)
-	if mode == "nerd" {
+	switch mode {
+	case "nerd":
 		ok("icons", "Nerd Font icons (from "+src+") — the terminal font must be a Nerd Font")
-	} else {
-		warn("icons", "plain Unicode (from "+src+"); with a Nerd Font set icons: nerd, or press T then i in the app")
+	case "symbols":
+		ok("icons", "Unicode symbols (from "+src+"); with a Nerd Font, icons: nerd draws richer ones (T then i in the app)")
+	default:
+		ok("icons", "none (from "+src+"); icons: symbols shows icons with any font")
 	}
 
 	colorterm := os.Getenv("COLORTERM")

@@ -230,7 +230,7 @@ var keymap = [scopes][]binding{
 		b(actTop, "first theme", "", "home", "g").hidden(),
 		b(actBottom, "last theme", "", "end", "G").hidden(),
 		b(actSave, "use and save the theme", "save", "enter"),
-		b(actToggleIcons, "icons: Nerd Font or plain Unicode (saved)", "icons", "i"),
+		b(actToggleIcons, "icons: Unicode symbols, Nerd Font or none (saved)", "icons", "i"),
 		b(actCancel, "keep the previous theme", "cancel", "esc", "q").show(1),
 	},
 	scGlobal: {

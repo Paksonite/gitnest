@@ -19,8 +19,8 @@ needs `git`.
   run an interactive rebase. `z` undoes any rewrite.
 - **Work across repositories.** Up to six gitnests side by side (`ctrl+n`),
   cherry-pick from one repository into another, pull everything with `ctrl+p`.
-- **Fits your terminal.** Ten themes plus your own, optional Nerd Font
-  icons, zsh and bash integration.
+- **Fits your terminal.** Ten themes plus your own, file and branch icons
+  with any font (richer ones with a Nerd Font), zsh and bash integration.
 
 ## Install and update
 
@@ -82,8 +82,8 @@ quit into its folder, and `?` for every key.
 - [Install, update and uninstall](docs/INSTALL.md): every platform, first
   start, shell integration
 - [Configuration](docs/CONFIG.md): `config.yaml` and environment variables
-- [Themes and icons](docs/THEMES.md): built-in and custom themes, Nerd Font
-  icons
+- [Themes and icons](docs/THEMES.md): built-in and custom themes, the icon
+  sets (Unicode symbols, Nerd Font)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Development](docs/DEVELOPMENT.md): building, tests and releasing
 

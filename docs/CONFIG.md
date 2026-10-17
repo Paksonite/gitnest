@@ -15,7 +15,7 @@ rescan_interval: 60    # seconds between background scans for new clones (0 = of
 status_interval: 15    # seconds between status refreshes of visible rows (0 = off)
 jobs: 8                # parallel git processes
 editor: ""             # for e; empty = $VISUAL, then $EDITOR, then vi
-icons: unicode         # or nerd (needs a Nerd Font)
+icons: symbols         # nerd (needs a Nerd Font) or plain
 update_check: true     # look for a new release once a day (false = never)
 theme:
   mode: auto           # follows the terminal background; dark or light to force

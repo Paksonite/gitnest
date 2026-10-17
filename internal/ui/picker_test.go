@@ -100,19 +100,17 @@ func TestUserThemeIsOffered(t *testing.T) {
 
 func TestPickerTogglesIcons(t *testing.T) {
 	a := themedApp(t)
-	setIcons("unicode")
-	defer setIcons("unicode")
+	setIcons("symbols")
+	defer setIcons("symbols")
 	a.onKey(key("T"))
-	a.onKey(key("i"))
-	cfg, _, _ := config.Load()
-	if !nerdIcons || cfg.Icons != "nerd" {
-		t.Fatalf("nerd=%v saved=%q", nerdIcons, cfg.Icons)
-	}
-	if !strings.Contains(a.View(), "icons: Nerd Font") {
-		t.Error("chooser should show the icon mode")
-	}
-	a.onKey(key("i"))
-	if cfg, _, _ = config.Load(); nerdIcons || cfg.Icons != "unicode" {
-		t.Errorf("back: nerd=%v saved=%q", nerdIcons, cfg.Icons)
+	for _, want := range []struct{ mode, shown string }{{"nerd", "Nerd Font"}, {"plain", "none"}, {"symbols", "Unicode symbols"}} {
+		a.onKey(key("i"))
+		cfg, _, _ := config.Load()
+		if iconModes[iconSet] != want.mode || cfg.Icons != want.mode {
+			t.Fatalf("after i: set %s, saved %q, want %s", iconModes[iconSet], cfg.Icons, want.mode)
+		}
+		if !strings.Contains(a.View(), "icons: "+want.shown) {
+			t.Errorf("chooser should show icons: %s", want.shown)
+		}
 	}
 }
