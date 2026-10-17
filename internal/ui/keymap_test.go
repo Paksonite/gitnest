@@ -70,11 +70,11 @@ func TestHelpOverlay(t *testing.T) {
 	}
 }
 
-// readmeKeys reads the key tables of README.md: for each row, its first
+// readmeKeys reads the key tables of docs/KEYS.md: for each row, its first
 // column and the keys written in backticks anywhere in it.
 func readmeKeys(t *testing.T) map[string][]string {
 	t.Helper()
-	b, err := os.ReadFile("../../README.md")
+	b, err := os.ReadFile("../../docs/KEYS.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,9 +108,8 @@ func readmeKeys(t *testing.T) map[string][]string {
 	return rows
 }
 
-// The README's key tables and the keymap must agree: every key the README
-// names is bound where it says, and every key the footer shows is in the
-// README.
+// The key tables in docs/KEYS.md and the keymap must agree: every key they
+// name is bound where they say, and every key the footer shows is in them.
 func TestReadmeKeyTablesMatchKeymap(t *testing.T) {
 	where := map[string][]scope{
 		"The repository list":               {scList, scFilter, scGlobal, scPanes, scPullAll},
@@ -129,7 +128,7 @@ func TestReadmeKeyTablesMatchKeymap(t *testing.T) {
 	for label, scs := range where {
 		keys := rows[label]
 		if len(keys) == 0 {
-			t.Errorf("README has no key table row %q", label)
+			t.Errorf("docs/KEYS.md has no key table row %q", label)
 			continue
 		}
 		have := map[string]bool{}
@@ -140,13 +139,13 @@ func TestReadmeKeyTablesMatchKeymap(t *testing.T) {
 				bound = bound || lookup(sc, k) != actNone
 			}
 			if !bound {
-				t.Errorf("README %q: %q is not bound", label, k)
+				t.Errorf("docs/KEYS.md %q: %q is not bound", label, k)
 			}
 		}
 		for _, sc := range scs[:1] {
 			for _, bd := range keymap[sc] {
 				if bd.hint != "" && !have[bd.keys[0]] {
-					t.Errorf("README %q lacks %q (%s), shown in the footer", label, keyLabel(bd.keys[0]), bd.help)
+					t.Errorf("docs/KEYS.md %q lacks %q (%s), shown in the footer", label, keyLabel(bd.keys[0]), bd.help)
 				}
 			}
 		}
