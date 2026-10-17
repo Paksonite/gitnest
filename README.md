@@ -201,6 +201,7 @@ icons in the Files tree and git icons for branches, tags and the reflog.
 | `s` | sort: recently used, name, last commit, needs attention |
 | `d` | only repositories with uncommitted changes |
 | `space` | mark (on a folder: everything below); `f` fetch / `p` pull the marked ones |
+| `ctrl+p` | pull all: fetches every repository, lists every branch that is behind (also main when it isn't checked out); pick with `space` / `a`, `enter` updates them (fast-forward only) |
 | `R` / `r` | rescan the folders / refresh the status |
 | `q` | quit |
 | `o` | quit and go to the repository (needs the [shell integration](#shell-integration-completion-and-gn)) |

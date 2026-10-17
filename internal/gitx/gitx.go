@@ -618,6 +618,24 @@ type Branch struct {
 // for-each-ref spells the unit separator %1f (git log uses %x1f).
 const branchFormat = "%(HEAD)%1f%(refname:short)%1f%(upstream:short)%1f%(upstream:track)%1f%(committerdate:relative)%1f%(subject)"
 
+// AheadBehind reads how many commits a local branch has that its upstream
+// lacks, and the other way round, from Track ("[ahead 1, behind 2]").
+// Gone reports an upstream that was deleted.
+func (b Branch) AheadBehind() (ahead, behind int, gone bool) {
+	track := strings.Trim(b.Track, "[]")
+	if track == "gone" {
+		return 0, 0, true
+	}
+	for _, part := range strings.Split(track, ", ") {
+		if n, ok := strings.CutPrefix(part, "ahead "); ok {
+			ahead, _ = strconv.Atoi(n)
+		} else if n, ok := strings.CutPrefix(part, "behind "); ok {
+			behind, _ = strconv.Atoi(n)
+		}
+	}
+	return ahead, behind, false
+}
+
 func parseBranches(out string, remote bool) []Branch {
 	var bs []Branch
 	for _, l := range strings.Split(out, "\n") {

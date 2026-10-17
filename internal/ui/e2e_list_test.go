@@ -227,3 +227,98 @@ func TestE2EUpdateNotice(t *testing.T) {
 		t.Error("update_check: false")
 	}
 }
+
+// ctrl+p fetches everything, lists the branches that are behind (checked
+// out or not) and fast-forwards the chosen ones.
+func TestE2EPullAll(t *testing.T) {
+	if testing.Short() {
+		t.Skip("end-to-end")
+	}
+	a, root, origin := e2eSetup(t)
+	app := filepath.Join(root, "app")
+
+	press(t, a, "ctrl+p")
+	if a.pull != nil || a.toast != "all 2 repos are up to date" {
+		t.Fatalf("nothing to pull: chooser=%v toast %q", a.pull != nil, a.toast)
+	}
+
+	// Elsewhere: new commits on main, on release and on topic.
+	other := filepath.Join(t.TempDir(), "other")
+	sh(t, root, "clone", "-q", origin, other)
+	sh(t, other, "checkout", "-q", "-b", "release")
+	sh(t, other, "push", "-q", "-u", "origin", "release")
+	sh(t, other, "checkout", "-q", "-b", "topic")
+	sh(t, other, "push", "-q", "-u", "origin", "topic")
+	sh(t, app, "fetch", "-q")
+	sh(t, app, "branch", "--track", "release", "origin/release")
+	sh(t, app, "branch", "--track", "topic", "origin/topic")
+	sh(t, app, "checkout", "-q", "topic")
+	commitFile(t, app, "local.txt", "l\n", "local topic work") // topic diverges
+	sh(t, app, "checkout", "-q", "main")
+	for _, b := range []string{"main", "release", "topic"} {
+		sh(t, other, "checkout", "-q", b)
+		commitFile(t, other, b+".txt", b+"\n", "new on "+b)
+		sh(t, other, "push", "-q", "origin", b)
+	}
+
+	press(t, a, "ctrl+p")
+	p := a.pull
+	if p == nil || len(p.rows) != 3 {
+		t.Fatalf("chooser: %+v (toast %q)", p, a.toast)
+	}
+	got := map[string]pullRow{}
+	for _, r := range p.rows {
+		got[r.branch.Name] = r
+	}
+	if r := got["main"]; !r.ok || !r.on || r.behind != 1 || !r.branch.Current {
+		t.Errorf("main: %+v", r)
+	}
+	if r := got["release"]; !r.ok || !r.on || r.branch.Current {
+		t.Errorf("release: %+v", r)
+	}
+	if r := got["topic"]; r.ok || r.on || !strings.Contains(r.note, "diverged") {
+		t.Errorf("topic: %+v", r)
+	}
+	v := a.View()
+	if !strings.Contains(v, "updates the 2 selected branches in 1 repos") {
+		t.Errorf("chooser view:\n%s", v)
+	}
+
+	// a picks none, a again all that can be pulled; space on topic says why not.
+	press(t, a, "a")
+	if n, _ := p.selected(); n != 0 {
+		t.Errorf("a: %d selected", n)
+	}
+	press(t, a, "a")
+	if n, _ := p.selected(); n != 2 {
+		t.Errorf("a again: %d selected", n)
+	}
+	for p.rows[p.cur].branch.Name != "topic" {
+		press(t, a, "j")
+	}
+	press(t, a, "space")
+	if !strings.Contains(a.toast, "diverged") || got["topic"].on {
+		t.Errorf("space on topic: %q", a.toast)
+	}
+
+	press(t, a, "enter")
+	if a.pull != nil || !strings.Contains(a.toast, "pulled 1 repos ✓") {
+		t.Fatalf("after enter: chooser=%v toast %q", a.pull != nil, a.toast)
+	}
+	for b, want := range map[string]string{"main": "new on main", "release": "new on release", "topic": "local topic work"} {
+		if got := sh(t, app, "log", "-1", "--format=%s", b); got != want {
+			t.Errorf("%s: %q, want %q", b, got, want)
+		}
+	}
+	if got := sh(t, app, "status", "--porcelain"); got != "" {
+		t.Errorf("worktree after pull all: %q", got)
+	}
+	// esc leaves without pulling.
+	sh(t, other, "checkout", "-q", "main")
+	commitFile(t, other, "more.txt", "m\n", "more")
+	sh(t, other, "push", "-q", "origin", "main")
+	press(t, a, "ctrl+p", "esc")
+	if got := sh(t, app, "log", "-1", "--format=%s", "main"); got != "new on main" || a.pull != nil {
+		t.Errorf("esc pulled anyway: %q", got)
+	}
+}
