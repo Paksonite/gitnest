@@ -37,7 +37,7 @@ var scopeTitles = [scopes]string{
 	scList:     "Repository list",
 	scFilter:   "Searching (/)",
 	scRepo:     "Repository view",
-	scState:    "Rebase, merge, cherry-pick, revert or bisect in progress",
+	scState:    "Rebase, merge, cherry-pick, revert, am or bisect in progress",
 	scFiles:    "Files panel",
 	scBranches: "Branches panel",
 	scCommits:  "Commits panel",
@@ -194,11 +194,23 @@ const (
 )
 
 type binding struct {
-	act  action
-	keys []string // as reported by tea.KeyMsg.String()
-	help string   // help screen
-	hint string   // footer label; empty keeps it out of the footer
+	act   action
+	keys  []string // as reported by tea.KeyMsg.String()
+	help  string   // help screen
+	hint  string   // footer label; empty keeps it out of the footer
+	shown int      // keys listed on the help screen: 0 all, n the first n, -1 none
+	label string   // replaces the key list on the help screen
 }
+
+// show lists only the first n keys on the help screen; the others still
+// work (vim-style and ctrl aliases).
+func (bd binding) show(n int) binding { bd.shown = n; return bd }
+
+// hidden keeps a binding off the help screen; it still works.
+func (bd binding) hidden() binding { bd.shown = -1; return bd }
+
+// labeled shows label instead of the keys on the help screen.
+func (bd binding) labeled(label string) binding { bd.label = label; return bd }
 
 func b(act action, help, hint string, keys ...string) binding {
 	return binding{act: act, keys: keys, help: help, hint: hint}
@@ -208,11 +220,11 @@ var keymap = [scopes][]binding{
 	scPicker: {
 		b(actUp, "previous theme (previewed at once)", "", "up", "k"),
 		b(actDown, "next theme (previewed at once)", "", "down", "j"),
-		b(actTop, "first theme", "", "home", "g"),
-		b(actBottom, "last theme", "", "end", "G"),
+		b(actTop, "first theme", "", "home", "g").hidden(),
+		b(actBottom, "last theme", "", "end", "G").hidden(),
 		b(actSave, "use and save the theme", "save", "enter"),
 		b(actToggleIcons, "icons: Nerd Font or plain Unicode (saved)", "icons", "i"),
-		b(actCancel, "keep the previous theme", "cancel", "esc", "q"),
+		b(actCancel, "keep the previous theme", "cancel", "esc", "q").show(1),
 	},
 	scGlobal: {
 		b(actHelp, "show all keys", "help", "?"),
@@ -226,10 +238,10 @@ var keymap = [scopes][]binding{
 		b(actClearSearch, "clear the search", "", "esc"),
 		b(actUp, "move up", "", "up", "k"),
 		b(actDown, "move down", "", "down", "j"),
-		b(actPageUp, "page up", "", "pgup", "ctrl+u"),
-		b(actPageDown, "page down", "", "pgdown", "ctrl+d"),
-		b(actTop, "first repository", "", "home", "g"),
-		b(actBottom, "last repository", "", "end", "G"),
+		b(actPageUp, "page up", "", "pgup", "ctrl+u").show(1),
+		b(actPageDown, "page down", "", "pgdown", "ctrl+d").show(1),
+		b(actTop, "first repository", "", "home", "g").show(1),
+		b(actBottom, "last repository", "", "end", "G").show(1),
 		b(actSort, "sort: recent, name, last commit, status", "sort", "s"),
 		b(actDirtyOnly, "only repositories with changes", "dirty only", "d"),
 		b(actMark, "mark for fetch/pull (on a directory: everything below)", "mark", " "),
@@ -238,24 +250,24 @@ var keymap = [scopes][]binding{
 		b(actPullMany, "pull --ff-only marked (or selected) repositories", "pull", "p"),
 		b(actRescan, "rescan the roots for new and removed repositories", "rescan", "R"),
 		b(actRefreshList, "refresh the status of every repository", "refresh", "r"),
-		b(actCdQuit, "quit and cd into the repository (gn shell function)", "", "o"),
+		b(actCdQuit, "quit and cd into the repository (needs the shell integration)", "", "o"),
 		b(actQuit, "quit", "quit", "q"),
 	},
 	scFilter: {
 		b(actOpenMatch, "open the selected repository", "open", "enter"),
 		b(actKeepFilter, "keep the filter, back to the list", "keep filter", "tab"),
 		b(actCancelFilter, "clear the search", "clear", "esc"),
-		b(actUp, "move up", "", "up", "ctrl+p", "ctrl+k"),
-		b(actDown, "move down", "", "down", "ctrl+n", "ctrl+j"),
+		b(actUp, "move up", "", "up", "ctrl+p", "ctrl+k").show(1),
+		b(actDown, "move down", "", "down", "ctrl+n", "ctrl+j").show(1),
 		b(actDeleteChar, "delete a character", "", "backspace"),
 		b(actClearQuery, "clear the query", "", "ctrl+u"),
 		b(actDeleteWord, "delete a word", "", "ctrl+w"),
 	},
 	scRepo: {
 		b(actFocusMain, "focus the diff to scroll it", "diff", "enter"),
-		b(actBack, "back to the list", "back", "esc", "q"),
-		b(actNextPanel, "next panel", "", "tab", "right", "l"),
-		b(actPrevPanel, "previous panel", "", "shift+tab", "left", "h"),
+		b(actBack, "back to the list", "back", "esc", "q").show(1),
+		b(actNextPanel, "next panel", "", "tab", "right", "l").show(2),
+		b(actPrevPanel, "previous panel", "", "shift+tab", "left", "h").show(2),
 		b(actPanel1, "Files panel", "", "1"),
 		b(actPanel2, "Branches panel", "", "2"),
 		b(actPanel3, "Commits panel", "", "3"),
@@ -264,16 +276,16 @@ var keymap = [scopes][]binding{
 		b(actDown, "move down", "", "down", "j"),
 		b(actTop, "first item", "", "home"),
 		b(actBottom, "last item", "", "end"),
-		b(actScrollUp, "scroll the diff up", "", "pgup", "ctrl+u", "K"),
-		b(actScrollDown, "scroll the diff down", "", "pgdown", "ctrl+d", "J"),
-		b(actFetch, "fetch all remotes", "fetch", "f", "ctrl+f"),
+		b(actScrollUp, "scroll the diff up", "", "pgup", "ctrl+u", "K").show(1),
+		b(actScrollDown, "scroll the diff down", "", "pgdown", "ctrl+d", "J").show(1),
+		b(actFetch, "fetch all remotes (ctrl+f in Branches and Commits, where f is taken)", "fetch", "f", "ctrl+f"),
 		b(actPull, "pull --ff-only", "pull", "p"),
 		b(actPullRebase, "pull --rebase", "", "ctrl+p"),
 		b(actPush, "push (sets the upstream if missing)", "push", "P"),
 		b(actForcePush, "force push (--force-with-lease)", "", "F"),
 		b(actUndo, "undo the last history change (again to redo)", "undo", "z"),
 		b(actReload, "reload", "", "ctrl+r"),
-		b(actCdQuit, "quit and cd into this repository (gn shell function)", "", "o"),
+		b(actCdQuit, "quit and cd into this repository (needs the shell integration)", "", "o"),
 	},
 	scState: {
 		b(actContinue, "continue after resolving conflicts", "continue", "C"),
@@ -304,7 +316,7 @@ var keymap = [scopes][]binding{
 		b(actFastForward, "fast-forward to upstream without checkout", "fast-forward", "f"),
 		b(actMerge, "merge into the current branch", "merge", "M"),
 		b(actRebase, "rebase the current branch onto it", "rebase", "R"),
-		b(actToggleRemote, "next tab: Local, Remote, Tags", "tabs", "]", "t"),
+		b(actToggleRemote, "next tab: Local, Remote, Tags", "tabs", "]", "t").show(1),
 		b(actPrevTab, "previous tab", "", "["),
 	},
 	scCommits: {
@@ -320,34 +332,34 @@ var keymap = [scopes][]binding{
 		b(actCopy, "copy the commit for cherry-pick (again: uncopy)", "copy", "c"),
 		b(actPaste, "paste copied commits onto this branch (also from another repository)", "paste", "v"),
 		b(actClearCopied, "forget the copied commits", "", "C"),
-		b(actToggleReflog, "show HEAD's reflog (every move, with a graph of what changed)", "reflog", "]", "["),
+		b(actToggleReflog, "show HEAD's reflog (every move, with a graph of what changed)", "reflog", "]", "[").show(1),
 	},
 	scPanes: {
 		b(actNewPane, "open another pane next to this one, starting on the list", "pane", "ctrl+n"),
 		b(actClosePane, "close this pane (the last one quits)", "", "ctrl+w"),
-		b(actPaneLeft, "focus the pane on the left", "", "ctrl+left", "alt+left"),
-		b(actPaneRight, "focus the pane on the right", "", "ctrl+right", "alt+right"),
-		b(actPaneUp, "focus the pane above", "", "ctrl+up", "alt+up"),
-		b(actPaneDown, "focus the pane below", "", "ctrl+down", "alt+down"),
+		b(actPaneLeft, "move to the pane in that direction (alt+arrows work too)", "", "ctrl+left", "alt+left").labeled("ctrl+←→↑↓"),
+		b(actPaneRight, "focus the pane on the right", "", "ctrl+right", "alt+right").hidden(),
+		b(actPaneUp, "focus the pane above", "", "ctrl+up", "alt+up").hidden(),
+		b(actPaneDown, "focus the pane below", "", "ctrl+down", "alt+down").hidden(),
 		b(actPaneLayout, "pane layout: grid, side by side, stacked", "", "ctrl+g"),
 	},
 	scStaging: {
 		b(actToggleStage, "stage (or, on the staged side, unstage) the line, range or hunk", "stage", " "),
 		b(actDown, "next change line (next hunk in hunk mode)", "", "down", "j"),
 		b(actUp, "previous change line", "", "up", "k"),
-		b(actPageDown, "half page down", "", "ctrl+d", "pgdown"),
-		b(actPageUp, "half page up", "", "ctrl+u", "pgup"),
+		b(actPageDown, "half page down", "", "pgdown", "ctrl+d").show(1),
+		b(actPageUp, "half page up", "", "pgup", "ctrl+u").show(1),
 		b(actRange, "start / end a range selection", "range", "v"),
 		b(actHunkMode, "select whole hunks / single lines", "hunk", "a"),
 		b(actSwitchSide, "switch between unstaged and staged changes", "staged/unstaged", "tab"),
 		b(actDiscard, "discard the selected unstaged lines", "discard", "d"),
-		b(actBack, "back to the files", "back", "esc", "q"),
+		b(actBack, "back to the files", "back", "esc", "q").show(1),
 	},
 	scPlan: {
 		b(actUp, "previous commit", "", "up", "k"),
 		b(actDown, "next commit", "", "down", "j"),
-		b(actMoveUp, "move up (newer)", "", "ctrl+k", "K"),
-		b(actMoveDown, "move down (older)", "move", "ctrl+j", "J"),
+		b(actMoveUp, "move up (newer)", "", "ctrl+k", "K").show(1),
+		b(actMoveDown, "move down (older)", "move", "ctrl+j", "J").show(1),
 		b(actPick, "pick", "pick", "p"),
 		b(actReword, "reword (opens the editor)", "reword", "r"),
 		b(actEditStep, "edit: stop there to change the commit", "edit", "e"),
@@ -355,7 +367,7 @@ var keymap = [scopes][]binding{
 		b(actFixup, "fixup into the commit below", "fixup", "f"),
 		b(actDrop, "drop", "drop", "d"),
 		b(actSave, "run the plan", "run", "enter"),
-		b(actCancel, "cancel", "cancel", "esc", "q"),
+		b(actCancel, "cancel", "cancel", "esc", "q").show(1),
 	},
 	scTags: {
 		b(actNewTag, "new tag at HEAD (with a message: annotated)", "new", "n"),
@@ -365,7 +377,7 @@ var keymap = [scopes][]binding{
 		b(actDeleteRemoteTag, "delete the tag on the remote", "", "D"),
 	},
 	scReflog: {
-		b(actToggleReflog, "back to the commits", "commits", "[", "]"),
+		b(actToggleReflog, "back to the commits", "commits", "[", "]").show(1),
 		b(actCheckoutEntry, "check out the entry (detached HEAD)", "checkout", " "),
 		b(actResetHere, "reset the current branch to the entry (z undoes)", "reset here", "g"),
 	},
@@ -376,26 +388,26 @@ var keymap = [scopes][]binding{
 		b(actStashDrop, "drop", "drop", "d"),
 	},
 	scMain: {
-		b(actBack, "back to the panels", "back", "esc", "q", "enter", "h", "left", "tab"),
-		b(actDown, "scroll down a line", "", "j", "down"),
-		b(actUp, "scroll up a line", "", "k", "up"),
-		b(actPageDown, "half page down", "", "d", "ctrl+d", "pgdown", " ", "J"),
-		b(actPageUp, "half page up", "", "u", "ctrl+u", "pgup", "K"),
-		b(actTop, "top", "", "g", "home"),
-		b(actBottom, "bottom", "", "G", "end"),
+		b(actBack, "back to the panels", "back", "esc", "q", "enter", "h", "left", "tab").show(1),
+		b(actDown, "scroll down", "", "down", "j"),
+		b(actUp, "scroll up", "", "up", "k"),
+		b(actPageDown, "half page down", "", "pgdown", "d", "ctrl+d", " ", "J").hidden(),
+		b(actPageUp, "half page up", "", "pgup", "u", "ctrl+u", "K").hidden(),
+		b(actTop, "top", "", "home", "g").show(1),
+		b(actBottom, "bottom", "", "end", "G").show(1),
 	},
 	scOverlay: {
-		b(actBack, "close", "close", "esc", "q", "enter"),
-		b(actDown, "scroll down", "", "j", "down"),
-		b(actUp, "scroll up", "", "k", "up"),
-		b(actPageDown, "page down", "", "pgdown", "ctrl+d", " "),
-		b(actPageUp, "page up", "", "pgup", "ctrl+u"),
+		b(actBack, "close", "close", "esc", "q", "enter").show(1),
+		b(actDown, "scroll", "", "down", "j").labeled("↑ ↓"),
+		b(actUp, "scroll up", "", "up", "k").hidden(),
+		b(actPageDown, "page down", "", "pgdown", "ctrl+d", " ").hidden(),
+		b(actPageUp, "page up", "", "pgup", "ctrl+u").hidden(),
 	},
 	scEditor: {
 		b(actEditorEnter, "in the subject: save (the body is optional)", "", "enter"),
 		b(actNextField, "move to the body", "", "tab"),
 		b(actPrevField, "back to the subject", "", "shift+tab"),
-		b(actSave, "save from either field", "save", "ctrl+s", "alt+enter"),
+		b(actSave, "save from either field", "save", "ctrl+s", "alt+enter").show(1),
 		b(actCancel, "cancel (twice when edited)", "cancel", "esc"),
 	},
 }
@@ -414,8 +426,17 @@ func lookup(sc scope, key string) action {
 
 // keyLabel renders a key the way the help and footer show it.
 func keyLabel(k string) string {
-	if k == " " {
+	switch k {
+	case " ":
 		return "space"
+	case "up":
+		return "↑"
+	case "down":
+		return "↓"
+	case "left":
+		return "←"
+	case "right":
+		return "→"
 	}
 	return k
 }
@@ -434,6 +455,20 @@ func hints(scs ...scope) string {
 	return strings.Join(parts, "  ")
 }
 
+// otherHints is hints for scs without the keys the panel takes over (f
+// fast-forwards in Branches, so "f fetch" isn't offered there).
+func otherHints(panel scope, scs ...scope) string {
+	var parts []string
+	for _, sc := range scs {
+		for _, bd := range keymap[sc] {
+			if bd.hint != "" && lookup(panel, bd.keys[0]) == actNone {
+				parts = append(parts, keyLabel(bd.keys[0])+" "+bd.hint)
+			}
+		}
+	}
+	return strings.Join(parts, "  ")
+}
+
 // helpLines renders every scope's bindings for the help overlay.
 func helpLines() []string {
 	order := []scope{scPanes, scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scStaging, scPlan, scTags, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
@@ -444,11 +479,22 @@ func helpLines() []string {
 		}
 		out = append(out, bold(scopeTitles[sc]))
 		for _, bd := range keymap[sc] {
-			labels := make([]string, len(bd.keys))
-			for i, k := range bd.keys {
+			if bd.shown < 0 {
+				continue
+			}
+			keys := bd.keys
+			if bd.shown > 0 {
+				keys = keys[:bd.shown]
+			}
+			labels := make([]string, len(keys))
+			for i, k := range keys {
 				labels[i] = keyLabel(k)
 			}
-			out = append(out, "  "+fg(cAccent, padRight(strings.Join(labels, " "), 22))+" "+bd.help)
+			label := strings.Join(labels, " ")
+			if bd.label != "" {
+				label = bd.label
+			}
+			out = append(out, "  "+fg(cAccent, padRight(label, 14))+" "+bd.help)
 		}
 	}
 	return out

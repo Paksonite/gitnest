@@ -33,6 +33,13 @@ type State struct {
 	Recent     map[string]int64 `json:"recent"`
 	ListTree   bool             `json:"list_tree"`   // repository list grouped by directory
 	PaneLayout string           `json:"pane_layout"` // grid, side by side or stacked
+	Collapsed  []string         `json:"collapsed"`   // folded directories of the list tree
+}
+
+// SetCollapsed remembers which directories of the list tree are folded.
+func (s *State) SetCollapsed(dirs []string) {
+	s.Collapsed = dirs
+	_ = s.save()
 }
 
 // SetPaneLayout remembers how panes are arranged.

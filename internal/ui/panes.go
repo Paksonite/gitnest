@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"strings"
 
@@ -278,7 +279,7 @@ func (a *App) sibling() *App {
 		themes: a.themes, theme: a.theme, dark: a.dark}
 	b.rs = reposState{
 		all: append(a.rs.all[:0:0], a.rs.all...), known: append(a.rs.known[:0:0], a.rs.known...),
-		marked: map[string]bool{}, isNew: map[string]bool{}, collapsed: map[string]bool{},
+		marked: map[string]bool{}, isNew: map[string]bool{}, collapsed: maps.Clone(a.rs.collapsed),
 		sortMode: a.rs.sortMode, tree: a.rs.tree,
 	}
 	b.rebuildView("")

@@ -473,6 +473,16 @@ func (a *App) openDir(path string) tea.Cmd {
 	return loadRepoData(a.ctx, path)
 }
 
+// saveCollapsed remembers the folded directories for the next start.
+func (a *App) saveCollapsed() {
+	dirs := make([]string, 0, len(a.rs.collapsed))
+	for d := range a.rs.collapsed {
+		dirs = append(dirs, d)
+	}
+	sort.Strings(dirs)
+	a.st.SetCollapsed(dirs)
+}
+
 func (a *App) moveRepos(delta int) tea.Cmd {
 	rs := &a.rs
 	rs.cur = clamp(rs.cur+delta, 0, len(rs.rows)-1)
@@ -534,7 +544,12 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 	case actOpen:
 		if i, ok := a.selectedDir(); ok { // enter on a directory folds it
 			d := rs.rows[i].dir
-			rs.collapsed[d] = !rs.collapsed[d]
+			if rs.collapsed[d] {
+				delete(rs.collapsed, d)
+			} else {
+				rs.collapsed[d] = true
+			}
+			a.saveCollapsed()
 			a.rebuildView("d:" + d)
 			return nil
 		}
@@ -737,7 +752,7 @@ func repoRow(r scan.Repo, o rowOpts) rowItem {
 	styledName := fit(pad+highlight(r.Name, o.hl, bold, func(s string) string { return hlStyle.Render(s) })+styledSuffix, o.nameW)
 	br := fit(r.Branch, 16)
 	sync := fit(r.Info.Sync(), 10)
-	rel := fmt.Sprintf("%4s", relTime(r.LastUnix, o.now))
+	rel := fmt.Sprintf("%6s", relTime(r.LastUnix, o.now))
 	plain := sel + dirty + " " + name + " " + br + " " + sync + " " + rel
 	dc := cYellow
 	if dirty == "!" {
@@ -785,9 +800,9 @@ func (a *App) viewRepos() string {
 		listW = a.w * 3 / 5
 	}
 	inner := listW - 2
-	nameW := clamp(inner-37, 10, 60)
+	nameW := clamp(inner-39, 10, 60)
 	now := time.Now()
-	lh := bodyH - 3
+	lh := bodyH - 4 // borders, panel title and the column headers
 	rs.listH = lh
 	rs.off = scrollTo(rs.cur, rs.off, lh)
 	// Only the rows on screen are built: styling every row of a long list
@@ -803,7 +818,7 @@ func (a *App) viewRepos() string {
 		items = append(items, repoRow(r, rowOpts{marked: rs.marked[r.Path], isNew: rs.isNew[r.Path],
 			label: rs.label[r.Path], hl: rs.hl[r.Path], nameW: nameW, now: now, indent: row.depth}))
 	}
-	lines := renderRows(items, rs.cur-rs.off, 0, lh, inner, true)
+	lines := append([]string{listHeader(nameW)}, renderRows(items, rs.cur-rs.off, 0, lh, inner, true)...)
 	if len(rs.view) == 0 {
 		msg := "No repositories match."
 		if rs.loading {
@@ -838,6 +853,11 @@ func (a *App) viewRepos() string {
 		footer = "type to search (@branch)  ·  ↑/↓ move  ·  " + hints(scFilter)
 	}
 	return strings.Join([]string{fit(head, a.w), body, a.footer(footer)}, "\n")
+}
+
+// listHeader names the columns of repoRow: the age is that of the last commit.
+func listHeader(nameW int) string {
+	return fg(cDim, "   "+fit("repository", nameW)+" "+fit("branch", 16)+" "+fit("status", 10)+" "+fmt.Sprintf("%6s", "commit"))
 }
 
 func rootsList(roots []string) string {

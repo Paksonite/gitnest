@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -754,9 +755,10 @@ func (a *App) panelItems(panel int) []rowItem {
 				mark = "* "
 				name = fg(cGreen, glyph+bold(b.Name))
 			}
+			sp, ss := branchSync(b)
 			items = append(items, rowItem{
-				plain:  mark + glyph + b.Name + " " + b.Track,
-				styled: mark + name + " " + fg(cDim, b.Track),
+				plain:  mark + glyph + b.Name + sp,
+				styled: mark + name + ss,
 			})
 		}
 	case pCommits:
@@ -807,9 +809,9 @@ func (a *App) repoHints() string {
 		panel = scReflog
 	}
 	if panel == scBranches && rp.branchTab == tabTags {
-		return hints(scTags) + "  ·  ] tabs  ·  " + hints(scRepo, scGlobal)
+		return hints(scTags) + "  ·  ] tabs  ·  " + otherHints(scTags, scRepo, scGlobal)
 	}
-	return hints(panel) + "  ·  " + hints(scRepo, scPanes, scGlobal)
+	return hints(panel) + "  ·  " + otherHints(panel, scRepo, scPanes, scGlobal)
 }
 
 func (a *App) viewRepo() string {
@@ -1097,6 +1099,42 @@ func (a *App) push(force bool) tea.Cmd {
 		}
 		return nil
 	})
+}
+
+// branchSync shows how a local branch stands against its upstream, after
+// its name: ✓ in sync, ↑ commits to push, ↓ commits to pull, "gone" when
+// the upstream was deleted, ∅ without an upstream (as in the list).
+func branchSync(b gitx.Branch) (plain, styled string) {
+	if b.Remote {
+		return "", ""
+	}
+	if b.Upstream == "" {
+		return " ∅", fg(cDim, " ∅")
+	}
+	track := strings.Trim(b.Track, "[]")
+	if track == "" {
+		return " ✓", fg(cGreen, " ✓")
+	}
+	if track == "gone" {
+		return " ✗ gone", fg(cRed, " ✗ gone")
+	}
+	var ahead, behind int
+	for _, part := range strings.Split(track, ", ") {
+		if n, ok := strings.CutPrefix(part, "ahead "); ok {
+			ahead, _ = strconv.Atoi(n)
+		} else if n, ok := strings.CutPrefix(part, "behind "); ok {
+			behind, _ = strconv.Atoi(n)
+		}
+	}
+	if ahead > 0 {
+		plain += fmt.Sprintf(" ↑%d", ahead)
+		styled += fg(cGreen, fmt.Sprintf(" ↑%d", ahead))
+	}
+	if behind > 0 {
+		plain += fmt.Sprintf(" ↓%d", behind)
+		styled += fg(cRed, fmt.Sprintf(" ↓%d", behind))
+	}
+	return plain, styled
 }
 
 func commitsTitle(rp *repoState) string {

@@ -125,6 +125,9 @@ func newApp(ctx context.Context, cfg config.Config, noConfig bool, startDir, cdF
 	a.rs.marked = map[string]bool{}
 	a.rs.isNew = map[string]bool{}
 	a.rs.collapsed = map[string]bool{}
+	for _, d := range a.st.Collapsed {
+		a.rs.collapsed[d] = true
+	}
 	a.rs.tree = a.st.ListTree
 	return a
 }
