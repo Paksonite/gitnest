@@ -40,12 +40,11 @@ func setIcons(mode string) {
 // Folders get none: no font every system ships has a folder that isn't an
 // emoji, and ▸/▾, the colour and the trailing slash already mark them.
 var symbols = map[string]string{
-	nfFile: "○",
 	nfGo: "◇", nfPython: "◇", nfJS: "◇", nfTS: "◇", nfRuby: "◇", nfRust: "◇", nfJava: "◇",
 	nfFileCode: "◇", nfHTML: "◇", nfCSS: "◇",
 	nfJSON: "≡", nfConfig: "≡", nfCubes: "≡", nfDocker: "≡", nfGnu: "≡",
 	nfMarkdown: "¶", nfFileText: "¶", nfLicense: "¶",
-	nfTerminal: "$", nfGit: "±", nfDatabase: "◈",
+	nfFile: "○", nfTerminal: "$", nfGit: "±", nfDatabase: "◈",
 	nfFileImage: "▧", nfFilePDF: "▤", nfFileArchive: "▦", nfLock: "⊘", nfKey: "⊗",
 	nfBranchIcon: "⌥", nfRemoteBranch: "⇅", nfTag: "⚑",
 }
