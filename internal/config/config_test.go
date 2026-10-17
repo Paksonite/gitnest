@@ -137,14 +137,19 @@ func TestSetValueNested(t *testing.T) {
 func TestIconsResolution(t *testing.T) {
 	sandbox(t)
 	t.Setenv("GITNEST_ICONS", "")
-	if mode, src := Icons(Config{}); mode != "unicode" || src != "default" {
+	if mode, src := Icons(Config{}); mode != "symbols" || src != "default" {
 		t.Errorf("default: %s %s", mode, src)
 	}
 	if mode, src := Icons(Config{Icons: "nerd"}); mode != "nerd" || src != "config" {
 		t.Errorf("config: %s %s", mode, src)
 	}
+	for v, want := range map[string]string{"unicode": "symbols", "Symbols": "symbols", "plain": "plain", "none": "plain"} {
+		if mode, _ := Icons(Config{Icons: v}); mode != want {
+			t.Errorf("icons: %s gives %s, want %s", v, mode, want)
+		}
+	}
 	t.Setenv("GITNEST_ICONS", "nerd")
-	if mode, src := Icons(Config{Icons: "unicode"}); mode != "nerd" || src != "GITNEST_ICONS" {
+	if mode, src := Icons(Config{Icons: "symbols"}); mode != "nerd" || src != "GITNEST_ICONS" {
 		t.Errorf("env: %s %s", mode, src)
 	}
 }

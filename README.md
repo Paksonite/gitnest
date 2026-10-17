@@ -20,7 +20,8 @@ tag and push — all from the keyboard.
   terminal (`ctrl+n`), copy commits from one repository into another, fetch
   or pull many repositories at once.
 - **Fits your terminal.** Ten built-in themes plus your own, light and dark
-  terminals, optional Nerd Font icons, zsh and bash integration.
+  terminals, file and branch icons with any font (richer ones with a Nerd
+  Font), zsh and bash integration.
 
 Runs on macOS 13+ and Linux (Debian, Ubuntu and others), as a
 single binary. It only needs `git`.
@@ -34,7 +35,7 @@ single binary. It only needs `git`.
 - [Other ways to install](#other-ways-to-install)
 - [First start](#first-start)
 - [Shell integration: completion and `gn`](#shell-integration-completion-and-gn)
-- [Icons (Nerd Font)](#icons-nerd-font)
+- [Icons](#icons)
 - [Using gitnest](#using-gitnest)
 - [Several repositories side by side](#several-repositories-side-by-side)
 - [Configuration](#configuration)
@@ -168,11 +169,18 @@ eval "$(gitnest shell bash)"
 Open a new terminal and try `gn` (or `gitnest`), then `o`. (Completion alone: `gitnest completion zsh`
 or `gitnest completion bash`.)
 
-## Icons (Nerd Font)
+## Icons
 
-By default gitnest uses plain symbols that every font has. With a
-[Nerd Font](https://www.nerdfonts.com) in your terminal you get file-type
-icons in the Files tree and git icons for branches, tags and the reflog.
+gitnest has three icon sets; press `T`, then `i` to switch (it is saved), or
+set `icons:` in the config:
+
+| `icons:` | |
+|---|---|
+| `symbols` (default) | Unicode symbols that the fonts every system ships have (DejaVu Sans Mono on Debian and Ubuntu, Menlo or SF Mono on macOS): `□ src/`, `◇ main.go`, `≡ config.yaml`, `¶ README.md`, `$ deploy.sh`, `⌥ main` — no font to install, no emoji |
+| `nerd` | Nerd Font glyphs: a separate icon per language and git icons for branches, tags and the reflog; needs a Nerd Font |
+| `plain` | no file, folder or branch icons |
+
+To use the Nerd Font set:
 
 1. **Install a Nerd Font**, for example MesloLGS NF:
    - macOS: `brew install --cask font-meslo-lg-nerd-font`
@@ -186,8 +194,8 @@ icons in the Files tree and git icons for branches, tags and the reflog.
    Terminal.app: Settings → Profiles → Text; GNOME Terminal: Preferences →
    your profile → Custom font). Over SSH, the font of the terminal on your own
    computer is what counts.
-3. **Turn icons on in gitnest:** press `T`, then `i` (it is saved), or set
-   `icons: nerd` in the config.
+3. **Switch gitnest to it:** press `T`, then `i` until it says Nerd Font, or
+   set `icons: nerd` in the config.
 
 ## Using gitnest
 
@@ -295,7 +303,7 @@ rescan_interval: 60    # seconds between background scans for new clones (0 = of
 status_interval: 15    # seconds between status refreshes of visible rows (0 = off)
 jobs: 8                # parallel git processes
 editor: ""             # for e; empty = $VISUAL, then $EDITOR, then vi
-icons: unicode         # or nerd (needs a Nerd Font)
+icons: symbols         # nerd (needs a Nerd Font) or plain
 update_check: true     # look for a new release once a day (false = never)
 theme:
   mode: auto           # follows the terminal background; dark or light to force
@@ -341,9 +349,9 @@ folders, themes, icons, colour support and the shell setup, and says what to
 do.
 
 - **"No directories to scan"** — `gitnest roots add ~/your/projects`.
-- **Boxes or question marks instead of icons** — the terminal font is not a
-  Nerd Font: install one (see [Icons](#icons-nerd-font)) or press `T` then `i`
-  to go back to plain symbols.
+- **Boxes or question marks instead of icons** — with `icons: nerd` the
+  terminal font is not a Nerd Font: install one (see [Icons](#icons)) or press
+  `T` then `i` to go back to `symbols`, which any font shows.
 - **Colours look off** — your terminal may not report its background: set
   `theme.mode: dark` or `light`. Without true colour, try the `terminal`
   theme.

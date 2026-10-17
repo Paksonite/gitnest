@@ -30,7 +30,7 @@ type Config struct {
 	StatusInterval int      `yaml:"status_interval"` // seconds, 0 disables
 	Jobs           int      `yaml:"jobs"`
 	Editor         string   `yaml:"editor"`
-	Icons          string   `yaml:"icons"` // "nerd" (needs a Nerd Font) or "unicode"
+	Icons          string   `yaml:"icons"` // "symbols", "nerd" (needs a Nerd Font) or "plain"
 	Theme          Theme    `yaml:"theme"`
 	UpdateCheck    *bool    `yaml:"update_check"` // nil means on
 }
@@ -57,10 +57,10 @@ status_interval: 15
 jobs: 8
 # Editor used by "e" (empty = $VISUAL, then $EDITOR, then vi).
 editor: ""
-# Icons: "nerd" for file-type and git icons (needs a Nerd Font in the
-# terminal, e.g. MesloLGS NF), "unicode" for plain symbols any font has.
-# T then i in the app switches and saves it.
-icons: unicode
+# Icons for files, folders, branches and tags: "symbols" uses Unicode
+# symbols every font has, "nerd" Nerd Font glyphs (needs a Nerd Font in the
+# terminal, e.g. MesloLGS NF), "plain" none. T then i in the app switches.
+icons: symbols
 # Check GitHub once a day for a new gitnest release and say so in the
 # header ("gitnest update" installs it). GITNEST_NO_UPDATE_CHECK=1 also turns it off.
 update_check: true
@@ -290,19 +290,22 @@ func editFile(b []byte, path []string, value *yaml.Node) error {
 	return os.WriteFile(Path(), out.Bytes(), 0o644)
 }
 
-// Icons decides the icon set, "nerd" or "unicode", and where that came
-// from: GITNEST_ICONS overrides the config; without either it is unicode,
-// which any font can show.
+// Icons decides the icon set, "symbols", "nerd" or "plain", and where that
+// came from: GITNEST_ICONS overrides the config; without either it is
+// symbols, which any font can show. "unicode", the name before symbols
+// existed (and the old default), means symbols.
 func Icons(cfg Config) (mode, source string) {
 	for _, c := range []struct{ v, src string }{{os.Getenv("GITNEST_ICONS"), "GITNEST_ICONS"}, {cfg.Icons, "config"}} {
 		switch strings.ToLower(strings.TrimSpace(c.v)) {
 		case "nerd":
 			return "nerd", c.src
-		case "unicode", "none", "plain":
-			return "unicode", c.src
+		case "symbols", "unicode":
+			return "symbols", c.src
+		case "plain", "none":
+			return "plain", c.src
 		}
 	}
-	return "unicode", "default"
+	return "symbols", "default"
 }
 
 // UpdateCheck reports whether gitnest may look for new releases: on unless

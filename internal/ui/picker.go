@@ -52,18 +52,13 @@ func (a *App) pickerKey(k tea.KeyMsg) tea.Cmd {
 	case actBottom:
 		move(len(p.names))
 	case actToggleIcons:
-		mode := "nerd"
-		if nerdIcons {
-			mode = "unicode"
-		}
+		mode := iconModes[(iconSet+1)%len(iconModes)]
 		setIcons(mode)
 		a.cfg.Icons = mode
 		if err := config.SetValue([]string{"icons"}, mode); err != nil {
 			a.setToast("saving icons: "+err.Error(), true)
-		} else if mode == "nerd" {
-			a.setToast("Nerd Font icons on (saved) — they need a Nerd Font in the terminal", false)
 		} else {
-			a.setToast("plain Unicode icons (saved)", false)
+			a.setToast("icons: "+iconNames[iconSet]+" (saved)"+iconHints[iconSet], false)
 		}
 	case actCancel:
 		a.previewTheme(p.orig)
@@ -161,10 +156,7 @@ func (a *App) viewPicker() string {
 	sel := lipgloss.NewStyle().Bold(true).Background(cSel).Foreground(cText)
 	_, sficon := fileIconStyled("main.go", false, false)
 	_, sdicon := fileIconStyled("src", true, false)
-	iconsMode := "Unicode"
-	if nerdIcons {
-		iconsMode = "Nerd Font"
-	}
+	iconsMode := iconNames[iconSet]
 	sample := []string{
 		fg(cDim, "icons: "+iconsMode+" (i)") + "   " + fg(cDim, "▾ ") + sdicon + fg(cCyan, "src/") + "  " + fg(cRed, " M") + " " + sficon + "main.go",
 		sel.Render(fit(" ● gitnest       main      ↑1 ↓2 ~3   2h", 44)),
@@ -185,3 +177,13 @@ func (a *App) viewPicker() string {
 		Padding(editorPad(a.h), 2).Width(min(72, a.w-2)).Render(body)
 	return lipgloss.Place(a.w, a.h, lipgloss.Center, lipgloss.Center, box)
 }
+
+// iconNames and iconHints describe the icon sets in the theme chooser.
+var (
+	iconNames = [...]string{iconsSymbols: "Unicode symbols", iconsNerd: "Nerd Font", iconsPlain: "none"}
+	iconHints = [...]string{
+		iconsSymbols: " — any font",
+		iconsNerd:    " — they need a Nerd Font in the terminal",
+		iconsPlain:   "",
+	}
+)
