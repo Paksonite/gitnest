@@ -113,7 +113,7 @@ func readmeKeys(t *testing.T) map[string][]string {
 // README.
 func TestReadmeKeyTablesMatchKeymap(t *testing.T) {
 	where := map[string][]scope{
-		"The repository list":               {scList, scFilter, scGlobal, scPanes},
+		"The repository list":               {scList, scFilter, scGlobal, scPanes, scPullAll},
 		"Several repositories side by side": {scPanes, scList},
 		"Files":                             {scFiles},
 		"Line staging":                      {scStaging},

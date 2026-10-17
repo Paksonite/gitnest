@@ -607,6 +607,8 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 			return nil
 		})
 		return a.bulk("pull", "pulled", ps, func(p string) error { return gitx.Pull(ctx, p, false) })
+	case actPullAll:
+		return a.startPullAll()
 	}
 	return nil
 }

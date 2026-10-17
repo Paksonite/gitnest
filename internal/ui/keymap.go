@@ -29,6 +29,7 @@ const (
 	scPlan                  // interactive rebase planner
 	scStaging               // line-by-line staging of a file
 	scPanes                 // several gitnests side by side
+	scPullAll               // choosing what "pull all" updates
 	scopes
 )
 
@@ -51,6 +52,7 @@ var scopeTitles = [scopes]string{
 	scPlan:     "Interactive rebase (i in the Commits panel)",
 	scStaging:  "Staging lines (enter on a file)",
 	scPanes:    "Panes (several repositories side by side)",
+	scPullAll:  "Pull all (ctrl+p in the list)",
 }
 
 type action int
@@ -92,6 +94,11 @@ const (
 	actRefreshList
 	actFetchMany
 	actPullMany
+	actPullAll
+
+	// pull all
+	actTogglePull
+	actToggleAllPulls
 
 	// search query
 	actOpenMatch
@@ -248,6 +255,7 @@ var keymap = [scopes][]binding{
 		b(actToggleTree, "group repositories by directory (tree) or flat list; enter folds a directory", "tree", "`"),
 		b(actFetchMany, "fetch marked (or all) repositories", "fetch", "f"),
 		b(actPullMany, "pull --ff-only marked (or selected) repositories", "pull", "p"),
+		b(actPullAll, "pull all: fetch everything, choose which branches to update", "pull all", "ctrl+p"),
 		b(actRescan, "rescan the roots for new and removed repositories", "rescan", "R"),
 		b(actRefreshList, "refresh the status of every repository", "refresh", "r"),
 		b(actCdQuit, "quit and cd into the repository (needs the shell integration)", "", "o"),
@@ -342,6 +350,14 @@ var keymap = [scopes][]binding{
 		b(actPaneUp, "focus the pane above", "", "ctrl+up", "alt+up").hidden(),
 		b(actPaneDown, "focus the pane below", "", "ctrl+down", "alt+down").hidden(),
 		b(actPaneLayout, "pane layout: grid, side by side, stacked", "", "ctrl+g"),
+	},
+	scPullAll: {
+		b(actUp, "previous branch", "", "up", "k"),
+		b(actDown, "next branch", "", "down", "j"),
+		b(actTogglePull, "include / leave out the branch", "toggle", " "),
+		b(actToggleAllPulls, "include all / none", "all", "a"),
+		b(actSave, "pull the selected branches (fast-forward only)", "pull", "enter"),
+		b(actCancel, "cancel", "cancel", "esc", "q").show(1),
 	},
 	scStaging: {
 		b(actToggleStage, "stage (or, on the staged side, unstage) the line, range or hunk", "stage", " "),
@@ -471,7 +487,7 @@ func otherHints(panel scope, scs ...scope) string {
 
 // helpLines renders every scope's bindings for the help overlay.
 func helpLines() []string {
-	order := []scope{scPanes, scList, scFilter, scRepo, scFiles, scBranches, scCommits, scStash, scStaging, scPlan, scTags, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
+	order := []scope{scPanes, scList, scFilter, scPullAll, scRepo, scFiles, scBranches, scCommits, scStash, scStaging, scPlan, scTags, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
 	var out []string
 	for _, sc := range order {
 		if len(out) > 0 {

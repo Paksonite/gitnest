@@ -357,10 +357,13 @@ func TestE2ETinyWindows(t *testing.T) {
 			a.lastErr = errorReport("push", fmt.Errorf("%s", strings.Repeat("a long error line\n", 40)))
 			press(t, a, "!")
 		},
+		"pull all": func() {
+			a.pull = &pullAll{fetched: 2, rows: []pullRow{{name: "lib", repo: lib, branch: gitx.Branch{Name: "main", Current: true}, behind: 2, ok: true, on: true, note: "checked out, 3 changed files"}}}
+		},
 		"too small": func() {},
 	}
 	reset := func() {
-		a.p, a.ed, a.plan, a.report, a.picker = nil, nil, nil, nil, nil
+		a.p, a.ed, a.plan, a.report, a.picker, a.pull = nil, nil, nil, nil, nil, nil
 		a.rp.staging, a.rp.mainFocus, a.rs.filtering, a.rs.filter = nil, false, false, ""
 	}
 	for _, size := range [][2]int{{50, 12}, {51, 13}, {60, 15}, {79, 20}, {49, 30}, {120, 11}, {10, 3}, {1, 1}} {
