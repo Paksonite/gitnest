@@ -172,3 +172,34 @@ func TestCopyAndPasteAcrossRepos(t *testing.T) {
 		t.Error("C should clear the clipboard")
 	}
 }
+
+func TestBranchSync(t *testing.T) {
+	cases := []struct {
+		b    gitx.Branch
+		want string
+	}{
+		{gitx.Branch{Name: "main", Upstream: "origin/main"}, " ✓"},
+		{gitx.Branch{Name: "main", Upstream: "origin/main", Track: "[ahead 2]"}, " ↑2"},
+		{gitx.Branch{Name: "main", Upstream: "origin/main", Track: "[behind 3]"}, " ↓3"},
+		{gitx.Branch{Name: "main", Upstream: "origin/main", Track: "[ahead 1, behind 12]"}, " ↑1 ↓12"},
+		{gitx.Branch{Name: "old", Upstream: "origin/old", Track: "[gone]"}, " ✗ gone"},
+		{gitx.Branch{Name: "local"}, " ∅"},
+		{gitx.Branch{Name: "origin/main", Remote: true}, ""},
+	}
+	for _, c := range cases {
+		if got, _ := branchSync(c.b); got != c.want {
+			t.Errorf("%+v: %q, want %q", c.b, got, c.want)
+		}
+	}
+}
+
+// Only the focused panel highlights its selected row.
+func TestSelectionOnlyInFocusedPanel(t *testing.T) {
+	items := []rowItem{{plain: "plain", styled: "styled"}}
+	if got := renderRows(items, 0, 0, 1, 8, false)[0]; got != fit("styled", 8) {
+		t.Errorf("unfocused panel: %q", got)
+	}
+	if got := renderRows(items, 0, 0, 1, 8, true)[0]; !strings.Contains(got, "plain") {
+		t.Errorf("focused panel: %q", got)
+	}
+}

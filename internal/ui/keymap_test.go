@@ -152,3 +152,38 @@ func TestReadmeKeyTablesMatchKeymap(t *testing.T) {
 		}
 	}
 }
+
+// A panel's footer doesn't offer a repository-wide key the panel uses for
+// something else.
+func TestFooterSkipsShadowedKeys(t *testing.T) {
+	a := testApp()
+	a.scr = scrRepo
+	for panel, shadowed := range map[int]string{pBranches: "f fetch", pCommits: "f fetch", pFiles: "enter diff"} {
+		a.rp.focus = panel
+		if h := a.repoHints(); strings.Contains(h, shadowed) {
+			t.Errorf("panel %d footer offers %q: %s", panel, shadowed, h)
+		}
+	}
+	a.rp.focus = pStash
+	if h := a.repoHints(); !strings.Contains(h, "f fetch") {
+		t.Errorf("stash footer lacks fetch: %s", h)
+	}
+}
+
+// The help screen lists the main keys only; aliases still work.
+func TestHelpShowsMainKeys(t *testing.T) {
+	help := strings.Join(helpLines(), "\n")
+	for _, want := range []string{"tab →", "shift+tab ←", "ctrl+←→↑↓", "↑ ↓"} {
+		if !strings.Contains(help, want) {
+			t.Errorf("help lacks %q", want)
+		}
+	}
+	for _, unwanted := range []string{"tab right l", "pgup ctrl+u K", "ctrl+k K", "esc q enter h", "d ctrl+d pgdown", "home g", "ctrl+p ctrl+k", "alt+left", "focus the pane above"} {
+		if strings.Contains(help, unwanted) {
+			t.Errorf("help still shows %q", unwanted)
+		}
+	}
+	if lookup(scRepo, "l") != actNextPanel || lookup(scMain, "J") != actPageDown || lookup(scPanes, "alt+up") != actPaneUp {
+		t.Error("hidden aliases must keep working")
+	}
+}

@@ -165,8 +165,8 @@ func expandTabs(s string) string {
 
 type rowItem struct{ plain, styled string }
 
-// renderRows draws list rows. The selected row is highlighted strongly in the
-// focused panel and faintly elsewhere, so every panel shows its selection.
+// renderRows draws list rows. Only the focused panel highlights its
+// selected row, so the highlight always shows where keys go.
 func renderRows(items []rowItem, cur, off, h, w int, focused bool) []string {
 	var out []string
 	for i := off; i < len(items) && i < off+h; i++ {
@@ -174,8 +174,6 @@ func renderRows(items []rowItem, cur, off, h, w int, focused bool) []string {
 		switch {
 		case i == cur && focused:
 			out = append(out, lipgloss.NewStyle().Bold(true).Background(cSel).Foreground(cText).Render(fit(it.plain, w)))
-		case i == cur:
-			out = append(out, lipgloss.NewStyle().Background(cSelDim).Foreground(cText).Render(fit(it.plain, w)))
 		default:
 			out = append(out, fit(it.styled, w))
 		}
