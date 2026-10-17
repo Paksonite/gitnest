@@ -99,6 +99,7 @@ type App struct {
 	sh        *shared     // state shared by every pane
 	quitAll   bool        // quitting leaves gitnest entirely (o for gn), not just this pane
 	plan      *planner    // interactive rebase being planned
+	pull      *pullAll    // choosing what "pull all" updates
 	lastErr   *report     // details of the last failed operation, shown with "!"
 	toast     string
 	toastErr  bool
@@ -213,6 +214,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.onOp(m)
 	case bulkMsg:
 		return a, a.onBulk(m)
+	case pullScanMsg:
+		return a, a.onPullScan(m)
 	case afterMsg:
 		a.busy = ""
 		if m.err != nil {
@@ -263,6 +266,9 @@ func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 	}
 	if a.plan != nil {
 		return a.plannerKey(k)
+	}
+	if a.pull != nil {
+		return a.pullAllKey(k)
 	}
 	if a.scr == scrRepos && a.rs.filtering {
 		return a.reposKey(k) // every key belongs to the search query, "?" too
@@ -466,6 +472,8 @@ func (a *App) View() string {
 		return a.viewPicker()
 	case a.plan != nil:
 		return a.viewPlanner()
+	case a.pull != nil:
+		return a.viewPullAll()
 	case a.scr == scrRepos:
 		return a.viewRepos()
 	}

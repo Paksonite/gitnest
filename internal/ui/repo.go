@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1111,20 +1110,12 @@ func branchSync(b gitx.Branch) (plain, styled string) {
 	if b.Upstream == "" {
 		return " ∅", fg(cDim, " ∅")
 	}
-	track := strings.Trim(b.Track, "[]")
-	if track == "" {
-		return " ✓", fg(cGreen, " ✓")
-	}
-	if track == "gone" {
+	ahead, behind, gone := b.AheadBehind()
+	switch {
+	case gone:
 		return " ✗ gone", fg(cRed, " ✗ gone")
-	}
-	var ahead, behind int
-	for _, part := range strings.Split(track, ", ") {
-		if n, ok := strings.CutPrefix(part, "ahead "); ok {
-			ahead, _ = strconv.Atoi(n)
-		} else if n, ok := strings.CutPrefix(part, "behind "); ok {
-			behind, _ = strconv.Atoi(n)
-		}
+	case ahead == 0 && behind == 0:
+		return " ✓", fg(cGreen, " ✓")
 	}
 	if ahead > 0 {
 		plain += fmt.Sprintf(" ↑%d", ahead)

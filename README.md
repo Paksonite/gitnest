@@ -18,7 +18,7 @@ needs `git`.
 - **History editing you can undo.** Squash, fixup, reword, drop, reorder or
   run an interactive rebase. `z` undoes any rewrite.
 - **Work across repositories.** Up to six gitnests side by side (`ctrl+n`),
-  cherry-pick from one repository into another, fetch or pull many at once.
+  cherry-pick from one repository into another, pull everything with `ctrl+p`.
 - **Fits your terminal.** Ten themes plus your own, optional Nerd Font
   icons, zsh and bash integration.
 

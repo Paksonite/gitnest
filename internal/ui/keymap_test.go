@@ -112,7 +112,7 @@ func readmeKeys(t *testing.T) map[string][]string {
 // name is bound where they say, and every key the footer shows is in them.
 func TestReadmeKeyTablesMatchKeymap(t *testing.T) {
 	where := map[string][]scope{
-		"The repository list":               {scList, scFilter, scGlobal, scPanes},
+		"The repository list":               {scList, scFilter, scGlobal, scPanes, scPullAll},
 		"Several repositories side by side": {scPanes, scList},
 		"Files":                             {scFiles},
 		"Line staging":                      {scStaging},
