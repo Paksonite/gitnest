@@ -17,8 +17,8 @@ presses (`press(t, app, "3", "s", "y")`): the list, every panel of the
 repository view, conflicts, panes, the update notice, and edge cases such as
 empty repositories, detached HEAD, huge diffs, odd file names, network
 timeouts and tiny windows. `go test -short ./...` skips them.
-`TestReadmeKeyTablesMatchKeymap` fails when the README's key tables and
-`keymap.go` disagree.
+`TestReadmeKeyTablesMatchKeymap` fails when the key tables in
+[KEYS.md](KEYS.md) and `keymap.go` disagree.
 
 CI (`.github/workflows/ci.yml`) runs gofmt, vet, staticcheck and the tests
 with `-race` on macOS and Ubuntu, the tests again on Debian 12, shellcheck
@@ -58,3 +58,17 @@ names in `.goreleaser.yaml` — `gitnest_<version>_darwin_universal.tar.gz`,
 and `checksums.txt` — so keep them in step when changing it. Pre-release tags
 (`v1.1.0-rc1`) are never offered as updates, and `/releases/latest` skips
 releases marked as pre-release on GitHub.
+
+## The README demo
+
+`docs/demo.gif` is recorded with [VHS](https://github.com/charmbracelet/vhs)
+(`brew install vhs`) from `docs/demo.tape`:
+
+```sh
+vhs docs/demo.tape
+```
+
+The tape runs `docs/demo-setup.sh`, which builds gitnest and a throwaway
+home in `$TMPDIR/gitnest-demo` with fake repositories (example.com remotes
+backed by local bare repositories, author "Ann Example"), so nothing of
+yours ends up in the GIF. Keep it under about 3 MB.
