@@ -19,15 +19,22 @@ Press `?` in the app for the same list. Panes are described in
 | `T` | theme and icons |
 | `ctrl+n` | open a second gitnest next to this one ([panes](#several-repositories-side-by-side)) |
 
-`✦` marks repositories found since gitnest started, `●` uncommitted changes,
-`!` a conflict or an operation in progress. Clones of the same project from
+The columns are the repository, its current branch, its status — `↑2` commits
+to push, `↓3` to pull, `~4` changed files, `∅` no upstream — and how long ago
+the last commit was (`5h`, `3d`, `4mo`, `2y`). `✦` marks repositories found
+since gitnest started, `●` uncommitted changes, `!` a conflict or an
+operation in progress. Folded directories of the tree stay folded the next
+time. Clones of the same project from
 different hosts are told apart by host (`org-core-dns · forgejo`).
 
 ## Inside a repository
 
 Four panels on the left — **Files**, **Branches** (`Local - Remote - Tags`),
 **Commits** (`Commits - Reflog`), **Stash** — and the diff on the right.
-`1`–`4` or `tab` switch panels, `enter` on the diff scrolls it.
+`1`–`4` or `tab` switch panels, `enter` on the diff scrolls it; only the
+active panel highlights its selection. Branches show how they stand against
+their upstream: `✓` in sync, `↑1` / `↓2` to push / pull, `✗ gone` when the
+upstream was deleted, `∅` without one.
 
 | Panel | Keys |
 |---|---|

@@ -1,12 +1,15 @@
 package ui
 
 import (
+	"context"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/Paksonite/gitnest/internal/state"
 )
 
 func treeApp(t *testing.T, roots []string, paths ...string) *App {
@@ -59,6 +62,13 @@ func TestRepoTree(t *testing.T) {
 	a.reposKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if got := rowsText(a); got[1] != "gitea.ps/" || a.selectedKey() != "d:forgejo.int" {
 		t.Errorf("collapsed: %v key %q", got, a.selectedKey())
+	}
+	// the fold is remembered for the next start
+	if st := state.Load(); !reflect.DeepEqual(st.Collapsed, []string{"forgejo.int"}) {
+		t.Errorf("saved folds: %v", st.Collapsed)
+	}
+	if b := newApp(context.Background(), a.cfg, false, "", ""); !b.rs.collapsed["forgejo.int"] {
+		t.Errorf("a new start lost the fold: %v", b.rs.collapsed)
 	}
 	// space on a directory marks everything below it
 	a.reposKey(key(" "))
