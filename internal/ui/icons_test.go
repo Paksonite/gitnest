@@ -9,11 +9,11 @@ import (
 
 // inDejaVuMono are the symbols checked against DejaVu Sans Mono, the
 // default monospace font on Debian and Ubuntu; none has an emoji form.
-const inDejaVuMono = "■□○◇≡¶$±◈▧▤▦⊘⊗⌥⇅⚑"
+const inDejaVuMono = "○◇≡¶$±◈▧▤▦⊘⊗⌥⇅⚑"
 
 func TestSymbolIcons(t *testing.T) {
 	defer setIcons("symbols")
-	kinds := []string{nfFolder, nfFolderOpen, nfFile, nfBranchIcon, nfRemoteBranch, nfTag}
+	kinds := []string{nfFile, nfBranchIcon, nfRemoteBranch, nfTag}
 	for _, m := range []map[string]string{nfByExt, nfByName} {
 		for _, nf := range m {
 			kinds = append(kinds, nf)
@@ -36,7 +36,8 @@ func TestSymbolIcons(t *testing.T) {
 		{"symbols", "deploy.sh", false, "$ "},
 		{"symbols", "Dockerfile.prod", false, "≡ "},
 		{"symbols", "notes.unknown", false, "○ "},
-		{"symbols", "src", true, "□ "},
+		{"symbols", "src", true, ""}, // ▸/▾ and the slash mark folders
+		{"nerd", "src", true, nfFolderOpen + " "},
 		{"unicode", "main.go", false, "◇ "}, // the old name
 		{"nerd", "main.go", false, nfGo + " "},
 		{"plain", "main.go", false, ""},

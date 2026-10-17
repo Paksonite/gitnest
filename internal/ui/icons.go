@@ -37,8 +37,10 @@ func setIcons(mode string) {
 
 // symbols stand in for the Nerd Font glyphs in the symbols set: one shape
 // per kind of file (the colour from fileIconStyled tells kinds apart too).
+// Folders get none: no font every system ships has a folder that isn't an
+// emoji, and ▸/▾, the colour and the trailing slash already mark them.
 var symbols = map[string]string{
-	nfFolder: "■", nfFolderOpen: "□", nfFile: "○",
+	nfFile: "○",
 	nfGo: "◇", nfPython: "◇", nfJS: "◇", nfTS: "◇", nfRuby: "◇", nfRust: "◇", nfJava: "◇",
 	nfFileCode: "◇", nfHTML: "◇", nfCSS: "◇",
 	nfJSON: "≡", nfConfig: "≡", nfCubes: "≡", nfDocker: "≡", nfGnu: "≡",

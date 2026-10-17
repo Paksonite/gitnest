@@ -33,9 +33,9 @@ set `icons:` in the config:
 
 | `icons:` | |
 |---|---|
-| `symbols` (default) | Unicode symbols that the fonts every system ships have (DejaVu Sans Mono on Debian and Ubuntu, Menlo or SF Mono on macOS): `□ src/`, `◇ main.go`, `≡ config.yaml`, `¶ README.md`, `$ deploy.sh`, `⌥ main` — no font to install, no emoji |
+| `symbols` (default) | Unicode symbols that the fonts every system ships have (DejaVu Sans Mono on Debian and Ubuntu, Menlo or SF Mono on macOS): `▾ src/`, `◇ main.go`, `≡ config.yaml`, `¶ README.md`, `$ deploy.sh`, `⌥ main` — no font to install, no emoji |
 | `nerd` | [Nerd Font](https://www.nerdfonts.com) glyphs: a separate icon per language and git icons for branches, tags and the reflog; needs a Nerd Font |
-| `plain` | no file, folder or branch icons |
+| `plain` | no file or branch icons |
 
 To use the Nerd Font set:
 
