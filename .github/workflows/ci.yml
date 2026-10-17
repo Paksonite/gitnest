@@ -27,7 +27,7 @@ jobs:
       - name: shell scripts
         if: runner.os == 'Linux'
         run: |
-          shellcheck install.sh
+          shellcheck install.sh docs/demo-setup.sh
           ./bin/gitnest completion bash | bash -n
           ./bin/gitnest shell bash | bash -n
 
