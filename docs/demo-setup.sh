@@ -119,11 +119,12 @@ push
 upstream 90 "Release 2.4.0"
 upstream 60 "Update dependencies"
 
-# cli: clean and up to date.
+# cli: clean, one commit behind.
 repo github.example.com/ann/cli github.example.com/ann/cli
 commit 20000 main.go "Initial commit" "package main"
 commit 15000 README.md "Add usage" "# cli"
 push
+upstream 240 "Add --json flag"
 
 # infra: uncommitted changes and one commit ahead.
 repo gitlab.example.com/platform/infra gitlab.example.com/platform/infra
@@ -138,7 +139,7 @@ commit 50000 index.md "Start the handbook" "# Platform docs"
 push
 echo "## Onboarding" >>index.md
 
-# billing and auth: work projects, one ahead and behind.
+# billing and auth: work projects, one ahead and behind, one behind.
 repo work/billing git.example.com/work/billing
 commit 7000 invoice.py "Generate invoices" "def invoice(): ..."
 push
@@ -148,6 +149,7 @@ commit 30 invoice.py "Add refunds" "def refund(): ..."
 repo work/auth git.example.com/work/auth
 commit 80000 token.go "Sign tokens" "package auth"
 push
+upstream 600 "Rotate signing keys"
 
 # dotfiles: local only, no remote.
 git init -q -b main "$HOME/repos/dotfiles"

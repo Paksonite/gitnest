@@ -60,7 +60,7 @@ Sleep 1.2s
 
 # Branches, then squash the two new commits and undo it.
 Type "2"
-Sleep 1.2s
+Sleep 1s
 Type "3"
 Sleep 1s
 Type "s"
@@ -68,16 +68,22 @@ Sleep 1.2s
 Enter
 Sleep 1.6s
 Type "z"
-Sleep 1.2s
+Sleep 1s
+Enter
+Sleep 1.4s
+
+# Back to the list: pull every repository that is behind (ctrl+p).
+Escape
+Sleep 1s
+Ctrl+p
+Sleep 2.2s
 Enter
 Sleep 1.6s
 
-# Back to the list and a second pane next to it.
-Escape
-Sleep 1s
+# A second pane next to the list.
 Ctrl+n
 Sleep 1.5s
 Type "/web"
 Sleep 600ms
 Enter
-Sleep 2.5s
+Sleep 2s
