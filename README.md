@@ -2,7 +2,7 @@
 
 **One terminal UI for all your git repositories.**
 
-![gitnest: the repository list, staging a line, squash and undo, two panes](docs/demo.gif)
+![gitnest: the repository list, pull all, a repository's panels and four panes side by side](docs/demo.gif)
 
 gitnest finds every repository under your project folders and shows them in
 one list. Open any of them to stage, commit, branch, rebase and push, all
@@ -22,15 +22,25 @@ needs `git`.
 - **Fits your terminal.** Ten themes plus your own, optional Nerd Font
   icons, zsh and bash integration.
 
-## Install
+## Install and update
 
-**macOS** (Homebrew):
+### macOS
+
+Install (Homebrew, macOS 13+):
 
 ```sh
 brew install --cask paksonite/tap/gitnest
 ```
 
-**Debian / Ubuntu** (`.deb` from the latest release; Fedora has `.rpm`):
+Update:
+
+```sh
+brew update && brew upgrade --cask gitnest
+```
+
+### Debian / Ubuntu
+
+Install the `.deb` from the latest release (Debian 12+, Ubuntu 22.04+):
 
 ```sh
 arch=$(dpkg --print-architecture)
@@ -39,14 +49,16 @@ curl -fsSLO "https://github.com/Paksonite/gitnest/releases/download/v${version}/
 sudo apt install -y "./gitnest_${version}_${arch}.deb"
 ```
 
-**Any macOS or Linux** (no root, into `~/.local/bin`):
+Update (downloads the new `.deb`, verifies its checksum and installs it):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Paksonite/gitnest/main/install.sh | sh
+gitnest update
 ```
 
-Requirements, `go install`, archives and updating are covered in
-[docs/INSTALL.md](docs/INSTALL.md).
+`gitnest update` works for every install method, and the header shows
+`⬆ <version> · gitnest update` when a new release is out. The install
+script for any macOS or Linux, Fedora `.rpm` packages, `go install` and
+uninstalling are in [docs/INSTALL.md](docs/INSTALL.md).
 
 ## Quick start
 
