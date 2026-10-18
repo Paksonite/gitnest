@@ -1,6 +1,6 @@
 # E2E findings
 
-Run 2026-10-18 23:46 on arm64, gitnest from `d6e5087`; `python3 e2e/run.py` reproduces it.
+Run 2026-10-18 23:57 on arm64, gitnest from `3647e4f`; `python3 e2e/run.py` reproduces it.
 
 **230 of 230 checks pass.**
 
