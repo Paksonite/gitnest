@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"github.com/charmbracelet/lipgloss"
+
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -208,17 +210,16 @@ func (s syncCount) styled() (plain, styled string) {
 	case s.tracked == 0:
 		return "", ""
 	case s.ahead == 0 && s.behind == 0:
-		return " ✓", fg(cGreen, " ✓")
+		return "✓", fg(cGreen, "✓")
 	}
+	var ps, ss []string
 	if s.ahead > 0 {
-		plain += " ↑" + strconv.Itoa(s.ahead)
-		styled += fg(cGreen, " ↑"+strconv.Itoa(s.ahead))
+		ps, ss = append(ps, "↑"+strconv.Itoa(s.ahead)), append(ss, fg(cGreen, "↑"+strconv.Itoa(s.ahead)))
 	}
 	if s.behind > 0 {
-		plain += " ↓" + strconv.Itoa(s.behind)
-		styled += fg(cRed, " ↓"+strconv.Itoa(s.behind))
+		ps, ss = append(ps, "↓"+strconv.Itoa(s.behind)), append(ss, fg(cRed, "↓"+strconv.Itoa(s.behind)))
 	}
-	return plain, styled
+	return strings.Join(ps, " "), strings.Join(ss, " ")
 }
 
 func (a *App) syncBelow(n *dirNode) syncCount {
@@ -299,22 +300,39 @@ func (a *App) rowDir(idx int) string {
 	return a.groupKey(parts)
 }
 
-func dirRow(r listRow, collapsed bool, w int) rowItem {
+// dirRow is a group of the list tree: its name and how many repositories
+// it holds, then, in the status column, how they stand: how many are dirty,
+// ✓ when all are up to date, or how many have commits to push (↑) and pull
+// (↓).
+func dirRow(r listRow, collapsed bool, w, nameW int) rowItem {
 	indent := strings.Repeat("  ", r.depth)
 	arrow := "▾"
 	if collapsed {
 		arrow = "▸"
 	}
 	icon := fileIcon(r.dir, true, collapsed)
-	plain := indent + "  " + arrow + " " + icon + r.name + "/"
-	styled := indent + "  " + fg(cDim, arrow) + " " + fg(cCyan, icon) + bold(r.name+"/")
-	info := " " + strconv.Itoa(r.count)
-	sinfo := fg(cDim, info)
+	count := " " + strconv.Itoa(r.count)
+	plain := indent + "  " + arrow + " " + icon + r.name + "/" + count
+	styled := indent + "  " + fg(cDim, arrow) + " " + fg(cCyan, icon) + bold(r.name+"/") + fg(cDim, count)
+	// The status column starts after the mark, name and branch columns.
+	at := 2 + nameW + 1 + 16 + 1
+	var sp, ss string
 	if r.dirty > 0 {
-		info += " ●" + strconv.Itoa(r.dirty)
-		sinfo += fg(cYellow, " ●"+strconv.Itoa(r.dirty))
+		sp = strconv.Itoa(r.dirty) + " dirty"
+		ss = fg(cYellow, sp)
 	}
-	sp, ss := r.sync.styled()
-	info, sinfo = info+sp, sinfo+ss
-	return rowItem{plain: fit(plain+info, w), styled: styled + sinfo}
+	if p, s := r.sync.styled(); p != "" {
+		if sp != "" {
+			sp, ss = sp+" ", ss+" "
+		}
+		sp, ss = sp+p, ss+s
+	}
+	switch {
+	case sp == "":
+	case lipgloss.Width(plain) < at:
+		plain, styled = fit(plain, at), fit(styled, at)
+	default: // a long name: right after it
+		plain, styled = plain+"  ", styled+"  "
+	}
+	return rowItem{plain: fit(plain+sp, w), styled: styled + ss}
 }

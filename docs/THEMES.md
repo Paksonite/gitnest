@@ -21,10 +21,13 @@ colors:
   accent: "#ff9e64"
 ```
 
-A theme paints the whole screen: `background` behind everything and
-`surface` behind the panels (cards), with its `text` colour, so a light theme
-reads well in a dark terminal and the other way round. Leave them empty
-(`""`) to keep the terminal's own colours; the `terminal` theme does.
+Dark themes paint the whole screen: `background` behind everything and
+`surface` behind the panels (cards), with their `text` colour, so they look
+the same in any terminal. Light themes keep the terminal's own background
+(a light screen painted over everything glares): they are for light
+terminals, and with `mode: auto` gitnest picks the light theme there by
+itself. Leave `background` and `surface` empty (`""`) in your own dark theme
+to keep the terminal's colours, as the `terminal` theme does.
 
 ```sh
 gitnest theme                                    # all themes, and which are in use

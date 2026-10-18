@@ -777,19 +777,10 @@ type rowOpts struct {
 }
 
 func repoRow(r scan.Repo, o rowOpts) rowItem {
-	sel, dirty := " ", " "
+	sel := " "
 	pad := strings.Repeat("  ", o.indent)
 	if o.marked {
 		sel = "✓"
-	}
-	dc := cYellow
-	switch {
-	case r.State != gitx.StateNone || r.Conflicts:
-		dirty, dc = "!", cRed
-	case r.Changes > 0:
-		dirty = "●"
-	case r.Info.Upstream && (r.Info.Ahead > 0 || r.Info.Behind > 0):
-		dirty, dc = "●", cCyan // clean, but to push or pull
 	}
 	suffix, styledSuffix := "", ""
 	if o.label != "" {
@@ -808,12 +799,34 @@ func repoRow(r scan.Repo, o rowOpts) rowItem {
 	name := fit(pad+r.Name+suffix, o.nameW)
 	styledName := fit(pad+highlight(r.Name, o.hl, bold, func(s string) string { return hlStyle.Render(s) })+styledSuffix, o.nameW)
 	br := fit(r.Branch, 16)
-	sync := fit(r.Info.Sync(), 10)
+	sp, ss := statusCell(r)
 	rel := fmt.Sprintf("%6s", relTime(r.LastUnix, o.now))
-	plain := sel + dirty + " " + name + " " + br + " " + sync + " " + rel
-	styled := fg(cGreen, sel) + fg(dc, dirty) + " " + styledName + " " + fg(cCyan, br) + " " +
-		fit(syncStyled(r.Info), 10) + " " + fg(cDim, rel)
+	plain := sel + " " + name + " " + br + " " + fit(sp, statusW) + " " + rel
+	styled := fg(cGreen, sel) + " " + styledName + " " + fg(cCyan, br) + " " +
+		fit(ss, statusW) + " " + fg(cDim, rel)
 	return rowItem{plain: plain, styled: styled}
+}
+
+// statusW is the width of the list's status column.
+const statusW = 12
+
+// statusCell is a repository's state in the list's status column, the
+// one place it is shown: an operation in progress or a conflict (!), else
+// changed files (~3), commits to push (↑1) and pull (↓2), no upstream (∅),
+// or ✓ when clean and in sync.
+func statusCell(r scan.Repo) (plain, styled string) {
+	switch {
+	case r.State != gitx.StateNone:
+		s := "! " + strings.ToLower(r.State.String())
+		return s, fg(cRed, s)
+	case r.Conflicts:
+		return "! conflict", fg(cRed, "! conflict")
+	}
+	plain, styled = r.Info.Sync(), syncStyled(r.Info)
+	if plain == "" && r.Upstream {
+		return "✓", fg(cGreen, "✓")
+	}
+	return plain, styled
 }
 
 func (a *App) viewRepos() string {
@@ -870,7 +883,7 @@ func (a *App) viewRepos() string {
 	var items []rowItem
 	for _, row := range rs.rows[min(rs.off, end):end] {
 		if row.repo < 0 {
-			items = append(items, dirRow(row, rs.collapsed[row.dir] && rs.filter == "", inner))
+			items = append(items, dirRow(row, rs.collapsed[row.dir] && rs.filter == "", inner, nameW))
 			continue
 		}
 		r := rs.all[row.repo]
@@ -927,7 +940,7 @@ func (a *App) viewRepos() string {
 
 // listHeader names the columns of repoRow: the age is that of the last commit.
 func listHeader(nameW int) string {
-	return fg(cDim, "   "+fit("repository", nameW)+" "+fit("branch", 16)+" "+fit("status", 10)+" "+fmt.Sprintf("%6s", "commit"))
+	return fg(cDim, "  "+fit("repository", nameW)+" "+fit("branch", 16)+" "+fit("status", statusW)+" "+fmt.Sprintf("%6s", "commit"))
 }
 
 func rootsList(roots []string) string {

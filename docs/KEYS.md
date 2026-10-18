@@ -26,13 +26,16 @@ Press `?` in the app for the same list. Panes are described in
 | `T` | theme and icons |
 | `ctrl+n` | open a second gitnest next to this one ([panes](#several-repositories-side-by-side)) |
 
-The columns are the repository, its current branch, its status — `↑2` commits
-to push, `↓3` to pull, `~4` changed files, `∅` no upstream — and how long ago
-the last commit was (`5h`, `3d`, `4mo`, `2y`). `✦` marks repositories found
-since gitnest started, a yellow `●` uncommitted changes, a blue `●` a clean
-repository with commits to push or pull, `!` a conflict or an operation in
-progress. Folded directories of the tree stay folded the next
-time. Clones of the same project from
+The columns are the repository, its current branch, its status and how long
+ago the last commit was (`5h`, `3d`, `4mo`, `2y`). The status column is the one
+place a repository's state is shown: `✓` clean and in sync with its upstream,
+`~4` changed files, `↑2` / `↓3` commits to push / pull, `∅` no upstream, `!`
+a conflict or an operation in progress (`! rebasing`). A group of the tree
+shows how many repositories it holds after its name and, in the status
+column, how many are dirty and `✓` when all are up to date (or how many have
+commits to push `↑` and pull `↓`). `✓` in the first column marks a repository
+(`space`); after the name, `★` is a favorite and `✦` a repository found since
+gitnest started. Folded directories of the tree stay folded the next time. Clones of the same project from
 different hosts are told apart by host (`org-core-dns · forgejo`).
 
 ## Inside a repository

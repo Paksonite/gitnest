@@ -183,10 +183,12 @@ func TestGroupSyncMarks(t *testing.T) {
 	got := map[string]string{}
 	for _, r := range a.rs.rows {
 		if r.repo < 0 {
-			got[r.name] = dirRow(r, false, 60).plain
+			got[r.name] = dirRow(r, false, 80, 30).plain
 		}
 	}
-	if !strings.Contains(got["ok"], "2 ✓") || !strings.Contains(got["mixed"], "↑1 ↓1") || strings.ContainsAny(got["none"], "✓↑↓") {
+	// The counts follow the name; the state sits in the status column (at 2+30+1+16+1).
+	if !strings.HasPrefix(got["ok"][strings.Index(got["ok"], "ok/"):], "ok/ 2 ") || !strings.HasSuffix(strings.TrimSpace(got["ok"]), "✓") ||
+		[]rune(got["ok"])[50] != '✓' || !strings.Contains(got["mixed"], "↑1 ↓1") || strings.ContainsAny(got["none"], "✓↑↓") {
 		t.Errorf("group rows: %q", got)
 	}
 	card := strings.Join(groupCard("ok", []string{"/r/ok/a", "/r/ok/b"}, map[string]scan.Repo{"/r/ok/a": a.rs.all[0], "/r/ok/b": a.rs.all[1]}, 60, 10), "\n")

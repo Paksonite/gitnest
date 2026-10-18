@@ -239,3 +239,27 @@ func key(s string) tea.KeyMsg {
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 }
+
+func TestStatusCell(t *testing.T) {
+	cases := []struct {
+		info gitx.Info
+		want string
+	}{
+		{gitx.Info{Upstream: true}, "✓"},
+		{gitx.Info{Upstream: true, Changes: 3}, "~3"},
+		{gitx.Info{Upstream: true, Ahead: 1, Behind: 2}, "↑1 ↓2"},
+		{gitx.Info{}, "∅"},
+		{gitx.Info{Upstream: true, Conflicts: true, Changes: 1}, "! conflict"},
+		{gitx.Info{Upstream: true, State: gitx.StateRebasing}, "! rebasing"},
+	}
+	for _, c := range cases {
+		if got, _ := statusCell(scan.Repo{Info: c.info}); got != c.want {
+			t.Errorf("%+v: %q, want %q", c.info, got, c.want)
+		}
+	}
+	// The mark column holds only the mark: no second status dot.
+	row := repoRow(scan.Repo{Name: "api", Info: gitx.Info{Upstream: true, Changes: 2}}, rowOpts{nameW: 20})
+	if strings.Count(row.plain, "●") != 0 || !strings.HasPrefix(row.plain, "  api") {
+		t.Errorf("row: %q", row.plain)
+	}
+}
