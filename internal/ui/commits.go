@@ -87,7 +87,7 @@ func commitRow(c gitx.Commit, st hashState, g []gcell, copied bool) rowItem {
 		refs = " (" + c.Refs + ")"
 	}
 	ini := initials(c.Author)
-	gp, gs := graphText(g)
+	gp, gs := graphText(g, authorColor(c.Author))
 	mark := " "
 	if copied {
 		mark = "▍"
