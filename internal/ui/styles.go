@@ -121,6 +121,12 @@ func clamp(v, lo, hi int) int {
 	return v
 }
 
+// centerOff is the first of n rows to show in h lines so that row cur sits
+// near the middle, without scrolling past either end: when all n fit, 0.
+func centerOff(cur, n, h int) int {
+	return clamp(cur-h/2, 0, max(0, n-h))
+}
+
 func scrollTo(cur, off, h int) int {
 	if h <= 0 {
 		return 0

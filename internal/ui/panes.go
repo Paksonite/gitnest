@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"go/ast"
 	"maps"
 	"reflect"
 	"strings"
@@ -99,8 +100,20 @@ func wrap(id int, cmd tea.Cmd) tea.Cmd {
 			}
 			return tea.Sequence(cmds...)()
 		}
+		if forProgram(msg) {
+			return msg
+		}
 		return paneMsg{id: id, msg: msg}
 	}
+}
+
+// forProgram reports whether msg is one of Bubble Tea's own requests to the
+// program (run a process such as the editor, clear the screen…): those are
+// unexported types the program acts on itself, so they must reach it as
+// they are. Their answers (execDoneMsg) come back to the focused pane.
+func forProgram(msg tea.Msg) bool {
+	t := reflect.TypeOf(msg)
+	return t != nil && t.PkgPath() == "github.com/charmbracelet/bubbletea" && !ast.IsExported(t.Name())
 }
 
 func shellRescanTick(a *App) tea.Cmd {
