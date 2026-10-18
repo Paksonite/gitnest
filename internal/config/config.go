@@ -33,6 +33,8 @@ type Config struct {
 	Icons          string   `yaml:"icons"` // "symbols", "nerd" (needs a Nerd Font) or "plain"
 	Theme          Theme    `yaml:"theme"`
 	UpdateCheck    *bool    `yaml:"update_check"` // nil means on
+	Start          string   `yaml:"start"`        // "dashboard" (default) or "list"
+	Mouse          *bool    `yaml:"mouse"`        // nil means on
 }
 
 const template = `# gitnest configuration
@@ -64,6 +66,12 @@ icons: symbols
 # Check GitHub once a day for a new gitnest release and say so in the
 # header ("gitnest update" installs it). GITNEST_NO_UPDATE_CHECK=1 also turns it off.
 update_check: true
+# What gitnest opens with: "dashboard" (activity, what needs attention) or
+# "list" (the repositories). H switches between them.
+start: dashboard
+# Click and scroll with the mouse. While it is on, select text in the
+# terminal with shift (or option on macOS) held down.
+mouse: true
 theme:
   # auto follows the terminal background; set dark or light if it guesses wrong.
   mode: auto
@@ -316,3 +324,11 @@ func UpdateCheck(cfg Config) bool {
 	}
 	return cfg.UpdateCheck == nil || *cfg.UpdateCheck
 }
+
+// StartOnDashboard reports whether gitnest opens with the dashboard.
+func StartOnDashboard(cfg Config) bool {
+	return !strings.EqualFold(strings.TrimSpace(cfg.Start), "list")
+}
+
+// MouseOn reports whether the mouse is used (mouse: true, the default).
+func MouseOn(cfg Config) bool { return cfg.Mouse == nil || *cfg.Mouse }

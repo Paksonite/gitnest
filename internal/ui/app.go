@@ -37,6 +37,7 @@ type screen int
 const (
 	scrRepos screen = iota
 	scrRepo
+	scrDash // the dashboard: activity and what needs attention
 )
 
 // ----------------------------------------------------------------- messages
@@ -107,6 +108,8 @@ type App struct {
 	pull      *pullAll    // choosing what "pull all" updates
 	menu      *menu       // filters, actions or the sort & view chooser
 	browse    *browser    // every file of the open repository (B)
+	dash      dashState   // the dashboard
+	from      screen      // where esc in a repository goes back to
 	lastErr   *report     // details of the last failed operation, shown with "!"
 	toast     string
 	toastErr  bool
@@ -120,7 +123,14 @@ func Run(cfg config.Config, noConfig bool, startDir, cdFile string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	a := newApp(ctx, cfg, noConfig, startDir, cdFile)
-	_, err := tea.NewProgram(newShell(a), tea.WithAltScreen(), tea.WithReportFocus()).Run()
+	if startDir == "" && config.StartOnDashboard(cfg) {
+		a.scr = scrDash
+	}
+	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
+	if config.MouseOn(cfg) {
+		opts = append(opts, tea.WithMouseCellMotion())
+	}
+	_, err := tea.NewProgram(newShell(a), opts...).Run()
 	return err
 }
 
@@ -193,7 +203,15 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.w, a.h = m.Width, m.Height
 		a.sizeEditor()
 	case reposMsg:
-		return a, a.onRepos(m)
+		cmd := a.onRepos(m)
+		if a.scr == scrDash && a.dash.act == nil {
+			cmd = tea.Batch(cmd, a.loadActivity())
+		}
+		return a, cmd
+	case activityMsg:
+		a.onActivity(m)
+	case tea.MouseMsg:
+		return a, a.onMouse(m)
 	case scanMsg:
 		return a, a.onScan(m)
 	case statusMsg:
@@ -320,8 +338,11 @@ func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 	}
-	if a.scr == scrRepos {
+	switch a.scr {
+	case scrRepos:
 		return a.reposKey(k)
+	case scrDash:
+		return a.dashKey(k)
 	}
 	return a.repoKey(k)
 }
@@ -510,6 +531,8 @@ func (a *App) View() string {
 		return a.viewBrowser()
 	case a.scr == scrRepos:
 		return a.viewRepos()
+	case a.scr == scrDash:
+		return a.viewDashboard()
 	}
 	return a.viewRepo()
 }

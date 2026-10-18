@@ -64,7 +64,10 @@ type repoState struct {
 	refs          []gitx.RefEntry // HEAD's reflog, newest first
 	otherCur      int             // cursor of the commits/reflog list not shown
 	mainH         int             // rows of the main panel on screen (set while rendering)
-	mainLen       int             // lines in the main panel
+	leftW         int             // width of the left panels (set while rendering)
+	panelTop      [4]int          // screen row of each left panel's top border, -1 when hidden
+	panelH        [4]int
+	mainLen       int // lines in the main panel
 }
 
 // Tabs of the Branches panel.
@@ -304,6 +307,10 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 		rp.mainFocus = true
 		return nil
 	case actBack:
+		if a.from == scrDash {
+			a.scr = scrDash
+			return a.gather(a.paths())
+		}
 		a.scr = scrRepos
 		return a.gather(a.paths())
 	case actNextPanel:
@@ -841,6 +848,15 @@ func (a *App) viewRepo() string {
 		fmt.Sprintf("[4] Stash (%d)", len(rp.stashes)),
 	}
 	heights := panelHeights(bodyH, rp.focus, [4]int{rp.count(0), rp.count(1), rp.count(2), rp.count(3)})
+	rp.leftW, rp.panelH = leftW, heights
+	top := 1 // below the header
+	for i := range heights {
+		rp.panelTop[i] = -1
+		if heights[i] > 0 {
+			rp.panelTop[i] = top
+			top += heights[i]
+		}
+	}
 	panels := make([]string, 4)
 	for i := 0; i < 4; i++ {
 		lh := heights[i] - 3 // borders and the title row

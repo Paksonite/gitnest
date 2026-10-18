@@ -3,6 +3,39 @@
 Press `?` in the app for the same list. Panes are described in
 [Several repositories side by side](#several-repositories-side-by-side).
 
+## The dashboard
+
+gitnest opens with the dashboard (`start: list` in the config opens the list
+instead; `H` switches between them):
+
+- **Activity**: commits per day across every repository for the last 26
+  weeks, darker for busier days, with the months above.
+- **Overview**: how many repositories are dirty, have commits to push or
+  pull, have no upstream or are in the middle of an operation; commits this
+  week and last, the busiest day, and your streak of days with commits.
+- **Needs attention**: operations in progress and conflicts first, then
+  uncommitted changes, commits to pull, commits to push.
+- **Most active**: repositories by commits in the last 12 weeks, each with a
+  sparkline of commits per week.
+- **Recent commits** across every repository, with author initials.
+
+| Key | |
+|---|---|
+| `↑` `↓` | move between the repositories listed |
+| `enter` | open the repository (`esc` comes back to the dashboard) |
+| `/` | search the repositories |
+| `esc` / `H` | the repository list |
+| `r` | read the activity again |
+
+## The mouse
+
+The wheel scrolls what is under the pointer (the diff, a file, a list); a
+click selects a row and a click on the selected row opens it (or folds a
+group); in a repository a click focuses the panel, and with panes a click
+focuses the pane. While the mouse is on, select text in the terminal with
+`shift` (`option` in macOS Terminal and iTerm2) held down; `mouse: false` in
+the config turns it off.
+
 ## The repository list
 
 | Key | |
@@ -11,6 +44,7 @@ Press `?` in the app for the same list. Panes are described in
 | `enter` | open the repository |
 | `` ` `` | list view: flat, grouped by folder, grouped by remote host and owner (github.com/ann/; local/ without a remote); `enter` folds a group |
 | `s` | sort: recently used, name, last commit, needs attention |
+| `H` | the dashboard: activity, what needs attention, the most active repositories |
 | `v` | sort & view: the sort order, a flat or grouped list (by folder or remote), all repositories or favorites only |
 | `B` | open the repository and browse its files (tree and syntax-coloured view) |
 | `*` | star the repository (or the marked ones) as a favorite, shown with a star; again to unstar |

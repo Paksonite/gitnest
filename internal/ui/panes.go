@@ -154,6 +154,8 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 	case tea.KeyMsg:
 		return s, s.onKey(m)
+	case tea.MouseMsg:
+		return s, s.onMouse(m)
 	case tea.FocusMsg, tea.BlurMsg:
 		return s, s.deliver(s.focused(), msg)
 	case updateMsg:
@@ -481,8 +483,11 @@ func (s *Shell) resize() {
 func (p *pane) title(n int) string {
 	a := p.app
 	t := fmt.Sprintf("%d · ", n)
-	if a.scr == scrRepo {
+	switch a.scr {
+	case scrRepo:
 		return t + a.rp.name + " · " + a.rp.info.Branch
+	case scrDash:
+		return t + "dashboard"
 	}
 	return t + "repositories"
 }

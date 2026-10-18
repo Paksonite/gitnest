@@ -32,6 +32,7 @@ const (
 	scPullAll               // choosing what "pull all" updates
 	scMenu                  // filters, actions, sort & view
 	scBrowser               // every file of the repository (B)
+	scDash                  // the dashboard (start screen, H)
 	scopes
 )
 
@@ -57,6 +58,7 @@ var scopeTitles = [scopes]string{
 	scPullAll:  "Pull all (ctrl+p in the list)",
 	scMenu:     "Menus: filters (F), actions (a), sort & view (v)",
 	scBrowser:  "Files of the repository (B)",
+	scDash:     "Dashboard (H in the list; the start screen)",
 }
 
 type action int
@@ -95,6 +97,7 @@ const (
 	actFilters
 	actActions
 	actViews
+	actDashboard
 	actFavorite
 	actBrowse
 	actMarkAll
@@ -262,6 +265,7 @@ var keymap = [scopes][]binding{
 		b(actBottom, "last repository", "", "end", "G").show(1),
 		b(actSort, "sort: recent, name, last commit, status", "sort", "s"),
 		b(actViews, "sort & view: sort order, flat or grouped list, favorites only", "view", "v"),
+		b(actDashboard, "the dashboard: activity, what needs attention", "dashboard", "H"),
 		b(actFavorite, "star / unstar the repository (or the marked ones) as a favorite", "", "*"),
 		b(actBrowse, "browse every file of the repository, with syntax colours", "", "B"),
 		b(actDirtyOnly, "only repositories with changes", "dirty only", "d"),
@@ -369,6 +373,17 @@ var keymap = [scopes][]binding{
 		b(actPaneUp, "focus the pane above", "", "ctrl+up", "alt+up").hidden(),
 		b(actPaneDown, "focus the pane below", "", "ctrl+down", "alt+down").hidden(),
 		b(actPaneLayout, "pane layout: grid, side by side, stacked", "", "ctrl+g"),
+	},
+	scDash: {
+		b(actUp, "move up", "", "up", "k"),
+		b(actDown, "move down", "", "down", "j"),
+		b(actTop, "first", "", "home", "g").show(1),
+		b(actBottom, "last", "", "end", "G").show(1),
+		b(actOpen, "open the repository", "open", "enter"),
+		b(actSearch, "search the repositories", "search", "/"),
+		b(actBack, "the repository list", "list", "esc", "H"),
+		b(actRefreshList, "read the activity again", "refresh", "r"),
+		b(actQuit, "quit", "quit", "q"),
 	},
 	scBrowser: {
 		b(actUp, "move up (or scroll the file)", "", "up", "k"),
@@ -529,7 +544,7 @@ func otherHints(panel scope, scs ...scope) string {
 
 // helpLines renders every scope's bindings for the help overlay.
 func helpLines() []string {
-	order := []scope{scPanes, scList, scFilter, scMenu, scPullAll, scRepo, scBrowser, scFiles, scBranches, scCommits, scStash, scStaging, scPlan, scTags, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
+	order := []scope{scPanes, scDash, scList, scFilter, scMenu, scPullAll, scRepo, scBrowser, scFiles, scBranches, scCommits, scStash, scStaging, scPlan, scTags, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
 	var out []string
 	for _, sc := range order {
 		if len(out) > 0 {

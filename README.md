@@ -9,6 +9,9 @@ one list. Open any of them to stage, commit, branch, rebase and push, all
 from the keyboard. It is a single binary for macOS 13+ and Linux, and only
 needs `git`.
 
+- **A dashboard to start the day.** Commit activity across every repository
+  as a heatmap, what needs attention, the most active repositories with
+  sparklines, the latest commits; clickable, like the rest (mouse).
 - **Every repository at a glance.** Branch, ahead/behind, uncommitted
   changes and last commit, with fuzzy search (`/`), sorting and grouping by folder.
 - **New clones appear on their own.** Background scans pick up repositories

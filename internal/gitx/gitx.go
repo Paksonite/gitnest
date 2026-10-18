@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Toplevel returns the repository root containing dir.
@@ -1107,6 +1108,32 @@ func readmeLine(dir string) string {
 		return ""
 	}
 	return ""
+}
+
+// ActivityCommit is one commit for the activity dashboard.
+type ActivityCommit struct {
+	Unix                   int64
+	Short, Subject, Author string
+}
+
+// Activity lists the commits on the local branches since since, newest
+// first, at most max of them.
+func Activity(ctx context.Context, dir string, since time.Time, max int) ([]ActivityCommit, error) {
+	out, err := run(ctx, kRead, dir, nil, "log", "--branches", "--no-merges",
+		"--since="+strconv.FormatInt(since.Unix(), 10), "-n", strconv.Itoa(max), "--format=%ct%x1f%h%x1f%an%x1f%s")
+	if err != nil {
+		return nil, err
+	}
+	var cs []ActivityCommit
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		f := strings.SplitN(l, "\x1f", 4)
+		if len(f) < 4 {
+			continue
+		}
+		unix, _ := strconv.ParseInt(f[0], 10, 64)
+		cs = append(cs, ActivityCommit{Unix: unix, Short: f[1], Author: f[2], Subject: f[3]})
+	}
+	return cs, nil
 }
 
 // ListFiles lists the repository's files: tracked ones and untracked ones

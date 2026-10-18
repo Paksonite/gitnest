@@ -22,6 +22,7 @@ type reposState struct {
 	view        []int    // indexes into all, after filtering
 	cur, off    int
 	listH       int // rows of the list on screen (set while rendering)
+	listW       int // width of the list panel (set while rendering)
 	filter      string
 	filtering   bool
 	status      int         // status filter: stAll, stDirty… (F, d)
@@ -483,6 +484,9 @@ func (a *App) previewCmd() tea.Cmd {
 func (a *App) openDir(path string) tea.Cmd {
 	a.st.Touch(path)
 	delete(a.rs.isNew, path)
+	if a.scr != scrRepo {
+		a.from = a.scr
+	}
 	a.scr = scrRepo
 	a.rp = repoState{dir: path, name: filepath.Base(path)}
 	return loadRepoData(a.ctx, path)
@@ -644,6 +648,8 @@ func (a *App) listAction(act action) tea.Cmd {
 		a.openActions()
 	case actViews:
 		a.openViews()
+	case actDashboard:
+		return a.openDashboard()
 	case actBrowse:
 		if p := a.selectedPath(); p != "" {
 			return tea.Batch(a.openDir(p), a.openBrowser(p))
@@ -875,7 +881,7 @@ func (a *App) viewRepos() string {
 	nameW := clamp(inner-39, 10, 60)
 	now := time.Now()
 	lh := bodyH - 4 // borders, panel title and the column headers
-	rs.listH = lh
+	rs.listH, rs.listW = lh, listW
 	rs.off = scrollTo(rs.cur, rs.off, lh)
 	// Only the rows on screen are built: styling every row of a long list
 	// on each frame is what makes big lists sluggish.

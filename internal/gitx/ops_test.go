@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 var ansi = regexp.MustCompile("\x1b\\[[0-9;]*m")
@@ -275,5 +276,27 @@ func TestTags(t *testing.T) {
 	}
 	if got := git(t, dir, "tag", "--list"); got != "v1.0.0" {
 		t.Errorf("local tags: %q", got)
+	}
+}
+
+func TestActivity(t *testing.T) {
+	dir := newRepo(t)
+	commit(t, dir, "a.txt", "a\n", "first")
+	commit(t, dir, "b.txt", "b\n", "second")
+	git(t, dir, "checkout", "-q", "-b", "side")
+	commit(t, dir, "c.txt", "c\n", "on a branch")
+	cs, err := Activity(context.Background(), dir, time.Now().Add(-time.Hour), 10)
+	subjects := map[string]bool{}
+	for _, c := range cs {
+		subjects[c.Subject] = c.Unix > 0 && c.Author != ""
+	}
+	if err != nil || len(cs) != 3 || !subjects["on a branch"] || !subjects["first"] { // every local branch
+		t.Fatalf("Activity = %+v, %v", cs, err)
+	}
+	if cs, _ := Activity(context.Background(), dir, time.Now().Add(-time.Hour), 2); len(cs) != 2 {
+		t.Errorf("max: %d", len(cs))
+	}
+	if cs, _ := Activity(context.Background(), dir, time.Now().Add(time.Hour), 10); len(cs) != 0 {
+		t.Errorf("since the future: %d", len(cs))
 	}
 }
