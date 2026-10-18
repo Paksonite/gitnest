@@ -298,6 +298,8 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 
 	// navigation
 	switch act {
+	case actBrowse:
+		return a.openBrowser(rp.dir)
 	case actFocusMain:
 		rp.mainFocus = true
 		return nil

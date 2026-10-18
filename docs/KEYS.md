@@ -12,6 +12,7 @@ Press `?` in the app for the same list. Panes are described in
 | `` ` `` | list view: flat, grouped by folder, grouped by remote host and owner (github.com/ann/; local/ without a remote); `enter` folds a group |
 | `s` | sort: recently used, name, last commit, needs attention |
 | `v` | sort & view: the sort order, a flat or grouped list (by folder or remote), all repositories or favorites only |
+| `B` | open the repository and browse its files (tree and syntax-coloured view) |
 | `*` | star the repository (or the marked ones) as a favorite, shown with a star; again to unstar |
 | `d` | only repositories with uncommitted changes |
 | `F` | filters, with how many repositories each keeps: dirty, stashed changes, ahead of or behind the remote, no remote; and by remote host |
@@ -53,7 +54,8 @@ upstream was deleted, `∅` without one.
 | Interactive rebase | `p` pick, `r` reword, `e` edit, `s` squash, `f` fixup, `d` drop, `ctrl+j`/`ctrl+k` move, `enter` run, `esc` cancel |
 | Reflog | `space` check out an entry, `g` reset the branch to it, `[` back to the commits |
 | Stash | `space` apply, `g` pop, `b` branch from it, `d` drop |
-| Anywhere | `p` pull, `ctrl+p` pull --rebase, `P` push, `F` force push, `f` or `ctrl+f` fetch (`ctrl+f` in Branches, where `f` fast-forwards), `z` undo the last history change, `o` quit and cd here, `enter` scroll the diff, `esc` back to the list, `!` full error, `?` help |
+| Files browser | `B`: every file of the repository in a tree, the selected one with line numbers and syntax colours; `enter` folds a folder or scrolls the file, `tab` tree / file, `e` edit, `esc` back |
+| Anywhere | `B` browse the files, `p` pull, `ctrl+p` pull --rebase, `P` push, `F` force push, `f` or `ctrl+f` fetch (`ctrl+f` in Branches, where `f` fast-forwards), `z` undo the last history change, `o` quit and cd here, `enter` scroll the diff, `esc` back to the list, `!` full error, `?` help |
 
 The commit message editor has a **Subject** and an optional **Body**: type the
 subject and press `enter` to commit, or `tab` to write a body, then `ctrl+s`.

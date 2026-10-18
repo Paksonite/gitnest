@@ -106,6 +106,7 @@ type App struct {
 	plan      *planner    // interactive rebase being planned
 	pull      *pullAll    // choosing what "pull all" updates
 	menu      *menu       // filters, actions or the sort & view chooser
+	browse    *browser    // every file of the open repository (B)
 	lastErr   *report     // details of the last failed operation, shown with "!"
 	toast     string
 	toastErr  bool
@@ -213,6 +214,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.onRescanTick()
 	case statusTickMsg:
 		return a, a.onStatusTick()
+	case browseFilesMsg:
+		a.onBrowseFiles(m)
 	case openPanesMsg: // a lone App (no shell) opens the first one itself
 		if len(m.paths) > 0 {
 			return a, a.openDir(m.paths[0])
@@ -289,6 +292,9 @@ func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 	}
 	if a.menu != nil {
 		return a.menuKey(k)
+	}
+	if a.browse != nil && global != actHelp && global != actThemes {
+		return a.browserKey(k)
 	}
 	if a.scr == scrRepos && a.rs.filtering {
 		return a.reposKey(k) // every key belongs to the search query, "?" too
@@ -496,6 +502,8 @@ func (a *App) View() string {
 		return a.viewPullAll()
 	case a.menu != nil:
 		return a.viewMenu()
+	case a.browse != nil:
+		return a.viewBrowser()
 	case a.scr == scrRepos:
 		return a.viewRepos()
 	}

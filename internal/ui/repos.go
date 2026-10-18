@@ -633,6 +633,10 @@ func (a *App) listAction(act action) tea.Cmd {
 		a.openActions()
 	case actViews:
 		a.openViews()
+	case actBrowse:
+		if p := a.selectedPath(); p != "" {
+			return tea.Batch(a.openDir(p), a.openBrowser(p))
+		}
 	case actFavorite:
 		return a.toggleFavorite()
 	case actUnmarkAll:

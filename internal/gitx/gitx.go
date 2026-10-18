@@ -1109,6 +1109,24 @@ func readmeLine(dir string) string {
 	return ""
 }
 
+// ListFiles lists the repository's files: tracked ones and untracked ones
+// that aren't ignored, as slash paths relative to dir.
+func ListFiles(ctx context.Context, dir string) ([]string, error) {
+	out, err := run(ctx, kRead, dir, nil, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var files []string
+	for _, f := range strings.Split(out, "\x00") {
+		if f != "" && !seen[f] { // a conflicted file is listed once per stage
+			seen[f] = true
+			files = append(files, f)
+		}
+	}
+	return files, nil
+}
+
 // MinGitVersion is the oldest git gitnest is tested with (Debian 12 ships
 // 2.39, macOS 2.39+). Older versions mostly work; stashing only staged
 // changes needs 2.35.
