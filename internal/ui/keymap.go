@@ -464,11 +464,16 @@ func hints(scs ...scope) string {
 	for _, sc := range scs {
 		for _, bd := range keymap[sc] {
 			if bd.hint != "" {
-				parts = append(parts, keyLabel(bd.keys[0])+" "+bd.hint)
+				parts = append(parts, keyHint(bd.keys[0], bd.hint))
 			}
 		}
 	}
 	return strings.Join(parts, "  ")
+}
+
+// keyHint is one footer hint: the key in the accent colour, then what it does.
+func keyHint(key, hint string) string {
+	return fg(cAccent, keyLabel(key)) + " " + fg(cDim, hint)
 }
 
 // otherHints is hints for scs without the keys the panel takes over (f
@@ -478,7 +483,7 @@ func otherHints(panel scope, scs ...scope) string {
 	for _, sc := range scs {
 		for _, bd := range keymap[sc] {
 			if bd.hint != "" && lookup(panel, bd.keys[0]) == actNone {
-				parts = append(parts, keyLabel(bd.keys[0])+" "+bd.hint)
+				parts = append(parts, keyHint(bd.keys[0], bd.hint))
 			}
 		}
 	}

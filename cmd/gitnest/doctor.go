@@ -84,8 +84,8 @@ func doctorCmd(args []string) error {
 			warn("theme", fmt.Sprintf("%s theme %q not found (gitnest theme list)", slot.kind, slot.name))
 		}
 	}
-	ok("theme", fmt.Sprintf("dark %s, light %s, mode %s", orDefault(cfg.Theme.Dark, "catppuccin-mocha"),
-		orDefault(cfg.Theme.Light, "catppuccin-latte"), orAuto(cfg.Theme.Mode)))
+	ok("theme", fmt.Sprintf("dark %s, light %s, mode %s", orDefault(cfg.Theme.Dark, "gitnest-dark"),
+		orDefault(cfg.Theme.Light, "gitnest-light"), orAuto(cfg.Theme.Mode)))
 
 	mode, src := config.Icons(cfg)
 	switch mode {

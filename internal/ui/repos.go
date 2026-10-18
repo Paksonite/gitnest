@@ -734,11 +734,14 @@ func repoRow(r scan.Repo, o rowOpts) rowItem {
 	if o.marked {
 		sel = "✓"
 	}
+	dc := cYellow
 	switch {
 	case r.State != gitx.StateNone || r.Conflicts:
-		dirty = "!"
+		dirty, dc = "!", cRed
 	case r.Changes > 0:
 		dirty = "●"
+	case r.Info.Upstream && (r.Info.Ahead > 0 || r.Info.Behind > 0):
+		dirty, dc = "●", cCyan // clean, but to push or pull
 	}
 	suffix, styledSuffix := "", ""
 	if o.label != "" {
@@ -756,10 +759,6 @@ func repoRow(r scan.Repo, o rowOpts) rowItem {
 	sync := fit(r.Info.Sync(), 10)
 	rel := fmt.Sprintf("%6s", relTime(r.LastUnix, o.now))
 	plain := sel + dirty + " " + name + " " + br + " " + sync + " " + rel
-	dc := cYellow
-	if dirty == "!" {
-		dc = cRed
-	}
 	styled := fg(cGreen, sel) + fg(dc, dirty) + " " + styledName + " " + fg(cCyan, br) + " " +
 		fit(syncStyled(r.Info), 10) + " " + fg(cDim, rel)
 	return rowItem{plain: plain, styled: styled}
@@ -775,7 +774,7 @@ func (a *App) viewRepos() string {
 		}
 	}
 
-	head := lipgloss.NewStyle().Bold(true).Foreground(cAccent).Render("gitnest") +
+	head := brand() +
 		fg(cDim, fmt.Sprintf("  %d repos · %d dirty", len(rs.all), dirty))
 	head += a.copiedBadge() + a.updateBadge()
 	if rs.sortMode != sortRecent {

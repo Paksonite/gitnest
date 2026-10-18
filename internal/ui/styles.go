@@ -13,19 +13,19 @@ import (
 )
 
 // The active palette. These are set from the colour theme by usePalette;
-// the defaults are catppuccin-mocha. Terminals without true colour get the
+// the defaults are gitnest-dark. Terminals without true colour get the
 // nearest 256/16-colour match from lipgloss.
 var (
-	cAccent  lipgloss.TerminalColor = lipgloss.Color("#cba6f7")
-	cDim     lipgloss.TerminalColor = lipgloss.Color("#6c7086")
-	cGreen   lipgloss.TerminalColor = lipgloss.Color("#a6e3a1")
-	cRed     lipgloss.TerminalColor = lipgloss.Color("#f38ba8")
-	cYellow  lipgloss.TerminalColor = lipgloss.Color("#f9e2af")
-	cCyan    lipgloss.TerminalColor = lipgloss.Color("#89dceb")
-	cText    lipgloss.TerminalColor = lipgloss.Color("#cdd6f4")
-	cSel     lipgloss.TerminalColor = lipgloss.Color("#45475a")
-	cSelDim  lipgloss.TerminalColor = lipgloss.Color("#313244")
-	cBorder  lipgloss.TerminalColor = lipgloss.Color("#6c7086")
+	cAccent  lipgloss.TerminalColor = lipgloss.Color("#2fd896")
+	cDim     lipgloss.TerminalColor = lipgloss.Color("#6f8a89")
+	cGreen   lipgloss.TerminalColor = lipgloss.Color("#4ade80")
+	cRed     lipgloss.TerminalColor = lipgloss.Color("#f87171")
+	cYellow  lipgloss.TerminalColor = lipgloss.Color("#facc15")
+	cCyan    lipgloss.TerminalColor = lipgloss.Color("#5fb3ff")
+	cText    lipgloss.TerminalColor = lipgloss.Color("#d6e3e1")
+	cSel     lipgloss.TerminalColor = lipgloss.Color("#173a37")
+	cSelDim  lipgloss.TerminalColor = lipgloss.Color("#11272a")
+	cBorder  lipgloss.TerminalColor = lipgloss.Color("#2a4a4c")
 	cAuthors []lipgloss.TerminalColor
 )
 
@@ -77,9 +77,9 @@ func darkBackground(cfg config.Config) bool {
 // pickTheme returns the configured theme for the background, falling back
 // to the default built-in when the name is unknown.
 func pickTheme(set *theme.Set, cfg config.Config, dark bool) (theme.Theme, error) {
-	name, fallback := cfg.Theme.Light, "catppuccin-latte"
+	name, fallback := cfg.Theme.Light, "gitnest-light"
 	if dark {
-		name, fallback = cfg.Theme.Dark, "catppuccin-mocha"
+		name, fallback = cfg.Theme.Dark, "gitnest-dark"
 	}
 	if name == "" {
 		name = fallback
@@ -229,4 +229,15 @@ func tabsTitle(num string, tabs []string, active int, focused bool) string {
 		}
 	}
 	return numStyle.Render(num) + " " + strings.Join(parts, fg(cDim, " - "))
+}
+
+// brand is the "gitnest" at the start of every header; preview builds
+// (gitnest-dev, version dev-<commit>) add a "dev" tag so they can't be
+// mistaken for the released one.
+func brand() string {
+	b := lipgloss.NewStyle().Bold(true).Foreground(cAccent).Render("gitnest")
+	if strings.HasPrefix(Version, "dev-") {
+		b += " " + lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(cYellow).Render(" dev ")
+	}
+	return b
 }

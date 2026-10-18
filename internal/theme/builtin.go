@@ -4,6 +4,21 @@ package theme
 // the light themes a few accents are darkened so text stays readable
 // (every built-in passes Check).
 var builtins = []Theme{
+	// gitnest's own: deep green-black with an emerald accent, the default.
+	{Name: "gitnest-dark", Kind: KindDark, Palette: Palette{
+		Background: "#0b1417", Text: "#d6e3e1", Dim: "#6f8a89", Accent: "#2fd896",
+		Added: "#4ade80", Removed: "#f87171", Warn: "#facc15", Branch: "#5fb3ff",
+		Sel: "#173a37", SelDim: "#11272a", Border: "#2a4a4c",
+		DiffAdd: "#4ade80", DiffDel: "#f87171", DiffHunk: "#5fb3ff", DiffMeta: "#2fd896",
+		Authors: []string{"#2fd896", "#5fb3ff", "#facc15", "#f472b6", "#a78bfa", "#fb923c"},
+	}},
+	{Name: "gitnest-light", Kind: KindLight, Palette: Palette{
+		Background: "#f5faf8", Text: "#1c2b29", Dim: "#5f7674", Accent: "#047857",
+		Added: "#15803d", Removed: "#b91c1c", Warn: "#a15c07", Branch: "#1d4ed8",
+		Sel: "#cdeee2", SelDim: "#e3f3ed", Border: "#8fa8a5",
+		DiffAdd: "#15803d", DiffDel: "#b91c1c", DiffHunk: "#1d4ed8", DiffMeta: "#047857",
+		Authors: []string{"#047857", "#1d4ed8", "#a15c07", "#be185d", "#6d28d9", "#c2410c"},
+	}},
 	{Name: "catppuccin-mocha", Kind: KindDark, Palette: Palette{
 		Background: "#1e1e2e", Text: "#cdd6f4", Dim: "#6c7086", Accent: "#cba6f7",
 		Added: "#a6e3a1", Removed: "#f38ba8", Warn: "#f9e2af", Branch: "#89dceb",

@@ -123,7 +123,7 @@ func TestSetValueNested(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg, _, err := Load()
-	if err != nil || cfg.Theme.Dark != "nord" || cfg.Theme.Light != "catppuccin-latte" {
+	if err != nil || cfg.Theme.Dark != "nord" || cfg.Theme.Light != "gitnest-light" {
 		t.Fatalf("theme = %+v err=%v", cfg.Theme, err)
 	}
 	b, _ := os.ReadFile(Path())

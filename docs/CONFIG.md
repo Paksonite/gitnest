@@ -19,8 +19,8 @@ icons: symbols         # nerd (needs a Nerd Font) or plain
 update_check: true     # look for a new release once a day (false = never)
 theme:
   mode: auto           # follows the terminal background; dark or light to force
-  dark: catppuccin-mocha
-  light: catppuccin-latte
+  dark: gitnest-dark
+  light: gitnest-light
   diff: theme          # "git" keeps your own git diff colours
   accent: ""           # overrides the theme's accent colour
 ```

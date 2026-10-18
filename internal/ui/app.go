@@ -506,7 +506,7 @@ func (a *App) footer(hints string) string {
 	case a.toast != "":
 		t = fg(cGreen, a.toast)
 	}
-	return fit(t, a.w) + "\n" + fit(fg(cDim, hints), a.w)
+	return fit(t, a.w) + "\n" + fit(hints, a.w) // hints() colours keys and text
 }
 
 // cdQuit leaves gitnest so the gn shell function cds into path.

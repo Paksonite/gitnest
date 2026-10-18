@@ -19,7 +19,7 @@ needs `git`.
   run an interactive rebase. `z` undoes any rewrite.
 - **Work across repositories.** Up to six gitnests side by side (`ctrl+n`),
   cherry-pick from one repository into another, pull everything with `ctrl+p`.
-- **Fits your terminal.** Ten themes plus your own, file and branch icons
+- **Fits your terminal.** Twelve themes (gitnest's own green by default) plus your own, file and branch icons
   with any font (richer ones with a Nerd Font), zsh and bash integration.
 
 ## Install and update

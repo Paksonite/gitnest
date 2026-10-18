@@ -817,7 +817,7 @@ func (a *App) viewRepo() string {
 	rp := &a.rp
 	bodyH := a.h - 3
 
-	head := lipgloss.NewStyle().Bold(true).Foreground(cAccent).Render("gitnest") + fg(cDim, " › ") +
+	head := brand() + fg(cDim, " › ") +
 		bold(rp.name) + "  " + fg(cCyan, rp.info.Branch) + " " + syncStyled(rp.info)
 	if st := rp.info.State; st != gitx.StateNone {
 		head += "  " + lipgloss.NewStyle().Bold(true).Foreground(cYellow).Render(st.String()+" — "+stateKeys(st))

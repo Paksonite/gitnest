@@ -69,8 +69,8 @@ theme:
   mode: auto
   # Themes for dark and light backgrounds: press T in the app to pick one,
   # "gitnest theme list" shows them all; custom ones live in themes/*.yaml.
-  dark: catppuccin-mocha
-  light: catppuccin-latte
+  dark: gitnest-dark
+  light: gitnest-light
   # "theme" colours diffs with the theme; "git" keeps your git colours.
   diff: theme
   # Overrides the theme's accent colour; empty keeps the theme's.
@@ -131,7 +131,7 @@ func Default() Config {
 		RescanInterval: 60,
 		StatusInterval: 15,
 		Jobs:           8,
-		Theme:          Theme{Mode: "auto", Dark: "catppuccin-mocha", Light: "catppuccin-latte", Diff: "theme"},
+		Theme:          Theme{Mode: "auto", Dark: "gitnest-dark", Light: "gitnest-light", Diff: "theme"},
 	}
 }
 

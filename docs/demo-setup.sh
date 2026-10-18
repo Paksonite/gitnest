@@ -163,11 +163,11 @@ depth: 4
 rescan_interval: 0
 status_interval: 0
 update_check: false
-icons: unicode
+icons: symbols
 theme:
   mode: dark
-  dark: catppuccin-mocha
-  light: catppuccin-latte
+  dark: gitnest-dark
+  light: gitnest-light
 EOF
 
 cat <<EOF

@@ -51,10 +51,10 @@ func listThemes() error {
 	for _, n := range set.Names() {
 		t, _ := set.Get(n)
 		var marks []string
-		if n == cfg.Theme.Dark || (cfg.Theme.Dark == "" && n == "catppuccin-mocha") {
+		if n == cfg.Theme.Dark || (cfg.Theme.Dark == "" && n == "gitnest-dark") {
 			marks = append(marks, "dark")
 		}
-		if n == cfg.Theme.Light || (cfg.Theme.Light == "" && n == "catppuccin-latte") {
+		if n == cfg.Theme.Light || (cfg.Theme.Light == "" && n == "gitnest-light") {
 			marks = append(marks, "light")
 		}
 		line := fmt.Sprintf("%-20s %-6s", n, t.Kind)
