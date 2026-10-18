@@ -54,7 +54,7 @@ func TestDashboard(t *testing.T) {
 		t.Fatalf("items: %v", a.dash.items)
 	}
 	// j moves, enter opens, esc in the repository comes back here.
-	a.onKey(key("j"))
+	a.onKey(tea.KeyMsg{Type: tea.KeyDown})
 	a.onKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if a.scr != scrRepo || a.rp.dir != "/r/web" {
 		t.Fatalf("enter: screen %d dir %q", a.scr, a.rp.dir)

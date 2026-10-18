@@ -38,7 +38,7 @@ func TestPickerPreviewCancelAndSave(t *testing.T) {
 	if a.picker == nil {
 		t.Fatal("T should open the theme chooser")
 	}
-	a.onKey(key("j")) // gitnest-light, previewed at once
+	a.onKey(tea.KeyMsg{Type: tea.KeyDown}) // gitnest-light, previewed at once
 	if cAccent != lipgloss.Color("#047857") {
 		t.Errorf("preview not applied: accent %v", cAccent)
 	}
@@ -53,7 +53,7 @@ func TestPickerPreviewCancelAndSave(t *testing.T) {
 	// Save tokyo-night (dark): written to theme.dark, mode unchanged.
 	a.onKey(key("T"))
 	for a.picker.names[a.picker.cur] != "tokyo-night" {
-		a.onKey(key("j"))
+		a.onKey(tea.KeyMsg{Type: tea.KeyDown})
 	}
 	a.onKey(tea.KeyMsg{Type: tea.KeyEnter})
 	cfg, _, _ := config.Load()
@@ -64,7 +64,7 @@ func TestPickerPreviewCancelAndSave(t *testing.T) {
 	// Picking a light theme on a dark background also switches the mode.
 	a.onKey(key("T"))
 	for a.picker.names[a.picker.cur] != "gruvbox-light" {
-		a.onKey(key("k"))
+		a.onKey(tea.KeyMsg{Type: tea.KeyUp})
 	}
 	a.onKey(tea.KeyMsg{Type: tea.KeyEnter})
 	cfg, _, _ = config.Load()

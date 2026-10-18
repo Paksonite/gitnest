@@ -98,7 +98,7 @@ func TestMouseSelectAndLink(t *testing.T) {
 	if got := a.selText(); !strings.HasPrefix(got, "Path") || !strings.Contains(got, "/r/platform") {
 		t.Errorf("selected text: %q", got)
 	}
-	a.onKey(key("j")) // any key clears it
+	a.onKey(tea.KeyMsg{Type: tea.KeyDown}) // any key clears it
 	if a.sel.on {
 		t.Error("a key should clear the selection")
 	}

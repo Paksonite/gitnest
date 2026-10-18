@@ -272,7 +272,7 @@ func TestE2EWorkflow(t *testing.T) {
 		sh(t, lib, "commit", "-q", "-m", "add "+n)
 	}
 	drive(t, a, loadRepoData(a.ctx, lib))
-	press(t, a, "3", "j", "i", "j", "d", "enter")
+	press(t, a, "3", "down", "i", "down", "d", "enter")
 	if a.p == nil || !strings.Contains(a.p.title, "Run the rebase plan on 2 commits") {
 		t.Fatalf("plan confirmation: %+v", a.p)
 	}

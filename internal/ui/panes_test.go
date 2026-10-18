@@ -330,17 +330,17 @@ func TestWrapPassesProgramMessages(t *testing.T) {
 
 func TestMenuShowsTopWhenItFits(t *testing.T) {
 	s := shellOf(t, 120, 40, "/r/a", "/r/b")
-	press(t, s, "F")
+	press(t, s, "v")
 	a := s.focused().app
 	for i := 0; i < 4; i++ {
-		press(t, s, "j")
+		press(t, s, "down")
 	}
-	if v := a.View(); !strings.Contains(v, "Status") || !strings.Contains(v, "All repositories") {
+	if v := a.View(); !strings.Contains(v, "View & filters") || !strings.Contains(v, "Sort by") {
 		t.Errorf("moving down hid the top of the menu:\n%s", v)
 	}
 	// In a short window the menu scrolls, and says so.
 	s.Update(tea.WindowSizeMsg{Width: 120, Height: 14})
-	press(t, s, "j", "j", "j")
+	press(t, s, "down", "down", "down")
 	if v := a.View(); !strings.Contains(v, "more") {
 		t.Errorf("a scrolled menu should say there is more:\n%s", v)
 	}

@@ -46,9 +46,6 @@ func (a *App) openActions() {
 			paths := targets
 			return func() tea.Msg { return openPanesMsg{paths: paths} }
 		}},
-		menuHeader("Marks"),
-		menuItem{label: "Mark every repository shown", key: "A", pick: act(actMarkAll)},
-		menuItem{label: "Unmark everything", key: "U", pick: act(actUnmarkAll)},
 	)
 	a.openMenu(m)
 }

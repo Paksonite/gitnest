@@ -130,9 +130,9 @@ func TestMainPanelScroll(t *testing.T) {
 	if !a.rp.mainFocus {
 		t.Fatal("enter should focus the diff")
 	}
-	for _, k := range []string{"j", "j", "d"} {
-		a.repoKey(key(k))
-	}
+	a.repoKey(tea.KeyMsg{Type: tea.KeyDown})
+	a.repoKey(tea.KeyMsg{Type: tea.KeyDown})
+	a.repoKey(key("d"))
 	if a.rp.mainOff != 12 {
 		t.Errorf("offset = %d, want 12", a.rp.mainOff)
 	}

@@ -44,12 +44,12 @@ func menuPick(t *testing.T, a *App, label string) {
 
 func TestFilters(t *testing.T) {
 	a := filtersApp()
-	a.onKey(key("F"))
+	a.onKey(key("v"))
 	if a.menu == nil {
 		t.Fatal("F should open the filters")
 	}
 	v := a.View()
-	for _, want := range []string{"Filters", "Behind remote", "github.com", "gitlab.com", "local"} {
+	for _, want := range []string{"View & filters", "Status filter", "Behind remote", "Remote filter", "github.com", "gitlab.com", "local"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("filters menu lacks %q", want)
 		}
@@ -58,7 +58,7 @@ func TestFilters(t *testing.T) {
 	if a.menu == nil || !reflect.DeepEqual(listed(a), []string{"behind"}) {
 		t.Fatalf("behind: menu %v, listed %v", a.menu != nil, listed(a))
 	}
-	menuPick(t, a, "All repositories")
+	menuPick(t, a, "Any status")
 	menuPick(t, a, "gitlab.com")
 	if !reflect.DeepEqual(listed(a), []string{"ahead", "stash"}) {
 		t.Fatalf("gitlab.com: %v", listed(a))
@@ -81,7 +81,7 @@ func TestFilters(t *testing.T) {
 	if len(listed(a)) != 6 {
 		t.Fatalf("d again: %v", listed(a))
 	}
-	a.onKey(key("F"))
+	a.onKey(key("v"))
 	menuPick(t, a, "No remote")
 	if !reflect.DeepEqual(listed(a), []string{"local"}) {
 		t.Fatalf("no remote: %v", listed(a))

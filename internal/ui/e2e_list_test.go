@@ -50,12 +50,12 @@ func TestE2EListSearchFilterTree(t *testing.T) {
 	if a.rs.filtering || a.rs.filter != "@release" || len(listed(a)) != 1 {
 		t.Fatalf("tab keeps the filter: filtering=%v filter=%q", a.rs.filtering, a.rs.filter)
 	}
-	press(t, a, "j", "esc")
+	press(t, a, "down", "esc")
 	if a.rs.filter != "" || len(listed(a)) != 4 {
 		t.Fatalf("esc clears: %q %v", a.rs.filter, listed(a))
 	}
 	// While searching, j, q and ? are text; backspace and ctrl+w edit it.
-	press(t, a, "/", "type:q?j", "backspace", "ctrl+w", "type:grp one")
+	press(t, a, "/", "type:q?j", "backspace", "backspace", "backspace", "type:grp one")
 	if a.rs.filter != "grp one" || len(listed(a)) != 1 || a.report != nil {
 		t.Fatalf("query editing: %q %v", a.rs.filter, listed(a))
 	}
@@ -87,14 +87,15 @@ func TestE2EListSearchFilterTree(t *testing.T) {
 		t.Errorf("fetch marked: %q", a.toast)
 	}
 
-	// s cycles the sort modes, r refreshes, R rescans.
-	for _, want := range []string{"name", "last commit", "status", "recent"} {
-		press(t, a, "s")
-		if a.toast != "sorted by "+want {
-			t.Errorf("sort: %q, want %q", a.toast, want)
+	// v sets the sort order; R rescans and refreshes.
+	for i, label := range sortLabels {
+		press(t, a, "v")
+		menuPick(t, a, label)
+		press(t, a, "esc")
+		if a.rs.sortMode != i || a.menu != nil {
+			t.Errorf("sort %q: mode %d", label, a.rs.sortMode)
 		}
 	}
-	press(t, a, "r")
 	press(t, a, "R")
 	if !strings.Contains(a.toast, "4 repositories, no changes") {
 		t.Errorf("rescan: %q", a.toast)
@@ -294,7 +295,7 @@ func TestE2EPullAll(t *testing.T) {
 		t.Errorf("a again: %d selected", n)
 	}
 	for p.rows[p.cur].branch.Name != "topic" {
-		press(t, a, "j")
+		press(t, a, "down")
 	}
 	press(t, a, "space")
 	if !strings.Contains(a.toast, "diverged") || got["topic"].on {

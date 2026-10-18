@@ -7,15 +7,16 @@ import (
 // sortLabels name the sort orders in the sort & view chooser.
 var sortLabels = [sortModes]string{"Recently used", "Name", "Last commit", "Status (needs attention first)"}
 
-// openViews shows the sort & view chooser: sort order, flat or grouped list,
-// all repositories or favourites only. Choices apply at once.
+// openViews shows the view menu (v): sort order, flat or grouped list, all
+// repositories or favourites only, and the status and remote filters.
+// Choices apply at once.
 func (a *App) openViews() {
 	rs := &a.rs
 	rebuild := func() tea.Cmd {
 		a.rebuildView(a.selectedKey())
 		return a.previewCmd()
 	}
-	m := &menu{title: "Sort & view", note: "choices apply at once"}
+	m := &menu{title: "View & filters", note: "choices apply at once; filters combine"}
 	m.items = append(m.items, menuHeader("Sort by"))
 	for i := 0; i < sortModes; i++ {
 		m.items = append(m.items, menuItem{label: sortLabels[i], stay: true,
@@ -34,13 +35,14 @@ func (a *App) openViews() {
 			pick: func() tea.Cmd { a.setListView(v.tree, v.group); return a.previewCmd() }})
 	}
 	m.items = append(m.items, menuHeader("Show"),
-		menuItem{label: "All repositories", stay: true,
+		menuItem{label: "Every repository", stay: true,
 			on:   func() bool { return !rs.favOnly },
 			pick: func() tea.Cmd { rs.favOnly = false; return rebuild() }},
 		menuItem{label: "Favorites only", right: countLabel(len(a.sh.fav)), stay: true,
 			on:   func() bool { return rs.favOnly },
 			pick: func() tea.Cmd { rs.favOnly = true; return rebuild() }},
 	)
+	m.items = append(m.items, a.filterItems()...)
 	a.openMenu(m)
 }
 

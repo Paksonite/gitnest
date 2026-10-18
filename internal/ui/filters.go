@@ -21,7 +21,7 @@ const (
 )
 
 var statusFilterNames = [statusFilters]string{
-	stAll: "All repositories", stDirty: "Dirty", stStashed: "Stashed changes",
+	stAll: "Any status", stDirty: "Dirty", stStashed: "Stashed changes",
 	stAhead: "Ahead of remote", stBehind: "Behind remote", stNoRemote: "No remote",
 }
 
@@ -63,9 +63,10 @@ func (rs *reposState) keeps(r scan.Repo) bool {
 	return statusMatch(rs.status, r) && (rs.host == "" || repoHost(r) == rs.host)
 }
 
-// openFilters shows the filter menu: status filters and remote hosts, each
-// with how many repositories it keeps; choosing one applies it at once.
-func (a *App) openFilters() {
+// filterItems are the filters of the view menu: status filters and remote
+// hosts, each with how many repositories it keeps; choosing one applies it
+// at once.
+func (a *App) filterItems() []menuItem {
 	rs := &a.rs
 	var counts [statusFilters]int
 	hosts := map[string]int{}
@@ -81,8 +82,8 @@ func (a *App) openFilters() {
 		a.rebuildView(a.selectedKey())
 		return a.previewCmd()
 	}
-	m := &menu{title: "Filters", note: "the list shows repositories that pass both"}
-	m.items = append(m.items, menuHeader("Status"))
+	m := &menu{}
+	m.items = append(m.items, menuHeader("Status filter"))
 	for f := 0; f < statusFilters; f++ {
 		m.items = append(m.items, menuItem{label: statusFilterNames[f], right: countLabel(counts[f]), stay: true,
 			on:   func() bool { return rs.status == f },
@@ -98,7 +99,7 @@ func (a *App) openFilters() {
 		}
 		return names[i] < names[j]
 	})
-	m.items = append(m.items, menuHeader("Remote"), menuItem{label: "All remotes", right: countLabel(len(rs.all)), stay: true,
+	m.items = append(m.items, menuHeader("Remote filter"), menuItem{label: "Any remote", right: countLabel(len(rs.all)), stay: true,
 		on:   func() bool { return rs.host == "" },
 		pick: func() tea.Cmd { rs.host = ""; return apply() }})
 	for _, h := range names {
@@ -106,5 +107,5 @@ func (a *App) openFilters() {
 			on:   func() bool { return rs.host == h },
 			pick: func() tea.Cmd { rs.host = h; return apply() }})
 	}
-	a.openMenu(m)
+	return m.items
 }

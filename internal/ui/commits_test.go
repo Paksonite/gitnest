@@ -58,7 +58,7 @@ func TestReflogToggleKeepsCursors(t *testing.T) {
 	if !a.rp.reflog || a.rp.cur[pCommits] != 0 || !strings.Contains(commitsTitle(&a.rp), "Reflog (5)") {
 		t.Fatalf("reflog=%v cur=%d title=%q", a.rp.reflog, a.rp.cur[pCommits], commitsTitle(&a.rp))
 	}
-	a.repoKey(key("j"))
+	a.repoKey(tea.KeyMsg{Type: tea.KeyDown})
 	a.repoKey(key("["))
 	if a.rp.reflog || a.rp.cur[pCommits] != 3 {
 		t.Errorf("back: reflog=%v cur=%d", a.rp.reflog, a.rp.cur[pCommits])

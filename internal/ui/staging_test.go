@@ -1,6 +1,7 @@
 package ui
 
 import (
+	tea "github.com/charmbracelet/bubbletea"
 	"strings"
 	"testing"
 
@@ -17,8 +18,8 @@ func TestStagingCursorAndSelection(t *testing.T) {
 	if st == nil || !st.rows[st.cur].change || st.rows[st.cur].text != "-b" {
 		t.Fatalf("cursor should start on the first change: %+v", st)
 	}
-	a.repoKey(key("j"))
-	a.repoKey(key("j"))
+	a.repoKey(tea.KeyMsg{Type: tea.KeyDown})
+	a.repoKey(tea.KeyMsg{Type: tea.KeyDown})
 	if st.rows[st.cur].text != "+y" {
 		t.Errorf("j skips context and headers: on %q", st.rows[st.cur].text)
 	}
@@ -26,7 +27,7 @@ func TestStagingCursorAndSelection(t *testing.T) {
 		t.Errorf("line selection: %v", sel)
 	}
 	a.repoKey(key("v"))
-	a.repoKey(key("j"))
+	a.repoKey(tea.KeyMsg{Type: tea.KeyDown})
 	if sel := st.selection(); len(sel) != 2 {
 		t.Errorf("range selection: %v", sel)
 	}
@@ -34,7 +35,7 @@ func TestStagingCursorAndSelection(t *testing.T) {
 	if sel := st.selection(); len(sel) != 2 || st.anchor != -1 {
 		t.Errorf("hunk selection: %v", sel)
 	}
-	a.repoKey(key("k"))
+	a.repoKey(tea.KeyMsg{Type: tea.KeyUp})
 	if st.rows[st.cur].ref.Hunk != 0 {
 		t.Errorf("k in hunk mode should go to the previous hunk")
 	}
@@ -42,7 +43,7 @@ func TestStagingCursorAndSelection(t *testing.T) {
 	if !strings.Contains(title, "Unstaged · f · hunk") || len(lines) == 0 {
 		t.Errorf("title %q", title)
 	}
-	if !strings.Contains(a.repoHints(), "staged/unstaged") {
+	if !strings.Contains(a.repoHints(), "tab staged side") {
 		t.Errorf("hints: %q", a.repoHints())
 	}
 	a.repoKey(key("q"))

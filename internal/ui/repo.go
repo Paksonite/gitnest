@@ -319,9 +319,6 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 	case actNextPanel:
 		rp.focus = (rp.focus + 1) % 4
 		return a.mainCmd()
-	case actPrevPanel:
-		rp.focus = (rp.focus + 3) % 4
-		return a.mainCmd()
 	case actPanel1, actPanel2, actPanel3, actPanel4:
 		rp.focus = int(act - actPanel1)
 		return a.mainCmd()
@@ -392,12 +389,7 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 		}
 		return a.do("pull", func() error { return gitx.Pull(ctx, dir, false) })
 	case actPush:
-		return a.push(false)
-	case actForcePush:
-		return a.push(true)
-	case actReload:
-		rp.mainKey = ""
-		return loadRepoData(ctx, dir)
+		return a.push()
 	case actUndo:
 		return a.undoLast()
 	case actCdQuit:
@@ -896,7 +888,7 @@ func (a *App) viewRepo() string {
 		mainTitle += fmt.Sprintf(" · %d–%d of %d", rp.mainOff+1, min(rp.mainOff+rp.mainH, rp.mainLen), rp.mainLen)
 	}
 	if rp.mainFocus {
-		mainTitle += "  (j/k scroll · esc back)"
+		mainTitle += "  (↑/↓ scroll · esc back)"
 	}
 	mainLines = mainLines[rp.mainOff:]
 	if rp.staging != nil {
@@ -1076,11 +1068,11 @@ func (a *App) onRepoRefresh(m repoRefreshMsg) tea.Cmd {
 	return a.mainCmd() // the selection itself may have changed (file gone, new status)
 }
 
-// push pushes the current branch. When it has diverged from its upstream it
-// checks whether that is only because pushed commits were rewritten here
-// (squash, reword, amend…): then a force push with lease is offered; if the
-// remote has commits that were never local, it refuses and suggests a pull.
-func (a *App) push(force bool) tea.Cmd {
+// push pushes the current branch (setting its upstream when missing). A
+// force push is never asked for up front: it is offered, with a warning,
+// only when a plain push can't go through — the branches diverged, or the
+// remote refused because it has commits not fetched here.
+func (a *App) push() tea.Cmd {
 	rp := &a.rp
 	dir, ctx := rp.dir, a.ctx
 	info := rp.info
@@ -1091,37 +1083,36 @@ func (a *App) push(force bool) tea.Cmd {
 			upName = b.Upstream
 		}
 	}
-	doPush := func(force bool) tea.Cmd {
-		label := "push"
-		if force {
-			label = "force push"
-		}
-		return a.doMsg(label, func() (string, error) {
-			err := gitx.Push(ctx, dir, force, up)
-			if err != nil && !force && gitx.PushRejected(err) {
-				return "", fmt.Errorf("rejected: %s has commits you haven't fetched — fetch (f), then pull or force push", upName)
-			}
-			return "", err
-		})
+	force := func() tea.Cmd {
+		return a.doMsg("force push", func() (string, error) { return "", gitx.Push(ctx, dir, true, up) })
+	}
+	offer := func(why string) {
+		a.confirm(why+" Force push (--force-with-lease)?", force)
 	}
 	if !up || info.Behind == 0 {
-		if !force {
-			return doPush(false)
-		}
-		a.confirm("Force push "+info.Branch+" (--force-with-lease)?", func() tea.Cmd { return doPush(true) })
-		return nil
+		cmd := a.after(func() (bool, error) {
+			err := gitx.Push(ctx, dir, false, up)
+			if err != nil && gitx.PushRejected(err) {
+				return true, nil
+			}
+			return false, err
+		}, func(rejected bool) tea.Cmd {
+			if rejected {
+				offer("⚠ Push rejected: " + upName + " has commits you haven't fetched, and force pushing deletes them from the remote (f fetches them to look first).")
+				return nil
+			}
+			a.setToast("push ✓", false)
+			return a.reloadCurrent()
+		})
+		a.busy = "pushing…"
+		return cmd
 	}
 	diverged := fmt.Sprintf("%s and %s have diverged (↑%d ↓%d)", info.Branch, upName, info.Ahead, info.Behind)
 	return a.after(func() (bool, error) { return gitx.UpstreamSeenLocally(ctx, dir) }, func(seen bool) tea.Cmd {
-		switch {
-		case seen:
-			a.confirm(diverged+" because commits that were already pushed were rewritten here. Force push (--force-with-lease)?",
-				func() tea.Cmd { return doPush(true) })
-		case force:
-			a.confirm("⚠ "+upName+" has commits that were never in your branch; force pushing deletes them from the remote. Force push anyway?",
-				func() tea.Cmd { return doPush(true) })
-		default:
-			a.setToast(diverged+": "+upName+" has commits you don't have — pull first (p / ctrl+p), or F to overwrite them", true)
+		if seen {
+			offer(diverged + " because commits that were already pushed were rewritten here.")
+		} else {
+			offer("⚠ " + diverged + ": " + upName + " has commits that were never in your branch, and force pushing deletes them from the remote (p pulls them in instead).")
 		}
 		return nil
 	})

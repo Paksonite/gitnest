@@ -148,7 +148,7 @@ func (a *App) viewReport() string {
 		more = fmt.Sprintf("  ·  %d–%d of %d lines", r.off+1, min(r.off+h, len(r.lines)), len(r.lines))
 	}
 	text := bold(r.title) + "\n\n" + strings.Join(body, "\n") + "\n\n" +
-		fg(cDim, "j/k scroll  "+hints(scOverlay)+more)
+		fg(cDim, "↑/↓ scroll  "+hints(scOverlay)+more)
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cRed).
 		Padding(1, 2).Width(w).Render(text)
 	return lipgloss.Place(a.w, a.h, lipgloss.Center, lipgloss.Center, box)

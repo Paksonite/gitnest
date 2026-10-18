@@ -598,14 +598,6 @@ func (a *App) listAction(act action) tea.Cmd {
 		}
 		a.rebuildView(a.selectedKey())
 		return a.previewCmd()
-	case actFilters:
-		a.openFilters()
-		return nil
-	case actSort:
-		rs.sortMode = (rs.sortMode + 1) % sortModes
-		a.rebuildView(a.selectedKey())
-		a.setToast("sorted by "+sortNames[rs.sortMode], false)
-		return a.previewCmd()
 	case actMark:
 		if i, ok := a.selectedDir(); ok { // a directory marks (or unmarks) everything below
 			paths := a.reposUnder(i)
@@ -628,11 +620,9 @@ func (a *App) listAction(act action) tea.Cmd {
 			}
 		}
 		return a.moveRepos(1)
-	case actRescan:
-		a.setToast("rescanning all roots…", false)
-		return a.scanCmd(true)
-	case actRefreshList:
-		return a.gather(a.paths())
+	case actRescan: // both happen on their own too (rescan_interval, status_interval)
+		a.setToast("rescanning the roots and refreshing every status…", false)
+		return tea.Batch(a.scanCmd(true), a.gather(a.paths()))
 	case actFetchMany:
 		return a.bulk("fetch", "fetched", a.targets(a.paths), func(p string) error { return gitx.Fetch(ctx, p) })
 	case actPullMany:
@@ -707,17 +697,6 @@ func (a *App) filterKey(k tea.KeyMsg) tea.Cmd {
 			return refilter()
 		}
 		return nil
-	case actClearQuery:
-		rs.filter = ""
-		return refilter()
-	case actDeleteWord:
-		f := strings.TrimRight(rs.filter, " ")
-		if i := strings.LastIndex(f, " "); i >= 0 {
-			rs.filter = f[:i+1]
-		} else {
-			rs.filter = ""
-		}
-		return refilter()
 	}
 	switch k.Type {
 	case tea.KeyRunes:

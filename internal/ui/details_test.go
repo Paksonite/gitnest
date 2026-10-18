@@ -67,7 +67,7 @@ func TestActionsOpenInPanes(t *testing.T) {
 	}
 	// U from the menu unmarks everything.
 	s.focus = 0
-	press(t, s, "a", "U")
+	press(t, s, "U")
 	if len(a.rs.marked) != 0 || a.menu != nil {
 		t.Errorf("unmark: %v", a.rs.marked)
 	}

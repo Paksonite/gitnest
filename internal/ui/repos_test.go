@@ -167,7 +167,8 @@ func TestSortModes(t *testing.T) {
 	}
 	want := []string{"abc", "bca", "cba"} // name, last commit, status
 	for _, w := range want {
-		a.reposKey(key("s"))
+		a.rs.sortMode = (a.rs.sortMode + 1) % sortModes
+		a.rebuildView("")
 		if got := order(); got != w {
 			t.Errorf("%s: got %s, want %s", sortNames[a.rs.sortMode], got, w)
 		}

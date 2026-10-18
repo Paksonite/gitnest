@@ -39,25 +39,26 @@ func openRepo(t *testing.T, a *App, dir string) {
 	}
 }
 
-// refresh runs one live refresh and a full reload of the open repository,
-// for changes made outside the app.
+// refresh reloads the open repository, as the live refresh does, for
+// changes made outside the app.
 func refresh(t *testing.T, a *App) {
 	t.Helper()
-	press(t, a, "ctrl+r")
+	a.rp.mainKey = ""
+	drive(t, a, loadRepoData(a.ctx, a.rp.dir))
 }
 
 // selectRow moves the cursor of the focused panel with j/k until label
 // (the row's plain text) contains want.
 func selectRow(t *testing.T, a *App, want string) {
 	t.Helper()
-	press(t, a, "home")
+	a.rp.cur[a.rp.focus] = 0
 	for i := 0; i < 200; i++ {
 		items := a.panelItems(a.rp.focus)
 		if c := a.rp.cur[a.rp.focus]; c < len(items) && strings.Contains(items[c].plain, want) {
 			return
 		}
 		before := a.rp.cur[a.rp.focus]
-		press(t, a, "j")
+		press(t, a, "down")
 		if a.rp.cur[a.rp.focus] == before {
 			break
 		}
@@ -109,7 +110,7 @@ func TestE2EFilesPanel(t *testing.T) {
 	if a.rp.staging == nil || a.rp.staging.staged {
 		t.Fatal("with nothing staged left the view goes back to the unstaged side")
 	}
-	press(t, a, "v", "j", "space")
+	press(t, a, "v", "down", "space")
 	if got := sh(t, lib, "show", ":lib.txt"); got != "lib\none\ntwo" {
 		t.Fatalf("index after a range: %q", got)
 	}
@@ -132,7 +133,7 @@ func TestE2EFilesPanel(t *testing.T) {
 		t.Errorf("toast %q", a.toast)
 	}
 	writeFile(t, filepath.Join(lib, "lib.txt"), "lib\none\ntwo\nthree\nfour\nfive\n")
-	press(t, a, "tab", "space", "j", "d", "y")
+	press(t, a, "tab", "space", "down", "d", "y")
 	if got, _ := os.ReadFile(filepath.Join(lib, "lib.txt")); string(got) != "lib\none\ntwo\nthree\nfour\n" {
 		t.Fatalf("worktree after discarding a line: %q", got)
 	}
@@ -300,9 +301,9 @@ func TestE2EBranches(t *testing.T) {
 	commitFile(t, other, "other.txt", "o\n", "From elsewhere")
 	sh(t, other, "push", "-q", "origin", "main")
 	sh(t, app, "branch", "--track", "lagging", "origin/main")
-	press(t, a, "ctrl+f")
-	selectRow(t, a, "lagging")
 	press(t, a, "f")
+	selectRow(t, a, "lagging")
+	press(t, a, "F")
 	if got := sh(t, app, "log", "-1", "--format=%s", "lagging"); got != "From elsewhere" {
 		t.Fatalf("fast-forward: %q (toast %q)", got, a.toast)
 	}
@@ -323,7 +324,7 @@ func TestE2EBranches(t *testing.T) {
 
 	// The Remote tab: space on a remote branch checks out a tracking branch.
 	sh(t, other, "push", "-q", "origin", "main:shared")
-	press(t, a, "ctrl+f", "]")
+	press(t, a, "f", "]")
 	if a.rp.branchTab != tabRemote {
 		t.Fatalf("tab %d", a.rp.branchTab)
 	}
@@ -370,7 +371,7 @@ func TestE2ECommitsPanel(t *testing.T) {
 		t.Fatalf("squash: %q", got)
 	}
 	selectRow(t, a, "add b")
-	press(t, a, "f", "y")
+	press(t, a, "F", "y")
 	if got := subjects(t, lib, "3"); got != "add c\nadd a\nlib initial" {
 		t.Fatalf("fixup: %q", got)
 	}
@@ -473,7 +474,7 @@ func TestE2ECommitsPanel(t *testing.T) {
 	if !a.rp.reflog || len(a.rp.refs) == 0 {
 		t.Fatal("reflog")
 	}
-	press(t, a, "j", "space", "y")
+	press(t, a, "down", "space", "y")
 	if !a.rp.info.Detached {
 		t.Fatalf("reflog checkout: %+v (toast %q)", a.rp.info, a.toast)
 	}

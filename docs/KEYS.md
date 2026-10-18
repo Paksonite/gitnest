@@ -49,18 +49,16 @@ false` in the config leaves the mouse to the terminal.
 | `/` | search by name (also git host and folder; `@text` searches branches); `enter` opens, `tab` keeps the filter, `esc` clears |
 | `enter` | open the repository |
 | `` ` `` | list view: flat, grouped by folder, grouped by remote host and owner (github.com/ann/; local/ without a remote); `enter` folds a group |
-| `s` | sort: recently used, name, last commit, needs attention |
 | `H` | the dashboard: activity, what needs attention, the most active repositories |
-| `v` | sort & view: the sort order, a flat or grouped list (by folder or remote), all repositories or favorites only |
+| `v` | view & filters: the sort order (recently used, name, last commit, needs attention), a flat or grouped list (by folder or remote), every repository or favorites only, and filters with how many repositories each keeps — dirty, stashed changes, ahead of or behind the remote, no remote, by remote host |
 | `B` | open the repository and browse its files (tree and syntax-coloured view) |
 | `*` | star the repository (or the marked ones) as a favorite, shown with a star; again to unstar |
 | `d` | only repositories with uncommitted changes |
-| `F` | filters, with how many repositories each keeps: dirty, stashed changes, ahead of or behind the remote, no remote; and by remote host |
 | `space` | mark (on a folder: everything below); `f` fetch / `p` pull the marked ones |
-| `a` | actions on the marked repositories (or the selected one): fetch, pull, open each in a pane of its own, mark all / unmark all |
+| `a` | actions on the marked repositories (or the selected one): fetch, pull, open each in a pane of its own |
 | `A` / `U` | mark every repository shown / unmark everything |
 | `ctrl+p` | pull all: fetches every repository, lists every branch that is behind (also main when it isn't checked out); pick with `space` / `a`, `enter` updates them (fast-forward only) |
-| `R` / `r` | rescan the folders / refresh the status |
+| `R` | rescan the folders and refresh every status now (both also happen on their own, every minute and every 15 seconds by default) |
 | `q` | quit |
 | `o` | quit and go to the repository (needs the [shell integration](INSTALL.md#shell-integration-completion-and-gn)) |
 | `T` | theme and icons |
@@ -94,15 +92,15 @@ branch; `u` sets one).
 | Panel | Keys |
 |---|---|
 | Files | `space` stage/unstage, `a` all, `c` commit, `C` commit in `$EDITOR`, `A` amend, `d` discard, `s` / `S` stash all / staged, `e` edit, `` ` `` tree/flat, **`enter` on a file: stage single lines** |
-| Line staging | `space` stage the line, `v` range, `a` hunk, `tab` staged side (unstage), `d` discard lines, `esc` back |
-| Branches | `space` checkout, `n` new, `r` rename, `d`/`D` delete, `u`/`U` set/unset upstream, `f` fast-forward, `M` merge, `R` rebase onto, `]`/`[` next/previous tab |
+| Line staging | `space` stage the line, `v` range, `a` hunk, `d` discard lines, `tab` the staged lines (there `space` unstages them), `esc` back |
+| Branches | `space` checkout, `n` new, `r` rename, `d`/`D` delete, `u`/`U` set/unset upstream, `F` fast-forward, `M` merge, `R` rebase onto, `]`/`[` next/previous tab |
 | Tags | `n` new at HEAD, `P` push, `d`/`D` delete local/remote, `space` checkout |
-| Commits | `s` squash, `f` fixup, `d` drop, `r` reword, `t` revert, `u` undo last commit, `ctrl+j`/`ctrl+k` move, **`i` interactive rebase**, `c` copy / `v` paste (cherry-pick, also into another repository) / `C` forget copied, `]` reflog |
+| Commits | `s` squash, `F` fixup, `d` drop, `r` reword, `t` revert, `u` undo last commit, `ctrl+j`/`ctrl+k` move, **`i` interactive rebase**, `c` copy / `v` paste (cherry-pick, also into another repository) / `C` forget copied, `]` reflog |
 | Interactive rebase | `p` pick, `r` reword, `e` edit, `s` squash, `f` fixup, `d` drop, `ctrl+j`/`ctrl+k` move, `enter` run, `esc` cancel |
 | Reflog | `space` check out an entry, `g` reset the branch to it, `[` back to the commits |
 | Stash | `space` apply, `g` pop, `b` branch from it, `d` drop |
-| Files browser | `B`: every file of the repository in a tree, the selected one with line numbers and syntax colours; `enter` folds a folder or scrolls the file, `tab` tree / file, `e` edit, `esc` back |
-| Anywhere | `B` browse the files, `p` pull, `ctrl+p` pull --rebase, `P` push, `F` force push, `f` or `ctrl+f` fetch (`ctrl+f` in Branches, where `f` fast-forwards), `z` undo the last history change, `o` quit and cd here, `enter` scroll the diff, `esc` back to the list, `!` full error, `?` help |
+| Files browser | `B`: every file of the repository in a tree, the selected one with line numbers and syntax colours; `enter` folds a folder or moves into the file to scroll it, `e` edit, `esc` back (from the file to the tree, then to the repository) |
+| Anywhere | `B` browse the files, `p` pull, `ctrl+p` pull --rebase, `P` push (when the remote refuses or the branches diverged, it offers a force push with a warning), `f` fetch, `z` undo the last history change, `o` quit and cd here, `enter` scroll the diff, `esc` back to the list, `!` full error, `?` help |
 
 The commit message editor has a **Subject** and an optional **Body**: type the
 subject and press `enter` to commit, or `tab` to write a body, then `ctrl+s`.

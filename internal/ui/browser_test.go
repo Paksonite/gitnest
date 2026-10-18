@@ -36,12 +36,12 @@ func TestBrowser(t *testing.T) {
 	if strings.Join(names, " ") != "docs .gitignore bin.dat main.go" {
 		t.Fatalf("rows: %v", names)
 	}
-	a.onKey(key("j"))
-	a.onKey(key("j"))
+	a.onKey(tea.KeyMsg{Type: tea.KeyDown})
+	a.onKey(tea.KeyMsg{Type: tea.KeyDown})
 	if !strings.Contains(b.note, "binary") {
 		t.Errorf("bin.dat: note %q", b.note)
 	}
-	a.onKey(key("j"))
+	a.onKey(tea.KeyMsg{Type: tea.KeyDown})
 	if b.path != "main.go" || len(b.lines) != 6 || !strings.Contains(b.lines[0], "package main") {
 		t.Fatalf("main.go: %q %d lines", b.path, len(b.lines))
 	}
@@ -58,7 +58,9 @@ func TestBrowser(t *testing.T) {
 		t.Fatal("esc should go back to the tree")
 	}
 	// enter on a folder unfolds it.
-	a.onKey(key("g"))
+	for i := 0; i < 4; i++ {
+		a.onKey(tea.KeyMsg{Type: tea.KeyUp})
+	}
 	a.onKey(tea.KeyMsg{Type: tea.KeyEnter})
 	names = names[:0]
 	for _, r := range b.rows {
