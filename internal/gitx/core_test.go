@@ -447,3 +447,34 @@ func TestRedact(t *testing.T) {
 		}
 	}
 }
+
+func TestRefsFingerprint(t *testing.T) {
+	dir := newRepo(t)
+	commit(t, dir, "a.txt", "a\n", "first")
+	fp := func() string { return RefsFingerprint(context.Background(), dir) }
+	prev := fp()
+	for _, change := range [][]string{
+		{"branch", "other"},
+		{"tag", "v1"},
+		{"checkout", "-q", "other"},
+		{"commit", "-q", "--allow-empty", "-m", "second"},
+		{"checkout", "-q", "--detach"},
+	} {
+		git(t, dir, change...)
+		if now := fp(); now == prev || now == "" {
+			t.Errorf("git %v didn't change the fingerprint", change)
+		} else {
+			prev = now
+		}
+	}
+	writeFile(t, dir, "a.txt", "stash me\n")
+	git(t, dir, "stash", "-q")
+	if fp() == prev {
+		t.Error("a stash didn't change the fingerprint")
+	}
+	prev = fp()
+	writeFile(t, dir, "a.txt", "work in progress\n")
+	if fp() != prev {
+		t.Error("editing a file isn't a ref change")
+	}
+}

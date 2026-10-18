@@ -270,6 +270,11 @@ func RebasePlan(ctx context.Context, dir string, steps []PlanStep) error {
 		}
 		inPlan[h] = true
 	}
+	if len(all) > 0 && !inPlan[all[len(all)-1]] {
+		// HEAD isn't in the plan: commits were made (or the branch moved)
+		// after the plan was put together.
+		return errors.New("the branch moved since the plan was made — open it again with i")
+	}
 	for i, h := range all {
 		if inPlan[h] {
 			oldest = h

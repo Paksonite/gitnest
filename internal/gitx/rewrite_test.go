@@ -383,3 +383,17 @@ func TestRebasePlanRefusals(t *testing.T) {
 		t.Error("a plan across a merge was accepted")
 	}
 }
+
+// A plan made before HEAD moved is refused with a message saying so.
+func TestRebasePlanStale(t *testing.T) {
+	dir := newRepo(t)
+	commit(t, dir, "a.txt", "a\n", "a")
+	commit(t, dir, "b.txt", "b\n", "b")
+	head := git(t, dir, "rev-parse", "HEAD")
+	plan := []PlanStep{{Hash: head, Action: "pick"}}
+	commit(t, dir, "c.txt", "c\n", "c") // made after the plan
+	err := RebasePlan(bg, dir, plan)
+	if err == nil || !strings.Contains(err.Error(), "moved since the plan was made") {
+		t.Fatalf("stale plan: %v", err)
+	}
+}

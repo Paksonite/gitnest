@@ -34,11 +34,13 @@ type repoData struct {
 	notMain  map[string]bool
 	tags     []gitx.Tag
 	main     string // the main branch: "origin/main", or "main" without origin/HEAD
+	refsFP   string // gitx.RefsFingerprint when loaded
 }
 
 type repoState struct {
 	dir, name     string
 	mainBranch    string // the main branch, see repoData
+	refsSeen      string // refs fingerprint at the last live refresh
 	focus         int
 	info          gitx.Info
 	files         []gitx.File
@@ -160,6 +162,7 @@ func loadRepoData(ctx context.Context, dir string) tea.Cmd {
 		par(func() { d.notMain = gitx.NotOnMain(ctx, dir, 1000) })
 		par(func() { d.tags, _ = gitx.Tags(ctx, dir) })
 		par(func() { d.main = gitx.MainBranch(ctx, dir) })
+		par(func() { d.refsFP = gitx.RefsFingerprint(ctx, dir) })
 		wg.Wait()
 		return repoDataMsg{dir: dir, d: d}
 	}
@@ -179,6 +182,7 @@ func (a *App) onRepoData(m repoDataMsg) tea.Cmd {
 	rp.setFiles(d.files)
 	rp.commits, rp.unpushed, rp.stashes, rp.refs = d.commits, d.unpushed, d.stashes, d.refs
 	rp.notMain, rp.graph, rp.tags, rp.mainBranch = d.notMain, buildGraph(d.commits), d.tags, d.main
+	rp.refsSeen = d.refsFP
 	for i := 0; i < 4; i++ {
 		rp.cur[i] = clamp(rp.cur[i], 0, rp.count(i)-1)
 	}
@@ -326,10 +330,6 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 		return a.move(-1)
 	case actDown:
 		return a.move(1)
-	case actTop:
-		return a.move(-rp.count(rp.focus))
-	case actBottom:
-		return a.move(rp.count(rp.focus))
 	case actScrollUp:
 		a.scrollMain(-half)
 		return nil
@@ -471,9 +471,29 @@ func (a *App) filesKey(s string) (tea.Cmd, bool) {
 		})
 		return nil, true
 	case actCommitEditor:
+		staged := false
+		for _, x := range rp.files {
+			staged = staged || x.Staged()
+		}
 		c := exec.Command("git", "commit")
 		c.Dir = dir
-		return a.execCmd(c), true
+		switch {
+		case staged:
+			return a.execCmd(c), true
+		case !has:
+			a.setToast("nothing to commit", false)
+			return nil, true
+		}
+		// Like c: offer to stage everything rather than let git commit
+		// stop with "nothing added to commit".
+		a.confirm("Nothing is staged. Stage all changes and commit in $EDITOR?", func() tea.Cmd {
+			if err := gitx.StageAll(ctx, dir); err != nil {
+				a.setToast("stage all: "+err.Error(), true)
+				return nil
+			}
+			return a.execCmd(c)
+		})
+		return nil, true
 	case actAmend:
 		return a.check(func() ([]string, error) { return gitx.CheckRewrite(ctx, dir, "HEAD", gitx.ActionAmend) },
 			func(pushed []string) tea.Cmd {
@@ -1023,6 +1043,7 @@ type (
 		files []gitx.File
 		key   string // main panel source the text belongs to ("" = not refreshed)
 		text  string
+		refs  string // gitx.RefsFingerprint
 	}
 )
 
@@ -1048,6 +1069,7 @@ func (a *App) onRepoTick() tea.Cmd {
 		m := repoRefreshMsg{dir: dir, key: key}
 		m.info, _ = gitx.GetInfo(ctx, dir)
 		m.files, _ = gitx.Files(ctx, dir)
+		m.refs = gitx.RefsFingerprint(ctx, dir)
 		if key != "" {
 			m.text = fn()
 		}
@@ -1063,6 +1085,15 @@ func (a *App) onRepoRefresh(m repoRefreshMsg) tea.Cmd {
 	rp.refreshing = false
 	if a.scr != scrRepo {
 		return nil
+	}
+	// Branches, commits, tags, the stash or HEAD moved (here or outside
+	// gitnest): reload every panel, not only the files.
+	if m.refs != "" && rp.refsSeen != "" && m.refs != rp.refsSeen {
+		rp.refsSeen = m.refs
+		return loadRepoData(a.ctx, rp.dir)
+	}
+	if m.refs != "" {
+		rp.refsSeen = m.refs
 	}
 	rp.info = m.info
 	rp.setFiles(m.files)

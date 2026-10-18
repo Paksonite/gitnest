@@ -1143,6 +1143,24 @@ func readmeLine(dir string) string {
 	return ""
 }
 
+// RefsFingerprint changes whenever a branch, tag, remote branch, HEAD or
+// the stash moves — in gitnest or anywhere else (another terminal, an
+// IDE). One git process, plus reading HEAD and the stash's reflog.
+func RefsFingerprint(ctx context.Context, dir string) string {
+	out, err := run(ctx, kRead, dir, nil, "for-each-ref", "--format=%(objectname) %(refname)")
+	if err != nil {
+		return ""
+	}
+	fp := out
+	if gitDir, common, ok := gitDirs(dir); ok {
+		head, _ := os.ReadFile(filepath.Join(gitDir, "HEAD"))
+		fp += "HEAD " + string(head) + fmt.Sprintf("stash %d", fileLines(filepath.Join(common, "logs", "refs", "stash")))
+	} else if h, err := run(ctx, kRead, dir, nil, "rev-parse", "HEAD"); err == nil {
+		fp += "HEAD " + h
+	}
+	return fp
+}
+
 // ActivityCommit is one commit for the activity dashboard.
 type ActivityCommit struct {
 	Unix                   int64

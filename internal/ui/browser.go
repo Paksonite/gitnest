@@ -248,16 +248,6 @@ func (a *App) browserKey(k tea.KeyMsg) tea.Cmd {
 		move(-1)
 	case actDown:
 		move(1)
-	case actPageUp:
-		move(-page)
-	case actPageDown:
-		move(page)
-	case actTop:
-		move(-len(b.rows) - len(b.lines))
-	case actBottom:
-		move(len(b.rows) + len(b.lines))
-	case actNextPanel:
-		b.focusFile = !b.focusFile && b.path != ""
 	case actOpen:
 		if b.cur < len(b.rows) && b.rows[b.cur].dir {
 			p := b.rows[b.cur].path
