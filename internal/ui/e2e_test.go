@@ -300,7 +300,8 @@ func TestE2EList(t *testing.T) {
 	}
 
 	// Mark two repositories and pull: lib has no upstream, so the report opens.
-	press(t, a, "s") // sort by name: app, lib, lib-copy
+	a.rs.sortMode = sortName // app, lib, lib-copy (v sets it in the app)
+	a.rebuildView("")
 	press(t, a, "g", "space", "space", "p")
 	if a.report == nil || !strings.Contains(a.report.title, "1 of 2 failed") {
 		t.Fatalf("report: %+v (toast %q)", a.report, a.toast)
