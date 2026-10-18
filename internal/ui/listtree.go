@@ -133,7 +133,7 @@ func (a *App) buildRows() {
 			dirs = append(dirs, c)
 		}
 		sort.Slice(dirs, func(i, j int) bool { return dirs[i].name < dirs[j].name })
-		for _, d := range dirs {
+		group := func(d *dirNode) {
 			name := d.name
 			for len(d.repos) == 0 && len(d.children) == 1 { // merge a/b when a holds only b
 				for _, only := range d.children {
@@ -147,11 +147,51 @@ func (a *App) buildRows() {
 				walk(d, depth+1)
 			}
 		}
+		if !searching {
+			for _, d := range dirs {
+				group(d)
+			}
+			for _, idx := range n.repos {
+				rs.rows = append(rs.rows, listRow{repo: idx, depth: depth})
+			}
+			return
+		}
+		// While searching the best matches come first: repositories and
+		// groups (by their best repository) in one order of score.
+		type entry struct {
+			d     *dirNode
+			idx   int
+			score int
+		}
+		var es []entry
+		for _, d := range dirs {
+			es = append(es, entry{d: d, score: a.bestBelow(d)})
+		}
 		for _, idx := range n.repos {
-			rs.rows = append(rs.rows, listRow{repo: idx, depth: depth})
+			es = append(es, entry{idx: idx, score: rs.score[idx]})
+		}
+		sort.SliceStable(es, func(i, j int) bool { return es[i].score > es[j].score })
+		for _, e := range es {
+			if e.d != nil {
+				group(e.d)
+			} else {
+				rs.rows = append(rs.rows, listRow{repo: e.idx, depth: depth})
+			}
 		}
 	}
 	walk(root, 0)
+}
+
+// bestBelow is the best search score of the repositories below n.
+func (a *App) bestBelow(n *dirNode) int {
+	best := -1 << 31
+	for _, idx := range n.repos {
+		best = max(best, a.rs.score[idx])
+	}
+	for _, c := range n.children {
+		best = max(best, a.bestBelow(c))
+	}
+	return best
 }
 
 func (a *App) countBelow(n *dirNode) (count, dirty int) {
