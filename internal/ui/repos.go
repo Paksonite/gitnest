@@ -26,6 +26,7 @@ type reposState struct {
 	filtering   bool
 	status      int    // status filter: stAll, stDirty… (F, d)
 	host        string // remote host filter ("" = all, "local" = no remote)
+	favOnly     bool   // only starred repositories
 	loading     bool   // initial load or full status refresh running
 	scanning    bool   // background scan for new/removed repositories running
 	marked      map[string]bool
@@ -316,7 +317,7 @@ func (a *App) rebuildView(keep string) {
 	type cand struct{ idx, score int }
 	var cs []cand
 	for i, r := range rs.all {
-		if !rs.keeps(r) {
+		if !rs.keeps(r) || (rs.favOnly && !a.sh.fav[r.Path]) {
 			continue
 		}
 		score, ok := a.matchRepo(r, terms)
@@ -630,6 +631,10 @@ func (a *App) listAction(act action) tea.Cmd {
 		return a.startPullAll()
 	case actActions:
 		a.openActions()
+	case actViews:
+		a.openViews()
+	case actFavorite:
+		return a.toggleFavorite()
 	case actUnmarkAll:
 		rs.marked = map[string]bool{}
 	case actMarkAll:
@@ -748,6 +753,7 @@ func relTime(unix int64, now time.Time) string {
 
 type rowOpts struct {
 	marked, isNew bool
+	fav           bool   // starred
 	label         string // clone label, shown after the name
 	hl            []int  // name runes matched by the filter
 	nameW         int
@@ -774,6 +780,10 @@ func repoRow(r scan.Repo, o rowOpts) rowItem {
 	if o.label != "" {
 		suffix += " · " + o.label
 		styledSuffix += fg(cDim, " · "+o.label)
+	}
+	if o.fav {
+		suffix += " ★"
+		styledSuffix += fg(cYellow, " ★")
 	}
 	if o.isNew {
 		suffix += " ✦"
@@ -807,7 +817,11 @@ func (a *App) viewRepos() string {
 	if rs.sortMode != sortRecent {
 		head += "  " + fg(cDim, "sort: "+sortNames[rs.sortMode])
 	}
-	if tags := rs.filterTags(); tags != "" {
+	tags := rs.filterTags()
+	if rs.favOnly {
+		tags = strings.TrimSpace(tags + " [★ favorites]")
+	}
+	if tags != "" {
 		head += "  " + fg(cYellow, tags)
 	}
 	if rs.filtering || rs.filter != "" {
@@ -843,7 +857,7 @@ func (a *App) viewRepos() string {
 			continue
 		}
 		r := rs.all[row.repo]
-		items = append(items, repoRow(r, rowOpts{marked: rs.marked[r.Path], isNew: rs.isNew[r.Path],
+		items = append(items, repoRow(r, rowOpts{marked: rs.marked[r.Path], isNew: rs.isNew[r.Path], fav: a.sh.fav[r.Path],
 			label: rs.label[r.Path], hl: rs.hl[r.Path], nameW: nameW, now: now, indent: row.depth}))
 	}
 	lines := append([]string{listHeader(nameW)}, renderRows(items, rs.cur-rs.off, 0, lh, inner, true)...)

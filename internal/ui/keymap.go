@@ -92,6 +92,8 @@ const (
 	actDirtyOnly
 	actFilters
 	actActions
+	actViews
+	actFavorite
 	actMarkAll
 	actUnmarkAll
 	actSort
@@ -256,6 +258,8 @@ var keymap = [scopes][]binding{
 		b(actTop, "first repository", "", "home", "g").show(1),
 		b(actBottom, "last repository", "", "end", "G").show(1),
 		b(actSort, "sort: recent, name, last commit, status", "sort", "s"),
+		b(actViews, "sort & view: sort order, flat or grouped list, favorites only", "view", "v"),
+		b(actFavorite, "star / unstar the repository (or the marked ones) as a favorite", "", "*"),
 		b(actDirtyOnly, "only repositories with changes", "dirty only", "d"),
 		b(actFilters, "filters: dirty, stashed, ahead, behind, no remote; by remote host", "filters", "F"),
 		b(actMark, "mark for fetch/pull (on a directory: everything below)", "mark", " "),

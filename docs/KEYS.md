@@ -11,6 +11,8 @@ Press `?` in the app for the same list. Panes are described in
 | `enter` | open the repository |
 | `` ` `` | list view: flat, grouped by folder, grouped by remote host and owner (github.com/ann/; local/ without a remote); `enter` folds a group |
 | `s` | sort: recently used, name, last commit, needs attention |
+| `v` | sort & view: the sort order, a flat or grouped list (by folder or remote), all repositories or favorites only |
+| `*` | star the repository (or the marked ones) as a favorite, shown with a star; again to unstar |
 | `d` | only repositories with uncommitted changes |
 | `F` | filters, with how many repositories each keeps: dirty, stashed changes, ahead of or behind the remote, no remote; and by remote host |
 | `space` | mark (on a folder: everything below); `f` fetch / `p` pull the marked ones |

@@ -56,7 +56,7 @@ func repoHost(r scan.Repo) string {
 }
 
 // listFiltered reports whether a status or host filter hides repositories.
-func (rs *reposState) listFiltered() bool { return rs.status != stAll || rs.host != "" }
+func (rs *reposState) listFiltered() bool { return rs.status != stAll || rs.host != "" || rs.favOnly }
 
 // keeps reports whether the status and host filters let r through.
 func (rs *reposState) keeps(r scan.Repo) bool {

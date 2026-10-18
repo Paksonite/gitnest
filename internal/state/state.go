@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 )
 
@@ -35,11 +36,19 @@ type State struct {
 	ListGroup  string           `json:"list_group"`  // "folders" (default) or "remote"
 	PaneLayout string           `json:"pane_layout"` // grid, side by side or stacked
 	Collapsed  []string         `json:"collapsed"`   // folded directories of the list tree
+	Favorites  []string         `json:"favorites"`   // starred repositories (*)
 }
 
 // SetListGroup remembers how the list tree groups repositories.
 func (s *State) SetListGroup(group string) {
 	s.ListGroup = group
+	_ = s.save()
+}
+
+// SetFavorites remembers the starred repositories.
+func (s *State) SetFavorites(paths []string) {
+	sort.Strings(paths)
+	s.Favorites = paths
 	_ = s.save()
 }
 

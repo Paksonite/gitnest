@@ -22,7 +22,8 @@ import (
 // paste in another).
 type shared struct {
 	copied *clipboard
-	update string // newer gitnest release, shown in the header
+	update string          // newer gitnest release, shown in the header
+	fav    map[string]bool // starred repositories (*)
 }
 
 // Smallest window the layout supports; below it a notice is shown instead.
@@ -133,6 +134,10 @@ func newApp(ctx context.Context, cfg config.Config, noConfig bool, startDir, cdF
 	a.rs.collapsed = map[string]bool{}
 	for _, d := range a.st.Collapsed {
 		a.rs.collapsed[d] = true
+	}
+	a.sh.fav = map[string]bool{}
+	for _, p := range a.st.Favorites {
+		a.sh.fav[p] = true
 	}
 	a.rs.tree = a.st.ListTree
 	if a.st.ListGroup == groupNames[groupRemote] {
