@@ -21,9 +21,10 @@ colors:
   accent: "#ff9e64"
 ```
 
-The `surface` role is the background of the panels (cards). The gitnest
-themes set it; leave it empty (`""`) to keep the terminal's own background
-inside panels.
+A theme paints the whole screen: `background` behind everything and
+`surface` behind the panels (cards), with its `text` colour, so a light theme
+reads well in a dark terminal and the other way round. Leave them empty
+(`""`) to keep the terminal's own colours; the `terminal` theme does.
 
 ```sh
 gitnest theme                                    # all themes, and which are in use

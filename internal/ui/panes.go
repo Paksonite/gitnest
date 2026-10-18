@@ -491,6 +491,10 @@ func (s *Shell) View() string {
 	if s.w == 0 || s.h == 0 {
 		return ""
 	}
+	return paintScreen(s.view(), s.w, s.h)
+}
+
+func (s *Shell) view() string {
 	if len(s.panes) == 1 {
 		return s.panes[0].app.View()
 	}

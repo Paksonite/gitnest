@@ -27,6 +27,7 @@ var (
 	cSelDim  lipgloss.TerminalColor = lipgloss.Color("#15302f")
 	cBorder  lipgloss.TerminalColor = lipgloss.Color("#2f5254")
 	cSurface lipgloss.TerminalColor = lipgloss.Color("#0f2024")
+	cBack    lipgloss.TerminalColor = lipgloss.Color("#0b1417") // the whole screen
 	cAuthors []lipgloss.TerminalColor
 	palette  = theme.Palette{Background: "#0b1417"} // the active one, for tints
 )
@@ -47,7 +48,7 @@ func usePalette(p theme.Palette, accent string, gitDiffs bool) {
 	cAccent, cDim, cText = color(p.Accent), color(p.Dim), color(p.Text)
 	cGreen, cRed, cYellow, cCyan = color(p.Added), color(p.Removed), color(p.Warn), color(p.Branch)
 	cSel, cSelDim, cBorder = color(p.Sel), color(p.SelDim), color(p.Border)
-	cSurface, palette = color(p.Surface), p
+	cSurface, cBack, palette = color(p.Surface), color(p.Background), p
 	cAuthors = cAuthors[:0]
 	for _, c := range p.Authors {
 		cAuthors = append(cAuthors, color(c))
@@ -235,7 +236,7 @@ func panel(title string, lines []string, w, h int, focused bool) string {
 		title += "  " + fg(cDim, note)
 	}
 	pad := strings.Repeat(" ", panelPad)
-	bg := bgSeq(cSurface)
+	bg := themeSeq(cSurface)
 	row := func(s string) string { return paintBG(pad+fit(s, inner)+pad, bg) }
 	rows := make([]string, 0, ih)
 	rows = append(rows, row(title))
@@ -252,15 +253,34 @@ func panel(title string, lines []string, w, h int, focused bool) string {
 		BorderBackground(cSurface).Render(strings.Join(rows, "\n"))
 }
 
-// bgSeq is the escape sequence that sets background c ("" when colours are
-// off or c is NoColor).
-func bgSeq(c lipgloss.TerminalColor) string {
-	if _, none := c.(lipgloss.NoColor); none {
+// themeSeq is the escape sequence that sets background bg and the theme's
+// text colour, so text without a colour of its own is readable on bg
+// whatever the terminal's colours are ("" when colours are off or bg is
+// NoColor).
+func themeSeq(bg lipgloss.TerminalColor) string {
+	if _, none := bg.(lipgloss.NoColor); none {
 		return ""
 	}
-	s := lipgloss.NewStyle().Background(c).Render("x")
+	s := lipgloss.NewStyle().Background(bg).Foreground(cText).Render("x")
 	seq, _, _ := strings.Cut(s, "x")
 	return seq
+}
+
+// paintScreen gives the whole w×h screen the theme's background and text
+// colour (themes without a background keep the terminal's).
+func paintScreen(view string, w, h int) string {
+	seq := themeSeq(cBack)
+	if seq == "" {
+		return view
+	}
+	lines := strings.Split(view, "\n")
+	for len(lines) < h {
+		lines = append(lines, "")
+	}
+	for i, l := range lines {
+		lines[i] = paintBG(fit(l, w), seq)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // paintBG puts background seq under a whole styled line: after every reset
