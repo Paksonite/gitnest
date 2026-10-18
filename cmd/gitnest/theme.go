@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Paksonite/gitnest/internal/config"
-	"github.com/Paksonite/gitnest/internal/theme"
+	"github.com/Paksonite/gitnest/v2/internal/config"
+	"github.com/Paksonite/gitnest/v2/internal/theme"
 )
 
 // themeCmd implements `gitnest theme [list|export <name>|check <name|file>]`.

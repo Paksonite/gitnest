@@ -11,9 +11,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Paksonite/gitnest/internal/gitx"
-	"github.com/Paksonite/gitnest/internal/scan"
-	"github.com/Paksonite/gitnest/internal/state"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/scan"
+	"github.com/Paksonite/gitnest/v2/internal/state"
 )
 
 func testApp(paths ...string) *App {

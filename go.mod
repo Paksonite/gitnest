@@ -1,4 +1,4 @@
-module github.com/Paksonite/gitnest
+module github.com/Paksonite/gitnest/v2
 
 go 1.25
 

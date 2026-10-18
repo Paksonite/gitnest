@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/Paksonite/gitnest/internal/state"
-	"github.com/Paksonite/gitnest/internal/update"
+	"github.com/Paksonite/gitnest/v2/internal/state"
+	"github.com/Paksonite/gitnest/v2/internal/update"
 )
 
 // updateCmd installs the latest release the same way gitnest was installed

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Paksonite/gitnest/internal/config"
+	"github.com/Paksonite/gitnest/v2/internal/config"
 )
 
 // Options control which directories are searched for repositories.

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Paksonite/gitnest/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
 )
 
 func names(rows []fileNode) []string {

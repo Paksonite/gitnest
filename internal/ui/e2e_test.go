@@ -16,7 +16,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Paksonite/gitnest/internal/config"
+	"github.com/Paksonite/gitnest/v2/internal/config"
 )
 
 // drive runs cmd and everything that follows from it. Timer messages are

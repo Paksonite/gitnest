@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Paksonite/gitnest/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
 )
 
 // cs builds commits from "hash:parent,parent" specs, newest first.

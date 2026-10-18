@@ -211,9 +211,11 @@ func (a *App) openURL(url string) tea.Cmd {
 	}
 	a.setToast("opening "+url, false)
 	return func() tea.Msg {
-		if err := exec.Command(opener, url).Start(); err != nil {
+		c := exec.Command(opener, url)
+		if err := c.Start(); err != nil {
 			return opMsg{label: "open " + url, err: err}
 		}
+		go c.Wait() //nolint:errcheck // reap it; the browser outlives it anyway
 		return nil
 	}
 }

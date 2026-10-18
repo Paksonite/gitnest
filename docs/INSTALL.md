@@ -71,7 +71,7 @@ script later? Remove the package first: `sudo apt remove gitnest`.)
 **From source** (Go 1.24 or newer):
 
 ```sh
-go install github.com/Paksonite/gitnest/cmd/gitnest@latest
+go install github.com/Paksonite/gitnest/v2/cmd/gitnest@latest
 ```
 
 **Release archives** for every platform are on the

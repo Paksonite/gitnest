@@ -27,7 +27,7 @@ import (
 var (
 	APIBase      = "https://api.github.com/repos/Paksonite/gitnest"
 	DownloadBase = "https://github.com/Paksonite/gitnest/releases/download"
-	Module       = "github.com/Paksonite/gitnest/cmd/gitnest"
+	Module       = "github.com/Paksonite/gitnest/v2/cmd/gitnest"
 )
 
 // client asks the GitHub API; downloadClient fetches release assets, which

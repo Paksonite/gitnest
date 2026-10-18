@@ -6,7 +6,7 @@ import (
 )
 
 // buildVersion fills in version information for builds made without the
-// release ldflags, such as go install github.com/Paksonite/gitnest/cmd/gitnest@v0.7.0:
+// release ldflags, such as go install github.com/Paksonite/gitnest/v2/cmd/gitnest@v2.0.0:
 // the module version, and the commit when the build has VCS data.
 func buildVersion() (v, c, d string) {
 	v, c, d = version, commit, date

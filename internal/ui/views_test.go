@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Paksonite/gitnest/internal/state"
+	"github.com/Paksonite/gitnest/v2/internal/state"
 )
 
 func TestViewsAndFavorites(t *testing.T) {
