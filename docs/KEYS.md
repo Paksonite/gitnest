@@ -5,8 +5,9 @@ Press `?` in the app for the same list. Panes are described in
 
 ## The dashboard
 
-gitnest opens with the dashboard (`start: list` in the config opens the list
-instead; `H` switches between them):
+gitnest opens with whichever of the dashboard and the repository list was
+shown when it last quit (the dashboard the first time; `start: dashboard` or
+`start: list` in the config fixes it); `H` switches between them:
 
 - **Activity**: commits per day across every repository for the last 26
   weeks, darker for busier days, with the months above.
@@ -32,9 +33,14 @@ instead; `H` switches between them):
 The wheel scrolls what is under the pointer (the diff, a file, a list); a
 click selects a row and a click on the selected row opens it (or folds a
 group); in a repository a click focuses the panel, and with panes a click
-focuses the pane. While the mouse is on, select text in the terminal with
-`shift` (`option` in macOS Terminal and iTerm2) held down; `mouse: false` in
-the config turns it off.
+focuses the pane. Dragging in the right-hand panel (the details card, the
+diff) selects text and copies it when you let go. A click on **Link** in the
+details card opens the repository's page in the browser (over SSH, where
+there is no browser, cmd/ctrl+click the link: terminals that know OSC 8 links
+open it). Elsewhere, select text in the terminal with `shift` (`option` in
+macOS Terminal and iTerm2) held down. gitnest asks the terminal for the
+plain arrow pointer while it runs (kitty, Ghostty, WezTerm, foot); `mouse:
+false` in the config leaves the mouse to the terminal.
 
 ## The repository list
 
@@ -77,9 +83,13 @@ different hosts are told apart by host (`org-core-dns · forgejo`).
 Four panels on the left — **Files**, **Branches** (`Local - Remote - Tags`),
 **Commits** (`Commits - Reflog`), **Stash** — and the diff on the right.
 `1`–`4` or `tab` switch panels, `enter` on the diff scrolls it; only the
-active panel highlights its selection. Branches show how they stand against
-their upstream: `✓` in sync, `↑1` / `↓2` to push / pull, `✗ gone` when the
-upstream was deleted, `∅` without one.
+active panel highlights its selection. A branch's icon is yellow for the
+main branch (`main`, `master`, or what `origin/HEAD` names) and blue for
+working branches, dimmed for remote ones; `*` and bold mark the branch you
+are on. Branches show how they stand against their upstream: `✓` in sync,
+`↑1` / `↓2` to push / pull, `✗ gone` when the upstream was deleted, `∅` when
+the branch has no upstream (it was never pushed, or doesn't track a remote
+branch; `u` sets one).
 
 | Panel | Keys |
 |---|---|

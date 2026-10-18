@@ -39,9 +39,19 @@ type State struct {
 	Recent     map[string]int64 `json:"recent"`
 	ListTree   bool             `json:"list_tree"`   // repository list grouped (by directory or remote)
 	ListGroup  string           `json:"list_group"`  // "folders" (default) or "remote"
+	Screen     string           `json:"screen"`      // "dashboard" or "list": where gitnest was last
 	PaneLayout string           `json:"pane_layout"` // grid, side by side or stacked
 	Collapsed  []string         `json:"collapsed"`   // folded directories of the list tree
 	Favorites  []string         `json:"favorites"`   // starred repositories (*)
+}
+
+// SetScreen remembers whether the dashboard or the list was shown last.
+func (s *State) SetScreen(screen string) {
+	if s.Screen == screen {
+		return
+	}
+	s.Screen = screen
+	_ = s.save()
 }
 
 // SetListGroup remembers how the list tree groups repositories.

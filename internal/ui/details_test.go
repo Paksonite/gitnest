@@ -24,7 +24,11 @@ func TestDetailsCard(t *testing.T) {
 			{Short: "7c1d4e", Subject: "Refactor server initialization", Author: "Bob Example", Unix: now.Add(-40 * 24 * time.Hour).Unix()},
 		},
 	}
-	card := strings.Join(detailsCard(r, "", d, 70, 40, now), "\n")
+	lines, linkRow := detailsCard(r, "", d, 70, 40, now)
+	card := strings.Join(lines, "\n")
+	if linkRow < 0 || !strings.Contains(lines[linkRow], "Link") || !strings.Contains(lines[linkRow], "https://gitlab.com/platform/platform") {
+		t.Errorf("link row %d: %q", linkRow, lines[max(0, linkRow)])
+	}
 	for _, want := range []string{"platform", "main", "gitlab.com/platform/platform", "Path", "/r/platform", "Upstream",
 		"origin/main", "Stashes", "Last commit", "3w ago · Ann Example", "Tag", "v1.2.0", "About", "Infrastructure",
 		"Changes", "src/main.go", "Recent commits", "a3f9e2 AE", "7c1d4e BE", "(main) Add health check endpoint"} {
@@ -40,10 +44,11 @@ func TestDetailsCard(t *testing.T) {
 	if got := compactRefs("HEAD -> main, origin/main, origin/HEAD, tag: v1.2"); got != "main, origin/main, v1.2" {
 		t.Errorf("compactRefs: %q", got)
 	}
-	if got := detailsCard(r, "", d, 70, 5, now); len(got) != 5 {
+	if got, _ := detailsCard(r, "", d, 70, 5, now); len(got) != 5 {
 		t.Errorf("card not clipped to the height: %d lines", len(got))
 	}
-	if loading := strings.Join(detailsCard(r, "", nil, 70, 40, now), "\n"); !strings.Contains(loading, "loading") {
+	loadingLines, _ := detailsCard(r, "", nil, 70, 40, now)
+	if loading := strings.Join(loadingLines, "\n"); !strings.Contains(loading, "loading") {
 		t.Errorf("no loading note: %s", loading)
 	}
 }

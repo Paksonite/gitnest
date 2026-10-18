@@ -202,6 +202,27 @@ func RemoteHost(url string) string {
 	return strings.ToLower(before)
 }
 
+// WebURL guesses the web page of a remote: https://host/owner/repo for
+// https, ssh:// and scp-like (git@host:owner/repo.git) remotes. Local paths
+// and empty URLs give "".
+func WebURL(url string) string {
+	host := RemoteHost(url)
+	if host == "" {
+		return ""
+	}
+	path := url
+	if i := strings.Index(url, "://"); i >= 0 {
+		_, path, _ = strings.Cut(url[i+3:], "/")
+	} else {
+		_, path, _ = strings.Cut(url, ":")
+	}
+	path = strings.TrimSuffix(strings.Trim(path, "/"), ".git")
+	if path == "" {
+		return "https://" + host
+	}
+	return "https://" + host + "/" + path
+}
+
 // RemoteGroup splits a remote URL into the host and the owner path, without
 // the repository's own name: git@github.com:ann/api.git gives
 // [github.com ann], https://gitlab.com/platform/infra/dns gives

@@ -66,9 +66,10 @@ icons: symbols
 # Check GitHub once a day for a new gitnest release and say so in the
 # header ("gitnest update" installs it). GITNEST_NO_UPDATE_CHECK=1 also turns it off.
 update_check: true
-# What gitnest opens with: "dashboard" (activity, what needs attention) or
-# "list" (the repositories). H switches between them.
-start: dashboard
+# What gitnest opens with: "last" (whichever was shown when it last quit),
+# "dashboard" (activity, what needs attention) or "list" (the repositories).
+# H switches between them.
+start: last
 # Click and scroll with the mouse. While it is on, select text in the
 # terminal with shift (or option on macOS) held down.
 mouse: true
@@ -325,9 +326,14 @@ func UpdateCheck(cfg Config) bool {
 	return cfg.UpdateCheck == nil || *cfg.UpdateCheck
 }
 
-// StartOnDashboard reports whether gitnest opens with the dashboard.
-func StartOnDashboard(cfg Config) bool {
-	return !strings.EqualFold(strings.TrimSpace(cfg.Start), "list")
+// StartScreen is what gitnest opens with: "dashboard", "list", or "last"
+// (the default: whichever was shown when gitnest last quit).
+func StartScreen(cfg Config) string {
+	switch v := strings.ToLower(strings.TrimSpace(cfg.Start)); v {
+	case "dashboard", "list":
+		return v
+	}
+	return "last"
 }
 
 // MouseOn reports whether the mouse is used (mouse: true, the default).

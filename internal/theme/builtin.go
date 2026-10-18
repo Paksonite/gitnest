@@ -22,7 +22,7 @@ var builtins = []Theme{
 	{Name: "catppuccin-mocha", Kind: KindDark, Palette: Palette{
 		Background: "#1e1e2e", Text: "#cdd6f4", Dim: "#6c7086", Accent: "#cba6f7",
 		Added: "#a6e3a1", Removed: "#f38ba8", Warn: "#f9e2af", Branch: "#89dceb",
-		Sel: "#45475a", SelDim: "#313244", Border: "#6c7086", Surface: "#181825",
+		Sel: "#45475a", SelDim: "#313244", Border: "#585b70", Surface: "#24243a",
 		DiffAdd: "#a6e3a1", DiffDel: "#f38ba8", DiffHunk: "#89dceb", DiffMeta: "#cba6f7",
 		Authors: []string{"#f5c2e7", "#fab387", "#94e2d5", "#89b4fa", "#b4befe", "#f2cdcd"},
 	}},
@@ -55,9 +55,9 @@ var builtins = []Theme{
 		Authors: []string{"#b48ead", "#d08770", "#8fbcbb", "#5e81ac", "#ebcb8b", "#a3be8c"},
 	}},
 	{Name: "solarized-dark", Kind: KindDark, Palette: Palette{
-		Background: "#002b36", Text: "#93a1a1", Dim: "#657b83", Accent: "#6c71c4",
+		Background: "#002b36", Text: "#a3b3b3", Dim: "#657b83", Accent: "#6c71c4",
 		Added: "#859900", Removed: "#dc322f", Warn: "#b58900", Branch: "#2aa198",
-		Sel: "#073642", SelDim: "#01313d", Border: "#586e75", Surface: "#00303b",
+		Sel: "#0c4554", SelDim: "#093c48", Border: "#2f5d68", Surface: "#073642",
 		DiffAdd: "#859900", DiffDel: "#dc322f", DiffHunk: "#2aa198", DiffMeta: "#6c71c4",
 		Authors: []string{"#d33682", "#cb4b16", "#2aa198", "#268bd2", "#b58900", "#859900"},
 	}},

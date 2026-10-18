@@ -21,8 +21,9 @@ type reposState struct {
 	known       []string // sorted repository paths from the last scan
 	view        []int    // indexes into all, after filtering
 	cur, off    int
-	listH       int // rows of the list on screen (set while rendering)
-	listW       int // width of the list panel (set while rendering)
+	listH       int      // rows of the list on screen (set while rendering)
+	listW       int      // width of the list panel (set while rendering)
+	link        listLink // the details card's Link (set while rendering)
 	filter      string
 	filtering   bool
 	status      int         // status filter: stAll, stDirty… (F, d)
@@ -925,7 +926,12 @@ func (a *App) viewRepos() string {
 			if p == rs.previewPath {
 				d = rs.details
 			}
-			pl = detailsCard(r, rs.label[p], d, pw, ph, now)
+			var linkRow int
+			pl, linkRow = detailsCard(r, rs.label[p], d, pw, ph, now)
+			rs.link = listLink{}
+			if linkRow >= 0 {
+				rs.link = listLink{y: 3 + linkRow, url: gitx.WebURL(r.RemoteURL)} // header, border, title
+			}
 		} else if i, ok := a.selectedDir(); ok {
 			repos := map[string]scan.Repo{}
 			for _, r := range rs.all {
@@ -955,4 +961,10 @@ func rootsList(roots []string) string {
 		out[i] = config.Abbrev(r)
 	}
 	return strings.Join(out, ", ")
+}
+
+// listLink is where the details card shows the repository's web page.
+type listLink struct {
+	y   int
+	url string
 }

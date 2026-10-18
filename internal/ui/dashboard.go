@@ -76,6 +76,7 @@ func (a *App) onActivity(m activityMsg) {
 // missing or older than ten minutes.
 func (a *App) openDashboard() tea.Cmd {
 	a.scr = scrDash
+	a.st.SetScreen("dashboard")
 	if a.dash.act == nil || time.Since(a.dash.loaded) > 10*time.Minute {
 		return a.loadActivity()
 	}
@@ -105,10 +106,12 @@ func (a *App) dashKey(k tea.KeyMsg) tea.Cmd {
 		}
 	case actSearch:
 		a.scr = scrRepos
+		a.st.SetScreen("list")
 		a.rs.filtering, a.rs.filter = true, ""
 		a.rebuildView(a.selectedKey())
 	case actBack, actDashboard:
 		a.scr = scrRepos
+		a.st.SetScreen("list")
 		return a.previewCmd()
 	case actRefreshList:
 		a.dash.act = nil

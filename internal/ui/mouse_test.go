@@ -1,7 +1,10 @@
 package ui
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/charmbracelet/lipgloss"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -62,5 +65,50 @@ func TestMouseDashboardAndPanes(t *testing.T) {
 	s.Update(click(150, 10))
 	if s.focus != 1 {
 		t.Fatalf("click on the right pane: %d", s.focus)
+	}
+}
+
+func TestMouseSelectAndLink(t *testing.T) {
+	a := testApp("/r/platform")
+	a.rs.all[0].Name = "platform"
+	a.rs.all[0].RemoteURL = "git@gitlab.com:platform/platform.git"
+	a.rebuildView("")
+	a.w, a.h = 140, 30
+	a.rs.previewPath = "/r/platform"
+	v := a.View()
+	// Find the Path row of the details card and drag across it.
+	lines := strings.Split(v, "\n")
+	y := -1
+	for i, l := range lines {
+		if strings.Contains(l, "Path") && strings.Contains(l, "/r/platform") {
+			y = i
+		}
+	}
+	if y < 0 {
+		t.Fatalf("no Path row:\n%s", v)
+	}
+	x := strings.Index(lines[y], "Path")
+	x = lipgloss.Width(lines[y][:x])
+	a.onMouse(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	a.onMouse(tea.MouseMsg{X: x + 30, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionMotion})
+	cmd := a.onMouse(tea.MouseMsg{X: x + 30, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
+	if !a.sel.on || cmd == nil || !strings.Contains(a.toast, "copied") {
+		t.Fatalf("selection: on %v, toast %q", a.sel.on, a.toast)
+	}
+	if got := a.selText(); !strings.HasPrefix(got, "Path") || !strings.Contains(got, "/r/platform") {
+		t.Errorf("selected text: %q", got)
+	}
+	a.onKey(key("j")) // any key clears it
+	if a.sel.on {
+		t.Error("a key should clear the selection")
+	}
+	// A click on the Link row opens the repository's web page.
+	if a.rs.link.url != "https://gitlab.com/platform/platform" {
+		t.Fatalf("link: %+v", a.rs.link)
+	}
+	a.View()
+	a.onMouse(click(a.rs.listW+20, a.rs.link.y))
+	if !strings.Contains(a.toast, "https://gitlab.com/platform/platform") {
+		t.Errorf("link click: toast %q", a.toast)
 	}
 }

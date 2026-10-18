@@ -148,6 +148,9 @@ func (a *App) viewPicker() string {
 			name = lipgloss.NewStyle().Bold(true).Background(cSel).Foreground(cText).Render(name)
 		}
 		kind := string(t.Kind)
+		if t.Kind == theme.KindLight && lipgloss.HasDarkBackground() {
+			kind = "light terminal" // they keep the terminal's background
+		}
 		if t.Source != "" {
 			kind += ", custom"
 		}

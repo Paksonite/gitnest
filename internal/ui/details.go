@@ -16,8 +16,10 @@ import (
 
 // detailsCard is the preview of the selected repository in the list: who and
 // where it is, how it stands, its latest commits and changes. d may be nil
-// while the details load.
-func detailsCard(r scan.Repo, label string, d *gitx.Details, w, h int, now time.Time) []string {
+// while the details load. linkRow is the line of the Link field (-1 when
+// there is none), which a click opens.
+func detailsCard(r scan.Repo, label string, d *gitx.Details, w, h int, now time.Time) (lines []string, linkRow int) {
+	linkRow = -1
 	inner := max(10, w)
 	var out []string
 	add := func(s string) { out = append(out, fit(s, inner)) }
@@ -48,6 +50,10 @@ func detailsCard(r scan.Repo, label string, d *gitx.Details, w, h int, now time.
 	}
 	field("Path", config.Abbrev(r.Path))
 	field("Remote", r.RemoteURL)
+	if web := gitx.WebURL(r.RemoteURL); web != "" {
+		linkRow = len(out)
+		field("Link", hyperlink(web, fg(cCyan, web)))
+	}
 	if d != nil {
 		up := d.Upstream
 		if up == "" && !r.Detached {
@@ -81,7 +87,7 @@ func detailsCard(r scan.Repo, label string, d *gitx.Details, w, h int, now time.
 	if d == nil {
 		add("")
 		add(fg(cDim, "loading…"))
-		return clip(out, h)
+		return clip(out, h), linkRow
 	}
 
 	if len(d.Changes) > 0 {
@@ -124,7 +130,7 @@ func detailsCard(r scan.Repo, label string, d *gitx.Details, w, h int, now time.
 			add(line + fit(subject, max(1, room)) + " " + fg(cDim, age))
 		}
 	}
-	return clip(out, h)
+	return clip(out, h), linkRow
 }
 
 // repoStatusText says in words how a repository stands.
@@ -224,4 +230,10 @@ func compactRefs(refs string) string {
 		out = append(out, r)
 	}
 	return strings.Join(out, ", ")
+}
+
+// hyperlink makes text a link to url in terminals that know OSC 8 (iTerm2,
+// kitty, WezTerm, GNOME Terminal…); others show the text.
+func hyperlink(url, text string) string {
+	return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
 }

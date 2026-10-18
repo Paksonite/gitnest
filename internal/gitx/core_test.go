@@ -412,3 +412,20 @@ func TestStashCount(t *testing.T) {
 		t.Fatalf("stashes %d, err %v", info.Stashes, err)
 	}
 }
+
+func TestWebURL(t *testing.T) {
+	cases := map[string]string{
+		"git@github.com:ann/api.git":                        "https://github.com/ann/api",
+		"https://gitlab.com/platform/infra/dns.git":         "https://gitlab.com/platform/infra/dns",
+		"https://user:token@gitea.example.com/team/app":     "https://gitea.example.com/team/app",
+		"ssh://git@forgejo.example.com:2222/Org/repo.git":   "https://forgejo.example.com/Org/repo",
+		"ssh://git@forgejo.example.com/Oktawave-GCP/fw.git": "https://forgejo.example.com/Oktawave-GCP/fw",
+		"/srv/git/local.git":                                "",
+		"":                                                  "",
+	}
+	for url, want := range cases {
+		if got := WebURL(url); got != want {
+			t.Errorf("WebURL(%q) = %q, want %q", url, got, want)
+		}
+	}
+}

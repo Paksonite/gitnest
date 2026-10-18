@@ -109,6 +109,7 @@ type App struct {
 	menu      *menu       // filters, actions or the sort & view chooser
 	browse    *browser    // every file of the open repository (B)
 	dash      dashState   // the dashboard
+	sel       textSel     // text selected with the mouse in the right-hand panel
 	from      screen      // where esc in a repository goes back to
 	lastErr   *report     // details of the last failed operation, shown with "!"
 	toast     string
@@ -123,12 +124,25 @@ func Run(cfg config.Config, noConfig bool, startDir, cdFile string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	a := newApp(ctx, cfg, noConfig, startDir, cdFile)
-	if startDir == "" && config.StartOnDashboard(cfg) {
-		a.scr = scrDash
+	if startDir == "" {
+		switch config.StartScreen(cfg) {
+		case "dashboard":
+			a.scr = scrDash
+		case "last":
+			if a.st.Screen != "list" { // the dashboard the first time
+				a.scr = scrDash
+			}
+		}
 	}
 	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
 	if config.MouseOn(cfg) {
 		opts = append(opts, tea.WithMouseCellMotion())
+		// While gitnest takes the mouse, ask for the plain arrow pointer
+		// rather than a text or selection one (OSC 22: kitty, Ghostty,
+		// WezTerm, foot, xterm; other terminals ignore it), and give the
+		// text pointer back afterwards.
+		fmt.Fprint(os.Stdout, "\x1b]22;default\x1b\\")
+		defer fmt.Fprint(os.Stdout, "\x1b]22;text\x1b\\")
 	}
 	_, err := tea.NewProgram(newShell(a), opts...).Run()
 	return err
@@ -294,6 +308,7 @@ func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 		return tea.Quit
 	}
 	a.toast = ""
+	a.sel.on = false
 	if a.ed != nil {
 		return a.editorKey(k)
 	}
@@ -497,7 +512,10 @@ func (a *App) gather(paths []string) tea.Cmd {
 
 // --------------------------------------------------------------------- views
 
-func (a *App) View() string {
+func (a *App) View() string { return a.withSelection(a.screen()) }
+
+// screen renders the current screen.
+func (a *App) screen() string {
 	if a.w == 0 || a.h == 0 {
 		return ""
 	}

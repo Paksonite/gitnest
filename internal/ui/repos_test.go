@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"github.com/charmbracelet/lipgloss"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -261,5 +262,28 @@ func TestStatusCell(t *testing.T) {
 	row := repoRow(scan.Repo{Name: "api", Info: gitx.Info{Upstream: true, Changes: 2}}, rowOpts{nameW: 20})
 	if strings.Count(row.plain, "●") != 0 || !strings.HasPrefix(row.plain, "  api") {
 		t.Errorf("row: %q", row.plain)
+	}
+}
+
+func TestBranchColor(t *testing.T) {
+	rp := &repoState{mainBranch: "origin/main"}
+	cases := []struct {
+		b    gitx.Branch
+		want lipgloss.TerminalColor
+	}{
+		{gitx.Branch{Name: "main"}, cYellow},
+		{gitx.Branch{Name: "feature/x"}, cCyan},
+		{gitx.Branch{Name: "origin/main", Remote: true}, tint(cYellow, 0.6)},
+		{gitx.Branch{Name: "origin/feature/x", Remote: true}, cDim},
+	}
+	for _, c := range cases {
+		if got := rp.branchColor(c.b); got != c.want {
+			t.Errorf("%s: %v, want %v", c.b.Name, got, c.want)
+		}
+	}
+	// Without origin/HEAD, master counts when there is no main.
+	rp = &repoState{local: []gitx.Branch{{Name: "master"}, {Name: "dev"}}}
+	if rp.branchColor(gitx.Branch{Name: "master"}) != cYellow || rp.branchColor(gitx.Branch{Name: "dev"}) != cCyan {
+		t.Error("master as the main branch")
 	}
 }

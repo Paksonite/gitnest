@@ -1,6 +1,10 @@
 package ui
 
 import (
+	"os"
+	"os/exec"
+	"runtime"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -19,7 +23,11 @@ func (a *App) onMouse(m tea.MouseMsg) tea.Cmd {
 		wheel = 1
 	}
 	if wheel != 0 && m.Action == tea.MouseActionPress {
+		a.sel.on = false
 		return a.onWheel(m.X, m.Y, wheel)
+	}
+	if cmd, took := a.selMouse(m); took {
+		return cmd
 	}
 	if m.Button != tea.MouseButtonLeft || m.Action != tea.MouseActionPress {
 		return nil
@@ -77,6 +85,9 @@ func (a *App) overlayOpen() bool {
 // opens it (a repository) or folds it (a group).
 func (a *App) clickList(x, y int) tea.Cmd {
 	rs := &a.rs
+	if x >= rs.listW && rs.link.url != "" && y == rs.link.y {
+		return a.openURL(rs.link.url)
+	}
 	const firstRow = 4 // header, border, panel title, column names
 	if x >= rs.listW || y < firstRow || y >= firstRow+rs.listH {
 		return nil
@@ -186,4 +197,23 @@ func (s *Shell) onMouse(m tea.MouseMsg) tea.Cmd {
 		return s.deliver(s.panes[i], m)
 	}
 	return nil
+}
+
+// openURL opens url in the browser (open on macOS, xdg-open on Linux).
+// Without a display, as over SSH, it says to use the terminal's link instead.
+func (a *App) openURL(url string) tea.Cmd {
+	opener := "xdg-open"
+	if runtime.GOOS == "darwin" {
+		opener = "open"
+	} else if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
+		a.setToast("no browser here (SSH?): cmd/ctrl+click the link, or open "+url, false)
+		return nil
+	}
+	a.setToast("opening "+url, false)
+	return func() tea.Msg {
+		if err := exec.Command(opener, url).Start(); err != nil {
+			return opMsg{label: "open " + url, err: err}
+		}
+		return nil
+	}
 }

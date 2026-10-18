@@ -33,10 +33,12 @@ type repoData struct {
 	refs     []gitx.RefEntry
 	notMain  map[string]bool
 	tags     []gitx.Tag
+	main     string // the main branch: "origin/main", or "main" without origin/HEAD
 }
 
 type repoState struct {
 	dir, name     string
+	mainBranch    string // the main branch, see repoData
 	focus         int
 	info          gitx.Info
 	files         []gitx.File
@@ -157,6 +159,7 @@ func loadRepoData(ctx context.Context, dir string) tea.Cmd {
 		par(func() { d.refs, _ = gitx.Reflog(ctx, dir, 300) })
 		par(func() { d.notMain = gitx.NotOnMain(ctx, dir, 1000) })
 		par(func() { d.tags, _ = gitx.Tags(ctx, dir) })
+		par(func() { d.main = gitx.MainBranch(ctx, dir) })
 		wg.Wait()
 		return repoDataMsg{dir: dir, d: d}
 	}
@@ -175,7 +178,7 @@ func (a *App) onRepoData(m repoDataMsg) tea.Cmd {
 	}
 	rp.setFiles(d.files)
 	rp.commits, rp.unpushed, rp.stashes, rp.refs = d.commits, d.unpushed, d.stashes, d.refs
-	rp.notMain, rp.graph, rp.tags = d.notMain, buildGraph(d.commits), d.tags
+	rp.notMain, rp.graph, rp.tags, rp.mainBranch = d.notMain, buildGraph(d.commits), d.tags, d.main
 	for i := 0; i < 4; i++ {
 		rp.cur[i] = clamp(rp.cur[i], 0, rp.count(i)-1)
 	}
@@ -758,10 +761,16 @@ func (a *App) panelItems(panel int) []rowItem {
 		for _, b := range rp.branches() {
 			mark := "  "
 			glyph := branchGlyph(b.Remote)
-			name := fg(cDim, glyph) + b.Name
+			name := fg(rp.branchColor(b), glyph) + b.Name
+			if glyph == "" { // no icons: the name carries the colour
+				name = fg(rp.branchColor(b), b.Name)
+			}
 			if b.Current {
 				mark = "* "
-				name = fg(cGreen, glyph+bold(b.Name))
+				name = fg(rp.branchColor(b), glyph) + bold(b.Name)
+				if glyph == "" {
+					name = fg(rp.branchColor(b), bold(b.Name))
+				}
 			}
 			sp, ss := branchSync(b)
 			items = append(items, rowItem{
@@ -1121,6 +1130,34 @@ func (a *App) push(force bool) tea.Cmd {
 // branchSync shows how a local branch stands against its upstream, after
 // its name: ✓ in sync, ↑ commits to push, ↓ commits to pull, "gone" when
 // the upstream was deleted, ∅ without an upstream (as in the list).
+// branchColor colours a branch's icon: the main branch (main, master, or
+// what origin/HEAD names) apart from working branches, remote ones dimmed.
+func (rp *repoState) branchColor(b gitx.Branch) lipgloss.TerminalColor {
+	main := rp.mainBranch
+	if main == "" {
+		main = "main"
+		for _, l := range rp.local {
+			if l.Name == "master" {
+				main = "master"
+			}
+		}
+	}
+	local := main
+	if i := strings.Index(main, "/"); i >= 0 {
+		local = main[i+1:]
+	}
+	isMain := b.Name == local || b.Name == main || (b.Remote && strings.HasSuffix(b.Name, "/"+local))
+	switch {
+	case isMain && b.Remote:
+		return tint(cYellow, 0.6)
+	case isMain:
+		return cYellow
+	case b.Remote:
+		return cDim
+	}
+	return cCyan
+}
+
 func branchSync(b gitx.Branch) (plain, styled string) {
 	if b.Remote {
 		return "", ""

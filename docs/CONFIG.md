@@ -17,7 +17,7 @@ jobs: 8                # parallel git processes
 editor: ""             # for e; empty = $VISUAL, then $EDITOR, then vi
 icons: symbols         # nerd (needs a Nerd Font) or plain
 update_check: true     # look for a new release once a day (false = never)
-start: dashboard       # or list: what gitnest opens with
+start: last            # or dashboard, list: what gitnest opens with (last = as you left it)
 mouse: true            # click and scroll; false leaves the mouse to the terminal
 theme:
   mode: auto           # follows the terminal background; dark or light to force
