@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/Paksonite/gitnest/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
 )
 
 // planner is the interactive rebase editor (i in the Commits panel): the

@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"time"
 
-	"github.com/Paksonite/gitnest/internal/state"
-	"github.com/Paksonite/gitnest/internal/update"
+	"github.com/Paksonite/gitnest/v2/internal/state"
+	"github.com/Paksonite/gitnest/v2/internal/update"
 )
 
 // updateCmd installs the latest release the same way gitnest was installed
@@ -76,19 +75,32 @@ func updateCmd(args []string) error {
 // updateDev updates a gitnest-dev preview build from the rolling dev
 // pre-release; release versions are left alone.
 func updateDev(ctx context.Context, exe, cur string, check bool) error {
-	fmt.Printf("gitnest-dev %s (preview build of the ui-next branch)\n", cur)
-	if check {
-		fmt.Printf("builds: %s/%s\nrun `gitnest-dev update` to install the latest one\n", strings.TrimSuffix(update.DownloadBase, "/download"), "tag/"+update.DevTag)
+	_, commit, _ := buildVersion()
+	checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	latest, newer, err := update.CheckDev(checkCtx, commit, state.DevUpdateCachePath(), 0)
+	cancel()
+	if err != nil {
+		return err
+	}
+	built := latest.Published.Local().Format("2006-01-02 15:04")
+	if !newer {
+		fmt.Printf("gitnest-dev %s is the latest dev build (built %s)\n", cur, built)
 		return nil
 	}
+	fmt.Printf("gitnest-dev %s is available (built %s); you have %s\n", latest.Version(), built, cur)
+	if check {
+		fmt.Println("run `gitnest-dev update` to install it")
+		return nil
+	}
+	fmt.Println()
 	changed, err := update.ApplyDev(ctx, exe, os.Stdout)
 	if err != nil {
 		return fmt.Errorf("update: %w", err)
 	}
-	if !changed {
+	if !changed { // the dev release moved on between the check and the download
 		fmt.Println("already the latest dev build")
 		return nil
 	}
-	fmt.Println("\nlatest gitnest-dev installed ✓  (restart it to use it)")
+	fmt.Printf("\ngitnest-dev %s → %s installed ✓  (restart it to use it)\n", cur, latest.Version())
 	return nil
 }

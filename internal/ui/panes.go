@@ -149,16 +149,26 @@ func broadcast(msg tea.Msg) bool {
 func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
+		resized := s.w != 0 && (s.w != m.Width || s.h != m.Height)
 		s.w, s.h = m.Width, m.Height
 		s.resize()
+		if resized {
+			// Terminals rewrap what was on screen when the window changes
+			// (iTerm2 splitting a pane, say); redrawing only the changed
+			// lines would leave pieces of the old frame behind, at the
+			// bottom right especially. Clear and draw it all.
+			return s, tea.ClearScreen
+		}
 		return s, nil
 	case tea.KeyMsg:
 		return s, s.onKey(m)
+	case tea.MouseMsg:
+		return s, s.onMouse(m)
 	case tea.FocusMsg, tea.BlurMsg:
 		return s, s.deliver(s.focused(), msg)
 	case updateMsg:
 		s.panes[0].app.sh.update = m.version // every pane shares sh
-		s.focused().app.setToast("gitnest "+m.version+" is out — quit and run: gitnest update", false)
+		s.focused().app.setToast("gitnest "+m.version+" is out — quit and run: "+updateCommand(m.version), false)
 		return s, nil
 	case shellRescanTickMsg:
 		a := s.panes[0].app
@@ -176,6 +186,9 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if _, ok := m.msg.(tea.QuitMsg); ok {
 			return s, s.quitFrom(p)
+		}
+		if o, ok := m.msg.(openPanesMsg); ok {
+			return s, s.openRepos(o.paths)
 		}
 		cmd := s.deliver(p, m.msg)
 		if broadcast(m.msg) {
@@ -270,6 +283,17 @@ func (s *Shell) open() tea.Cmd {
 	}
 	a.setToast(msg, false)
 	return wrap(p.id, tea.Batch(a.previewCmd(), repoTick()))
+}
+
+// openRepos opens each repository in a new pane next to the focused one.
+func (s *Shell) openRepos(paths []string) tea.Cmd {
+	var cmds []tea.Cmd
+	for _, path := range paths {
+		cmds = append(cmds, s.open())
+		p := s.focused()
+		cmds = append(cmds, wrap(p.id, p.app.openDir(path)))
+	}
+	return tea.Batch(cmds...)
 }
 
 func (s *Shell) close(p *pane) {
@@ -467,8 +491,11 @@ func (s *Shell) resize() {
 func (p *pane) title(n int) string {
 	a := p.app
 	t := fmt.Sprintf("%d · ", n)
-	if a.scr == scrRepo {
+	switch a.scr {
+	case scrRepo:
 		return t + a.rp.name + " · " + a.rp.info.Branch
+	case scrDash:
+		return t + "dashboard"
 	}
 	return t + "repositories"
 }
@@ -477,6 +504,10 @@ func (s *Shell) View() string {
 	if s.w == 0 || s.h == 0 {
 		return ""
 	}
+	return paintScreen(s.view(), s.w, s.h)
+}
+
+func (s *Shell) view() string {
 	if len(s.panes) == 1 {
 		return s.panes[0].app.View()
 	}

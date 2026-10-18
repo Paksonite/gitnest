@@ -1,6 +1,8 @@
 package ui
 
 import (
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"os"
 	"regexp"
 	"strings"
@@ -43,12 +45,13 @@ func TestHintsAndHelpComeFromKeymap(t *testing.T) {
 		t.Errorf("stash hints = %q", got)
 	}
 	help := strings.Join(helpLines(), "\n")
-	for _, want := range []string{"Repository list", "fast-forward to upstream", "shift+tab", "move to the body"} {
+	for _, want := range []string{"Repository list", "fast-forward to upstream", "next panel", "move to the body"} {
 		if !strings.Contains(help, want) {
 			t.Errorf("help lacks %q", want)
 		}
 	}
-	if lookup(scBranches, "f") != actFastForward || lookup(scRepo, "f") != actFetch || lookup(scList, "x") != actNone {
+	if lookup(scBranches, "F") != actFastForward || lookup(scRepo, "f") != actFetch || lookup(scList, "x") != actNone ||
+		lookup(scCommits, "F") != actFixup || lookup(scBranches, "f") != actNone {
 		t.Error("lookup")
 	}
 }
@@ -60,7 +63,7 @@ func TestHelpOverlay(t *testing.T) {
 	if a.report == nil || a.report.title != "Keys" {
 		t.Fatal("? should open the key overlay")
 	}
-	a.onKey(key("j"))
+	a.onKey(tea.KeyMsg{Type: tea.KeyDown})
 	if a.report.off != 1 {
 		t.Errorf("overlay should scroll, off = %d", a.report.off)
 	}
@@ -157,22 +160,25 @@ func TestReadmeKeyTablesMatchKeymap(t *testing.T) {
 func TestFooterSkipsShadowedKeys(t *testing.T) {
 	a := testApp()
 	a.scr = scrRepo
-	for panel, shadowed := range map[int]string{pBranches: "f fetch", pCommits: "f fetch", pFiles: "enter diff"} {
+	for panel, shadowed := range map[int]string{pFiles: "enter diff", pStash: "space"} {
 		a.rp.focus = panel
-		if h := a.repoHints(); strings.Contains(h, shadowed) {
-			t.Errorf("panel %d footer offers %q: %s", panel, shadowed, h)
+		if h := a.repoHints(); strings.Count(h, shadowed) > 1 {
+			t.Errorf("panel %d footer offers %q twice: %s", panel, shadowed, h)
 		}
 	}
-	a.rp.focus = pStash
-	if h := a.repoHints(); !strings.Contains(h, "f fetch") {
-		t.Errorf("stash footer lacks fetch: %s", h)
+	// f fetches in every panel now (fast-forward and fixup moved to F).
+	for _, panel := range []int{pFiles, pBranches, pCommits, pStash} {
+		a.rp.focus = panel
+		if h := a.repoHints(); !strings.Contains(h, "f fetch") {
+			t.Errorf("panel %d footer lacks fetch: %s", panel, h)
+		}
 	}
 }
 
 // The help screen lists the main keys only; aliases still work.
 func TestHelpShowsMainKeys(t *testing.T) {
 	help := strings.Join(helpLines(), "\n")
-	for _, want := range []string{"tab →", "shift+tab ←", "ctrl+←→↑↓", "↑ ↓"} {
+	for _, want := range []string{"tab", "ctrl+←→↑↓", "↑ ↓"} {
 		if !strings.Contains(help, want) {
 			t.Errorf("help lacks %q", want)
 		}
@@ -182,7 +188,28 @@ func TestHelpShowsMainKeys(t *testing.T) {
 			t.Errorf("help still shows %q", unwanted)
 		}
 	}
-	if lookup(scRepo, "l") != actNextPanel || lookup(scMain, "J") != actPageDown || lookup(scPanes, "alt+up") != actPaneUp {
+	if lookup(scRepo, "right") != actNextPanel || lookup(scMain, "J") != actPageDown || lookup(scPanes, "alt+up") != actPaneUp {
 		t.Error("hidden aliases must keep working")
+	}
+	// No vim-style j/k anywhere, no backspace in the help.
+	for sc := scope(0); sc < scopes; sc++ {
+		if lookup(sc, "j") == actDown || lookup(sc, "k") == actUp {
+			t.Errorf("%s still moves with j/k", scopeTitles[sc])
+		}
+	}
+	if strings.Contains(help, "backspace") {
+		t.Error("the help lists backspace")
+	}
+}
+
+// A footer too long for the window loses hints from the end, never "? help".
+func TestFooterKeepsHelp(t *testing.T) {
+	a := testApp("/r/a")
+	a.w, a.h = 80, 24
+	f := a.footer(hints(scList, scPanes, scGlobal))
+	last := strings.Split(f, "\n")[1]
+	if lipgloss.Width(last) > 79 || !strings.Contains(last, "? help") || !strings.HasPrefix(last, "enter open") ||
+		!strings.HasSuffix(last, versionLabel()) {
+		t.Errorf("footer: %q", last)
 	}
 }

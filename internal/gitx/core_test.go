@@ -1,6 +1,7 @@
 package gitx
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -141,6 +142,9 @@ func TestUpstreamAndFastForward(t *testing.T) {
 }
 
 func TestStashStagedAndBranch(t *testing.T) {
+	if v, _ := GitVersion(bg); !VersionAtLeast(v, MinGitVersion) {
+		t.Skipf("git stash push --staged needs git %s (this is %s); the app says so", MinGitVersion, v)
+	}
 	dir := newRepo(t)
 	commit(t, dir, "a.txt", "a\n", "first")
 	writeFile(t, dir, "a.txt", "staged\n")
@@ -381,4 +385,96 @@ func TestCherryPickAcrossRepositories(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustState(t, dst, StateNone)
+}
+
+func TestRemoteGroup(t *testing.T) {
+	cases := map[string]string{
+		"git@github.com:ann/api.git":                    "github.com/ann",
+		"https://gitlab.com/platform/infra/dns.git":     "gitlab.com/platform/infra",
+		"ssh://git@forge.example.com:2222/team/app.git": "forge.example.com/team",
+		"https://example.com/solo.git":                  "example.com",
+		"/srv/git/local.git":                            "",
+		"":                                              "",
+	}
+	for url, want := range cases {
+		if got := strings.Join(RemoteGroup(url), "/"); got != want {
+			t.Errorf("RemoteGroup(%q) = %q, want %q", url, got, want)
+		}
+	}
+}
+
+func TestStashCount(t *testing.T) {
+	dir := newRepo(t)
+	commit(t, dir, "a.txt", "a\n", "first")
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("changed"), 0o644)
+	git(t, dir, "stash")
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("again"), 0o644)
+	git(t, dir, "stash")
+	info, err := GetInfo(context.Background(), dir)
+	if err != nil || info.Stashes != 2 {
+		t.Fatalf("stashes %d, err %v", info.Stashes, err)
+	}
+}
+
+func TestWebURL(t *testing.T) {
+	cases := map[string]string{
+		"git@github.com:ann/api.git":                        "https://github.com/ann/api",
+		"https://gitlab.com/platform/infra/dns.git":         "https://gitlab.com/platform/infra/dns",
+		"https://user:token@gitea.example.com/team/app":     "https://gitea.example.com/team/app",
+		"ssh://git@forgejo.example.com:2222/Org/repo.git":   "https://forgejo.example.com/Org/repo",
+		"ssh://git@forgejo.example.com/Oktawave-GCP/fw.git": "https://forgejo.example.com/Oktawave-GCP/fw",
+		"/srv/git/local.git":                                "",
+		"":                                                  "",
+	}
+	for url, want := range cases {
+		if got := WebURL(url); got != want {
+			t.Errorf("WebURL(%q) = %q, want %q", url, got, want)
+		}
+	}
+}
+
+func TestRedact(t *testing.T) {
+	cases := map[string]string{
+		"https://ann:ghp_secret@github.com/ann/api.git":                           "https://ann:***@github.com/ann/api.git",
+		"fatal: unable to access 'https://x:tok@gitea.example.com/a/b.git/': 403": "fatal: unable to access 'https://x:***@gitea.example.com/a/b.git/': 403",
+		"git@github.com:ann/api.git":                                              "git@github.com:ann/api.git",
+		"https://github.com/ann/api":                                              "https://github.com/ann/api",
+		"ssh://git@host:2222/a/b.git":                                             "ssh://git@host:2222/a/b.git",
+	}
+	for in, want := range cases {
+		if got := Redact(in); got != want {
+			t.Errorf("Redact(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestRefsFingerprint(t *testing.T) {
+	dir := newRepo(t)
+	commit(t, dir, "a.txt", "a\n", "first")
+	fp := func() string { return RefsFingerprint(context.Background(), dir) }
+	prev := fp()
+	for _, change := range [][]string{
+		{"branch", "other"},
+		{"tag", "v1"},
+		{"checkout", "-q", "other"},
+		{"commit", "-q", "--allow-empty", "-m", "second"},
+		{"checkout", "-q", "--detach"},
+	} {
+		git(t, dir, change...)
+		if now := fp(); now == prev || now == "" {
+			t.Errorf("git %v didn't change the fingerprint", change)
+		} else {
+			prev = now
+		}
+	}
+	writeFile(t, dir, "a.txt", "stash me\n")
+	git(t, dir, "stash", "-q")
+	if fp() == prev {
+		t.Error("a stash didn't change the fingerprint")
+	}
+	prev = fp()
+	writeFile(t, dir, "a.txt", "work in progress\n")
+	if fp() != prev {
+		t.Error("editing a file isn't a ref change")
+	}
 }

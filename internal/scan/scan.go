@@ -9,7 +9,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/Paksonite/gitnest/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
 )
 
 type Repo struct {

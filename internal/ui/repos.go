@@ -10,10 +10,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/Paksonite/gitnest/internal/config"
-	"github.com/Paksonite/gitnest/internal/gitx"
-	"github.com/Paksonite/gitnest/internal/scan"
-	"github.com/Paksonite/gitnest/internal/state"
+	"github.com/Paksonite/gitnest/v2/internal/config"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/scan"
+	"github.com/Paksonite/gitnest/v2/internal/state"
 )
 
 type reposState struct {
@@ -21,10 +21,14 @@ type reposState struct {
 	known       []string // sorted repository paths from the last scan
 	view        []int    // indexes into all, after filtering
 	cur, off    int
-	listH       int // rows of the list on screen (set while rendering)
+	listH       int      // rows of the list on screen (set while rendering)
+	listW       int      // width of the list panel (set while rendering)
+	link        listLink // the details card's Link (set while rendering)
 	filter      string
 	filtering   bool
-	dirtyOnly   bool
+	status      int         // status filter: stAll, stDirty… (F, d)
+	host        string      // remote host filter ("" = all, "local" = no remote)
+	favOnly     bool        // only starred repositories
 	score       map[int]int // search score of each shown repository (rs.all index)
 	loading     bool        // initial load or full status refresh running
 	scanning    bool        // background scan for new/removed repositories running
@@ -33,10 +37,11 @@ type reposState struct {
 	label       map[string]string // tells apart clones that share a name, e.g. "forgejo"
 	hl          map[string][]int  // name runes matched by the filter
 	sortMode    int
-	tree        bool            // group repositories by directory
+	tree        bool            // group repositories (by directory or remote)
+	group       int             // groupFolders or groupRemote, when tree
 	rows        []listRow       // what is shown: repositories and, in tree mode, directories
 	collapsed   map[string]bool // collapsed directories in tree mode
-	preview     string
+	details     *gitx.Details   // of previewPath, nil while loading
 	previewPath string
 }
 
@@ -206,7 +211,7 @@ func (a *App) onStatus(m statusMsg) tea.Cmd {
 	rs.all = out
 	// A plain refresh updates rows in place: indexes in rs.view stay valid
 	// and rows don't jump around under the cursor.
-	if m.added || len(out) != before || rs.dirtyOnly {
+	if m.added || len(out) != before || rs.listFiltered() {
 		a.rebuildView(keep)
 	}
 	return nil
@@ -316,7 +321,7 @@ func (a *App) rebuildView(keep string) {
 	rs.score = map[int]int{}
 	var cs []cand
 	for i, r := range rs.all {
-		if rs.dirtyOnly && r.Changes == 0 {
+		if !rs.keeps(r) || (rs.favOnly && !a.sh.fav[r.Path]) {
 			continue
 		}
 		score, ok := a.matchRepo(r, terms)
@@ -466,19 +471,39 @@ func (a *App) selectedDir() (int, bool) {
 func (a *App) previewCmd() tea.Cmd {
 	p := a.selectedPath()
 	if p == "" {
-		a.rs.preview, a.rs.previewPath = "", ""
+		a.rs.details, a.rs.previewPath = nil, ""
 		return nil
 	}
 	if p != a.rs.previewPath {
-		a.rs.preview = ""
+		a.rs.details = nil
 	}
 	a.rs.previewPath = p
-	return func() tea.Msg { return previewMsg{path: p, text: gitx.Preview(a.ctx, p)} }
+	// Wait a moment before asking git: holding a key down moves through
+	// many rows, and only the one it stops on needs its details.
+	return tea.Tick(previewDelay, func(time.Time) tea.Msg { return previewDueMsg{path: p} })
+}
+
+// previewDelay is how long the selection must rest before its details load
+// (a variable so tests can shorten it).
+var previewDelay = 80 * time.Millisecond
+
+type previewDueMsg struct{ path string }
+
+// onPreviewDue loads the details if the selection is still where it was.
+func (a *App) onPreviewDue(m previewDueMsg) tea.Cmd {
+	if m.path != a.rs.previewPath {
+		return nil
+	}
+	ctx, p := a.ctx, m.path
+	return func() tea.Msg { return previewMsg{path: p, details: gitx.RepoDetails(ctx, p, 12)} }
 }
 
 func (a *App) openDir(path string) tea.Cmd {
 	a.st.Touch(path)
 	delete(a.rs.isNew, path)
+	if a.scr != scrRepo {
+		a.from = a.scr
+	}
 	a.scr = scrRepo
 	a.rp = repoState{dir: path, name: filepath.Base(path)}
 	return loadRepoData(a.ctx, path)
@@ -515,15 +540,17 @@ func (a *App) targets(fallback func() []string) []string {
 }
 
 func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
-	rs := &a.rs
-	ctx := a.ctx
-	s := k.String()
-
-	if rs.filtering {
+	if a.rs.filtering {
 		return a.filterKey(k)
 	}
+	return a.listAction(lookup(scList, k.String()))
+}
 
-	switch lookup(scList, s) {
+// listAction runs one of the list's actions, from a key or a menu.
+func (a *App) listAction(act action) tea.Cmd {
+	rs := &a.rs
+	ctx := a.ctx
+	switch act {
 	case actUp:
 		return a.moveRepos(-1)
 	case actDown:
@@ -567,19 +594,25 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 		if p := a.selectedPath(); p != "" {
 			return a.openDir(p)
 		}
-	case actToggleTree:
-		rs.tree = !rs.tree
-		a.st.SetListTree(rs.tree)
-		a.rebuildView(a.selectedKey())
+	case actToggleTree: // flat → by folder → by remote → flat
+		switch {
+		case !rs.tree:
+			rs.tree, rs.group = true, groupFolders
+		case rs.group == groupFolders:
+			rs.group = groupRemote
+		default:
+			rs.tree = false
+		}
+		a.setListView(rs.tree, rs.group)
+		a.setToast("list: "+a.listViewName()+" (` changes)", false)
 		return a.previewCmd()
 	case actDirtyOnly:
-		rs.dirtyOnly = !rs.dirtyOnly
+		if rs.status == stDirty {
+			rs.status = stAll
+		} else {
+			rs.status = stDirty
+		}
 		a.rebuildView(a.selectedKey())
-		return a.previewCmd()
-	case actSort:
-		rs.sortMode = (rs.sortMode + 1) % sortModes
-		a.rebuildView(a.selectedKey())
-		a.setToast("sorted by "+sortNames[rs.sortMode], false)
 		return a.previewCmd()
 	case actMark:
 		if i, ok := a.selectedDir(); ok { // a directory marks (or unmarks) everything below
@@ -603,11 +636,9 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 			}
 		}
 		return a.moveRepos(1)
-	case actRescan:
-		a.setToast("rescanning all roots…", false)
-		return a.scanCmd(true)
-	case actRefreshList:
-		return a.gather(a.paths())
+	case actRescan: // both happen on their own too (rescan_interval, status_interval)
+		a.setToast("rescanning the roots and refreshing every status…", false)
+		return tea.Batch(a.scanCmd(true), a.gather(a.paths()))
 	case actFetchMany:
 		return a.bulk("fetch", "fetched", a.targets(a.paths), func(p string) error { return gitx.Fetch(ctx, p) })
 	case actPullMany:
@@ -620,6 +651,24 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 		return a.bulk("pull", "pulled", ps, func(p string) error { return gitx.Pull(ctx, p, false) })
 	case actPullAll:
 		return a.startPullAll()
+	case actActions:
+		a.openActions()
+	case actViews:
+		a.openViews()
+	case actDashboard:
+		return a.openDashboard()
+	case actBrowse:
+		if p := a.selectedPath(); p != "" {
+			return tea.Batch(a.openDir(p), a.openBrowser(p))
+		}
+	case actFavorite:
+		return a.toggleFavorite()
+	case actUnmarkAll:
+		rs.marked = map[string]bool{}
+	case actMarkAll:
+		for _, i := range rs.view {
+			rs.marked[rs.all[i].Path] = true
+		}
 	}
 	return nil
 }
@@ -664,17 +713,6 @@ func (a *App) filterKey(k tea.KeyMsg) tea.Cmd {
 			return refilter()
 		}
 		return nil
-	case actClearQuery:
-		rs.filter = ""
-		return refilter()
-	case actDeleteWord:
-		f := strings.TrimRight(rs.filter, " ")
-		if i := strings.LastIndex(f, " "); i >= 0 {
-			rs.filter = f[:i+1]
-		} else {
-			rs.filter = ""
-		}
-		return refilter()
 	}
 	switch k.Type {
 	case tea.KeyRunes:
@@ -732,6 +770,7 @@ func relTime(unix int64, now time.Time) string {
 
 type rowOpts struct {
 	marked, isNew bool
+	fav           bool   // starred
 	label         string // clone label, shown after the name
 	hl            []int  // name runes matched by the filter
 	nameW         int
@@ -740,21 +779,19 @@ type rowOpts struct {
 }
 
 func repoRow(r scan.Repo, o rowOpts) rowItem {
-	sel, dirty := " ", " "
+	sel := " "
 	pad := strings.Repeat("  ", o.indent)
 	if o.marked {
 		sel = "✓"
-	}
-	switch {
-	case r.State != gitx.StateNone || r.Conflicts:
-		dirty = "!"
-	case r.Changes > 0:
-		dirty = "●"
 	}
 	suffix, styledSuffix := "", ""
 	if o.label != "" {
 		suffix += " · " + o.label
 		styledSuffix += fg(cDim, " · "+o.label)
+	}
+	if o.fav {
+		suffix += " ★"
+		styledSuffix += fg(cYellow, " ★")
 	}
 	if o.isNew {
 		suffix += " ✦"
@@ -764,16 +801,34 @@ func repoRow(r scan.Repo, o rowOpts) rowItem {
 	name := fit(pad+r.Name+suffix, o.nameW)
 	styledName := fit(pad+highlight(r.Name, o.hl, bold, func(s string) string { return hlStyle.Render(s) })+styledSuffix, o.nameW)
 	br := fit(r.Branch, 16)
-	sync := fit(r.Info.Sync(), 10)
+	sp, ss := statusCell(r)
 	rel := fmt.Sprintf("%6s", relTime(r.LastUnix, o.now))
-	plain := sel + dirty + " " + name + " " + br + " " + sync + " " + rel
-	dc := cYellow
-	if dirty == "!" {
-		dc = cRed
-	}
-	styled := fg(cGreen, sel) + fg(dc, dirty) + " " + styledName + " " + fg(cCyan, br) + " " +
-		fit(syncStyled(r.Info), 10) + " " + fg(cDim, rel)
+	plain := sel + " " + name + " " + br + " " + fit(sp, statusW) + " " + rel
+	styled := fg(cGreen, sel) + " " + styledName + " " + fg(cCyan, br) + " " +
+		fit(ss, statusW) + " " + fg(cDim, rel)
 	return rowItem{plain: plain, styled: styled}
+}
+
+// statusW is the width of the list's status column.
+const statusW = 12
+
+// statusCell is a repository's state in the list's status column, the
+// one place it is shown: an operation in progress or a conflict (!), else
+// changed files (~3), commits to push (↑1) and pull (↓2), no upstream (∅),
+// or ✓ when clean and in sync.
+func statusCell(r scan.Repo) (plain, styled string) {
+	switch {
+	case r.State != gitx.StateNone:
+		s := "! " + strings.ToLower(r.State.String())
+		return s, fg(cRed, s)
+	case r.Conflicts:
+		return "! conflict", fg(cRed, "! conflict")
+	}
+	plain, styled = r.Info.Sync(), syncStyled(r.Info)
+	if plain == "" && r.Upstream {
+		return "✓", fg(cGreen, "✓")
+	}
+	return plain, styled
 }
 
 func (a *App) viewRepos() string {
@@ -786,14 +841,20 @@ func (a *App) viewRepos() string {
 		}
 	}
 
-	head := lipgloss.NewStyle().Bold(true).Foreground(cAccent).Render("gitnest") +
+	head := brand() +
 		fg(cDim, fmt.Sprintf("  %d repos · %d dirty", len(rs.all), dirty))
 	head += a.copiedBadge() + a.updateBadge()
 	if rs.sortMode != sortRecent {
-		head += "  " + fg(cDim, "sort: "+sortNames[rs.sortMode])
+		head += "  " + badge("sort: "+sortNames[rs.sortMode], cDim)
 	}
-	if rs.dirtyOnly {
-		head += "  " + fg(cYellow, "[dirty only]")
+	if rs.status != stAll {
+		head += "  " + badge(statusFilterTags[rs.status], cYellow)
+	}
+	if rs.host != "" {
+		head += "  " + badge(rs.host, cCyan)
+	}
+	if rs.favOnly {
+		head += "  " + badge("★ favorites", cYellow)
 	}
 	if rs.filtering || rs.filter != "" {
 		cursor := ""
@@ -812,11 +873,11 @@ func (a *App) viewRepos() string {
 	if a.w >= 90 {
 		listW = a.w * 3 / 5
 	}
-	inner := listW - 2
+	inner := panelInner(listW)
 	nameW := clamp(inner-39, 10, 60)
 	now := time.Now()
 	lh := bodyH - 4 // borders, panel title and the column headers
-	rs.listH = lh
+	rs.listH, rs.listW = lh, listW
 	rs.off = scrollTo(rs.cur, rs.off, lh)
 	// Only the rows on screen are built: styling every row of a long list
 	// on each frame is what makes big lists sluggish.
@@ -824,11 +885,11 @@ func (a *App) viewRepos() string {
 	var items []rowItem
 	for _, row := range rs.rows[min(rs.off, end):end] {
 		if row.repo < 0 {
-			items = append(items, dirRow(row, rs.collapsed[row.dir] && rs.filter == "", inner))
+			items = append(items, dirRow(row, rs.collapsed[row.dir] && rs.filter == "", inner, nameW))
 			continue
 		}
 		r := rs.all[row.repo]
-		items = append(items, repoRow(r, rowOpts{marked: rs.marked[r.Path], isNew: rs.isNew[r.Path],
+		items = append(items, repoRow(r, rowOpts{marked: rs.marked[r.Path], isNew: rs.isNew[r.Path], fav: a.sh.fav[r.Path],
 			label: rs.label[r.Path], hl: rs.hl[r.Path], nameW: nameW, now: now, indent: row.depth}))
 	}
 	lines := append([]string{listHeader(nameW)}, renderRows(items, rs.cur-rs.off, 0, lh, inner, true)...)
@@ -843,20 +904,36 @@ func (a *App) viewRepos() string {
 		}
 		lines = []string{fg(cDim, msg)}
 	}
-	list := panel(fmt.Sprintf("Repositories (%d)", len(rs.view)), lines, listW, bodyH, true)
+	note := fmt.Sprintf("%d · %s", len(rs.view), a.listViewName())
+	if len(rs.view) != len(rs.all) {
+		note = fmt.Sprintf("%d of %d · %s", len(rs.view), len(rs.all), a.listViewName())
+	}
+	list := panel(subtitle("Repositories", note), lines, listW, bodyH, true)
 
 	body := list
 	if a.w >= 90 {
 		var pl []string
-		if rs.preview != "" {
-			pl = strings.Split(strings.TrimRight(expandTabs(rs.preview), "\n"), "\n")
-		}
-		title := "Preview"
+		pw, ph := panelInner(a.w-listW), bodyH-3
+		title := "Details"
 		if p := a.selectedPath(); p != "" {
-			title = "Preview · " + filepath.Base(p)
-			if l := rs.label[p]; l != "" {
-				title += " · " + l
+			r := rs.all[rs.rows[rs.cur].repo]
+			var d *gitx.Details
+			if p == rs.previewPath {
+				d = rs.details
 			}
+			var linkRow int
+			pl, linkRow = detailsCard(r, rs.label[p], d, pw, ph, now)
+			rs.link = listLink{}
+			if linkRow >= 0 {
+				rs.link = listLink{y: 3 + linkRow, url: gitx.WebURL(r.RemoteURL)} // header, border, title
+			}
+		} else if i, ok := a.selectedDir(); ok {
+			repos := map[string]scan.Repo{}
+			for _, r := range rs.all {
+				repos[r.Path] = r
+			}
+			title = "Group"
+			pl = groupCard(rs.rows[i].name, a.reposUnder(i), repos, pw, ph)
 		}
 		body = lipgloss.JoinHorizontal(lipgloss.Top, list, panel(title, pl, a.w-listW, bodyH, false))
 	}
@@ -870,7 +947,7 @@ func (a *App) viewRepos() string {
 
 // listHeader names the columns of repoRow: the age is that of the last commit.
 func listHeader(nameW int) string {
-	return fg(cDim, "   "+fit("repository", nameW)+" "+fit("branch", 16)+" "+fit("status", 10)+" "+fmt.Sprintf("%6s", "commit"))
+	return fg(cDim, "  "+fit("repository", nameW)+" "+fit("branch", 16)+" "+fit("status", statusW)+" "+fmt.Sprintf("%6s", "commit"))
 }
 
 func rootsList(roots []string) string {
@@ -879,4 +956,10 @@ func rootsList(roots []string) string {
 		out[i] = config.Abbrev(r)
 	}
 	return strings.Join(out, ", ")
+}
+
+// listLink is where the details card shows the repository's web page.
+type listLink struct {
+	y   int
+	url string
 }

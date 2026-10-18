@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Paksonite/gitnest/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
 )
 
 func TestPlannerBuildsSteps(t *testing.T) {
@@ -22,9 +22,9 @@ func TestPlannerBuildsSteps(t *testing.T) {
 		t.Fatalf("plan: %+v", a.plan)
 	}
 	a.onKey(key("d"))                       // drop d
-	a.onKey(key("j"))                       // to c
+	a.onKey(tea.KeyMsg{Type: tea.KeyDown})  // to c
 	a.onKey(tea.KeyMsg{Type: tea.KeyCtrlJ}) // move c below b
-	a.onKey(key("k"))                       // to b (now second)
+	a.onKey(tea.KeyMsg{Type: tea.KeyUp})    // to b (now second)
 	a.onKey(key("s"))                       // squash b into c (below it)
 	got := a.plan.steps()
 	want := []gitx.PlanStep{{Hash: "c", Action: "pick"}, {Hash: "b", Action: "squash"}, {Hash: "d", Action: "drop"}}

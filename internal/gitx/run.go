@@ -109,6 +109,11 @@ func baseEnv(k kind) []string {
 
 // run executes git in dir. env entries are appended last, so they override
 // the defaults. Write and network commands hold the repository lock.
+// alwaysArgs go before every git command: gitnest's own refs (the undo
+// point) never decorate commits. git 2.39 and newer leave such refs out of
+// decorations anyway; older ones need telling.
+var alwaysArgs = []string{"-c", "log.excludeDecoration=refs/worktree/gitnest/*"}
+
 func run(ctx context.Context, k kind, dir string, env []string, args ...string) (string, error) {
 	if k != kRead {
 		unlock, err := lockRepo(ctx, dir)
@@ -124,7 +129,7 @@ func run(ctx context.Context, k kind, dir string, env []string, args ...string) 
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd := exec.CommandContext(ctx, "git", append(alwaysArgs, args...)...)
 	cmd.Dir = dir
 	cmd.Env = append(baseEnv(k), env...)
 	setProcGroup(cmd)

@@ -220,8 +220,15 @@ func TestUndoAndRedo(t *testing.T) {
 	if p.Label != "drop "+short(h["b"]) || p.Head != h["d"] || p.Branch != "main" {
 		t.Errorf("undo point = %+v", p)
 	}
-	if refs := parseLog(git(t, dir, "log", "-1", logFormat, h["d"]))[0].Refs; strings.Contains(refs, "gitnest") {
-		t.Errorf("undo ref shows up in log decorations: %q", refs)
+	// The Commits panel (Log) never shows the undo ref, on any git version.
+	cs, err := Log(bg, dir, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cs {
+		if strings.Contains(c.Refs, "gitnest") {
+			t.Errorf("undo ref shows up in log decorations: %q", c.Refs)
+		}
 	}
 
 	if err := Undo(bg, dir); err != nil {
@@ -374,5 +381,19 @@ func TestRebasePlanRefusals(t *testing.T) {
 	mdir, mh := mergeRepo(t)
 	if err := RebasePlan(bg, mdir, plan(mh, "pick m1", "pick merge", "pick m2")); err == nil {
 		t.Error("a plan across a merge was accepted")
+	}
+}
+
+// A plan made before HEAD moved is refused with a message saying so.
+func TestRebasePlanStale(t *testing.T) {
+	dir := newRepo(t)
+	commit(t, dir, "a.txt", "a\n", "a")
+	commit(t, dir, "b.txt", "b\n", "b")
+	head := git(t, dir, "rev-parse", "HEAD")
+	plan := []PlanStep{{Hash: head, Action: "pick"}}
+	commit(t, dir, "c.txt", "c\n", "c") // made after the plan
+	err := RebasePlan(bg, dir, plan)
+	if err == nil || !strings.Contains(err.Error(), "moved since the plan was made") {
+		t.Fatalf("stale plan: %v", err)
 	}
 }

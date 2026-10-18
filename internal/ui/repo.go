@@ -12,7 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/Paksonite/gitnest/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
 )
 
 const (
@@ -33,10 +33,14 @@ type repoData struct {
 	refs     []gitx.RefEntry
 	notMain  map[string]bool
 	tags     []gitx.Tag
+	main     string // the main branch: "origin/main", or "main" without origin/HEAD
+	refsFP   string // gitx.RefsFingerprint when loaded
 }
 
 type repoState struct {
 	dir, name     string
+	mainBranch    string // the main branch, see repoData
+	refsSeen      string // refs fingerprint at the last live refresh
 	focus         int
 	info          gitx.Info
 	files         []gitx.File
@@ -64,7 +68,10 @@ type repoState struct {
 	refs          []gitx.RefEntry // HEAD's reflog, newest first
 	otherCur      int             // cursor of the commits/reflog list not shown
 	mainH         int             // rows of the main panel on screen (set while rendering)
-	mainLen       int             // lines in the main panel
+	leftW         int             // width of the left panels (set while rendering)
+	panelTop      [4]int          // screen row of each left panel's top border, -1 when hidden
+	panelH        [4]int
+	mainLen       int // lines in the main panel
 }
 
 // Tabs of the Branches panel.
@@ -154,6 +161,8 @@ func loadRepoData(ctx context.Context, dir string) tea.Cmd {
 		par(func() { d.refs, _ = gitx.Reflog(ctx, dir, 300) })
 		par(func() { d.notMain = gitx.NotOnMain(ctx, dir, 1000) })
 		par(func() { d.tags, _ = gitx.Tags(ctx, dir) })
+		par(func() { d.main = gitx.MainBranch(ctx, dir) })
+		par(func() { d.refsFP = gitx.RefsFingerprint(ctx, dir) })
 		wg.Wait()
 		return repoDataMsg{dir: dir, d: d}
 	}
@@ -172,7 +181,8 @@ func (a *App) onRepoData(m repoDataMsg) tea.Cmd {
 	}
 	rp.setFiles(d.files)
 	rp.commits, rp.unpushed, rp.stashes, rp.refs = d.commits, d.unpushed, d.stashes, d.refs
-	rp.notMain, rp.graph, rp.tags = d.notMain, buildGraph(d.commits), d.tags
+	rp.notMain, rp.graph, rp.tags, rp.mainBranch = d.notMain, buildGraph(d.commits), d.tags, d.main
+	rp.refsSeen = d.refsFP
 	for i := 0; i < 4; i++ {
 		rp.cur[i] = clamp(rp.cur[i], 0, rp.count(i)-1)
 	}
@@ -298,17 +308,20 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 
 	// navigation
 	switch act {
+	case actBrowse:
+		return a.openBrowser(rp.dir)
 	case actFocusMain:
 		rp.mainFocus = true
 		return nil
 	case actBack:
+		if a.from == scrDash {
+			a.scr = scrDash
+			return a.gather(a.paths())
+		}
 		a.scr = scrRepos
 		return a.gather(a.paths())
 	case actNextPanel:
 		rp.focus = (rp.focus + 1) % 4
-		return a.mainCmd()
-	case actPrevPanel:
-		rp.focus = (rp.focus + 3) % 4
 		return a.mainCmd()
 	case actPanel1, actPanel2, actPanel3, actPanel4:
 		rp.focus = int(act - actPanel1)
@@ -317,10 +330,6 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 		return a.move(-1)
 	case actDown:
 		return a.move(1)
-	case actTop:
-		return a.move(-rp.count(rp.focus))
-	case actBottom:
-		return a.move(rp.count(rp.focus))
 	case actScrollUp:
 		a.scrollMain(-half)
 		return nil
@@ -380,12 +389,7 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 		}
 		return a.do("pull", func() error { return gitx.Pull(ctx, dir, false) })
 	case actPush:
-		return a.push(false)
-	case actForcePush:
-		return a.push(true)
-	case actReload:
-		rp.mainKey = ""
-		return loadRepoData(ctx, dir)
+		return a.push()
 	case actUndo:
 		return a.undoLast()
 	case actCdQuit:
@@ -458,14 +462,38 @@ func (a *App) filesKey(s string) (tea.Cmd, bool) {
 		})
 		return nil, true
 	case actStashStaged:
+		if v, err := gitx.GitVersion(ctx); err == nil && !gitx.VersionAtLeast(v, gitx.MinGitVersion) {
+			a.setToast("stashing only the staged changes needs git "+gitx.MinGitVersion+" (you have "+v+"); s stashes everything", true)
+			return nil, true
+		}
 		a.ask("Stash staged changes — message", "", func(msg string) tea.Cmd {
 			return a.do("stash staged", func() error { return gitx.StashStaged(ctx, dir, msg) })
 		})
 		return nil, true
 	case actCommitEditor:
+		staged := false
+		for _, x := range rp.files {
+			staged = staged || x.Staged()
+		}
 		c := exec.Command("git", "commit")
 		c.Dir = dir
-		return a.execCmd(c), true
+		switch {
+		case staged:
+			return a.execCmd(c), true
+		case !has:
+			a.setToast("nothing to commit", false)
+			return nil, true
+		}
+		// Like c: offer to stage everything rather than let git commit
+		// stop with "nothing added to commit".
+		a.confirm("Nothing is staged. Stage all changes and commit in $EDITOR?", func() tea.Cmd {
+			if err := gitx.StageAll(ctx, dir); err != nil {
+				a.setToast("stage all: "+err.Error(), true)
+				return nil
+			}
+			return a.execCmd(c)
+		})
+		return nil, true
 	case actAmend:
 		return a.check(func() ([]string, error) { return gitx.CheckRewrite(ctx, dir, "HEAD", gitx.ActionAmend) },
 			func(pushed []string) tea.Cmd {
@@ -749,10 +777,16 @@ func (a *App) panelItems(panel int) []rowItem {
 		for _, b := range rp.branches() {
 			mark := "  "
 			glyph := branchGlyph(b.Remote)
-			name := fg(cDim, glyph) + b.Name
+			name := fg(rp.branchColor(b), glyph) + b.Name
+			if glyph == "" { // no icons: the name carries the colour
+				name = fg(rp.branchColor(b), b.Name)
+			}
 			if b.Current {
 				mark = "* "
-				name = fg(cGreen, glyph+bold(b.Name))
+				name = fg(rp.branchColor(b), glyph) + bold(b.Name)
+				if glyph == "" {
+					name = fg(rp.branchColor(b), bold(b.Name))
+				}
 			}
 			sp, ss := branchSync(b)
 			items = append(items, rowItem{
@@ -817,7 +851,7 @@ func (a *App) viewRepo() string {
 	rp := &a.rp
 	bodyH := a.h - 3
 
-	head := lipgloss.NewStyle().Bold(true).Foreground(cAccent).Render("gitnest") + fg(cDim, " › ") +
+	head := brand() + fg(cDim, " › ") +
 		bold(rp.name) + "  " + fg(cCyan, rp.info.Branch) + " " + syncStyled(rp.info)
 	if st := rp.info.State; st != gitx.StateNone {
 		head += "  " + lipgloss.NewStyle().Bold(true).Foreground(cYellow).Render(st.String()+" — "+stateKeys(st))
@@ -839,13 +873,22 @@ func (a *App) viewRepo() string {
 		fmt.Sprintf("[4] Stash (%d)", len(rp.stashes)),
 	}
 	heights := panelHeights(bodyH, rp.focus, [4]int{rp.count(0), rp.count(1), rp.count(2), rp.count(3)})
+	rp.leftW, rp.panelH = leftW, heights
+	top := 1 // below the header
+	for i := range heights {
+		rp.panelTop[i] = -1
+		if heights[i] > 0 {
+			rp.panelTop[i] = top
+			top += heights[i]
+		}
+	}
 	panels := make([]string, 4)
 	for i := 0; i < 4; i++ {
 		lh := heights[i] - 3 // borders and the title row
 		var lines []string
 		if lh > 0 {
 			rp.off[i] = scrollTo(rp.cur[i], rp.off[i], lh)
-			lines = renderRows(a.panelItems(i), rp.cur[i], rp.off[i], lh, leftW-2, i == rp.focus)
+			lines = renderRows(a.panelItems(i), rp.cur[i], rp.off[i], lh, panelInner(leftW), i == rp.focus)
 		}
 		if heights[i] > 0 {
 			panels[i] = panel(titles[i], lines, leftW, heights[i], i == rp.focus)
@@ -869,11 +912,11 @@ func (a *App) viewRepo() string {
 		mainTitle += fmt.Sprintf(" · %d–%d of %d", rp.mainOff+1, min(rp.mainOff+rp.mainH, rp.mainLen), rp.mainLen)
 	}
 	if rp.mainFocus {
-		mainTitle += "  (j/k scroll · esc back)"
+		mainTitle += "  (↑/↓ scroll · esc back)"
 	}
 	mainLines = mainLines[rp.mainOff:]
 	if rp.staging != nil {
-		mainTitle, mainLines = a.stagingLines(mh-3, mainW-2)
+		mainTitle, mainLines = a.stagingLines(mh-3, panelInner(mainW))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, panel(mainTitle, mainLines, mainW, mh, rp.mainFocus || rp.staging != nil))
 
@@ -1000,6 +1043,7 @@ type (
 		files []gitx.File
 		key   string // main panel source the text belongs to ("" = not refreshed)
 		text  string
+		refs  string // gitx.RefsFingerprint
 	}
 )
 
@@ -1025,6 +1069,7 @@ func (a *App) onRepoTick() tea.Cmd {
 		m := repoRefreshMsg{dir: dir, key: key}
 		m.info, _ = gitx.GetInfo(ctx, dir)
 		m.files, _ = gitx.Files(ctx, dir)
+		m.refs = gitx.RefsFingerprint(ctx, dir)
 		if key != "" {
 			m.text = fn()
 		}
@@ -1041,6 +1086,15 @@ func (a *App) onRepoRefresh(m repoRefreshMsg) tea.Cmd {
 	if a.scr != scrRepo {
 		return nil
 	}
+	// Branches, commits, tags, the stash or HEAD moved (here or outside
+	// gitnest): reload every panel, not only the files.
+	if m.refs != "" && rp.refsSeen != "" && m.refs != rp.refsSeen {
+		rp.refsSeen = m.refs
+		return loadRepoData(a.ctx, rp.dir)
+	}
+	if m.refs != "" {
+		rp.refsSeen = m.refs
+	}
 	rp.info = m.info
 	rp.setFiles(m.files)
 	if m.key != "" && m.key == rp.mainKey && m.text != rp.main {
@@ -1049,11 +1103,11 @@ func (a *App) onRepoRefresh(m repoRefreshMsg) tea.Cmd {
 	return a.mainCmd() // the selection itself may have changed (file gone, new status)
 }
 
-// push pushes the current branch. When it has diverged from its upstream it
-// checks whether that is only because pushed commits were rewritten here
-// (squash, reword, amend…): then a force push with lease is offered; if the
-// remote has commits that were never local, it refuses and suggests a pull.
-func (a *App) push(force bool) tea.Cmd {
+// push pushes the current branch (setting its upstream when missing). A
+// force push is never asked for up front: it is offered, with a warning,
+// only when a plain push can't go through — the branches diverged, or the
+// remote refused because it has commits not fetched here.
+func (a *App) push() tea.Cmd {
 	rp := &a.rp
 	dir, ctx := rp.dir, a.ctx
 	info := rp.info
@@ -1064,40 +1118,67 @@ func (a *App) push(force bool) tea.Cmd {
 			upName = b.Upstream
 		}
 	}
-	doPush := func(force bool) tea.Cmd {
-		label := "push"
-		if force {
-			label = "force push"
-		}
-		return a.doMsg(label, func() (string, error) {
-			err := gitx.Push(ctx, dir, force, up)
-			if err != nil && !force && gitx.PushRejected(err) {
-				return "", fmt.Errorf("rejected: %s has commits you haven't fetched — fetch (f), then pull or force push", upName)
-			}
-			return "", err
-		})
+	force := func() tea.Cmd {
+		return a.doMsg("force push", func() (string, error) { return "", gitx.Push(ctx, dir, true, up) })
+	}
+	offer := func(why string) {
+		a.confirm(why+" Force push (--force-with-lease)?", force)
 	}
 	if !up || info.Behind == 0 {
-		if !force {
-			return doPush(false)
-		}
-		a.confirm("Force push "+info.Branch+" (--force-with-lease)?", func() tea.Cmd { return doPush(true) })
-		return nil
+		cmd := a.after(func() (bool, error) {
+			err := gitx.Push(ctx, dir, false, up)
+			if err != nil && gitx.PushRejected(err) {
+				return true, nil
+			}
+			return false, err
+		}, func(rejected bool) tea.Cmd {
+			if rejected {
+				offer("⚠ Push rejected: " + upName + " has commits you haven't fetched, and force pushing deletes them from the remote (f fetches them to look first).")
+				return nil
+			}
+			a.setToast("push ✓", false)
+			return a.reloadCurrent()
+		})
+		a.busy = "pushing…"
+		return cmd
 	}
 	diverged := fmt.Sprintf("%s and %s have diverged (↑%d ↓%d)", info.Branch, upName, info.Ahead, info.Behind)
 	return a.after(func() (bool, error) { return gitx.UpstreamSeenLocally(ctx, dir) }, func(seen bool) tea.Cmd {
-		switch {
-		case seen:
-			a.confirm(diverged+" because commits that were already pushed were rewritten here. Force push (--force-with-lease)?",
-				func() tea.Cmd { return doPush(true) })
-		case force:
-			a.confirm("⚠ "+upName+" has commits that were never in your branch; force pushing deletes them from the remote. Force push anyway?",
-				func() tea.Cmd { return doPush(true) })
-		default:
-			a.setToast(diverged+": "+upName+" has commits you don't have — pull first (p / ctrl+p), or F to overwrite them", true)
+		if seen {
+			offer(diverged + " because commits that were already pushed were rewritten here.")
+		} else {
+			offer("⚠ " + diverged + ": " + upName + " has commits that were never in your branch, and force pushing deletes them from the remote (p pulls them in instead).")
 		}
 		return nil
 	})
+}
+
+// branchColor colours a branch's icon: the main branch (main, master, or
+// what origin/HEAD names) apart from working branches, remote ones dimmed.
+func (rp *repoState) branchColor(b gitx.Branch) lipgloss.TerminalColor {
+	main := rp.mainBranch
+	if main == "" {
+		main = "main"
+		for _, l := range rp.local {
+			if l.Name == "master" {
+				main = "master"
+			}
+		}
+	}
+	local := main
+	if i := strings.Index(main, "/"); i >= 0 {
+		local = main[i+1:]
+	}
+	isMain := b.Name == local || b.Name == main || (b.Remote && strings.HasSuffix(b.Name, "/"+local))
+	switch {
+	case isMain && b.Remote:
+		return tint(cYellow, 0.6)
+	case isMain:
+		return cYellow
+	case b.Remote:
+		return cDim
+	}
+	return cCyan
 }
 
 // branchSync shows how a local branch stands against its upstream, after

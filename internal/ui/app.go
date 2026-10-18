@@ -10,18 +10,22 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
-	"github.com/Paksonite/gitnest/internal/config"
-	"github.com/Paksonite/gitnest/internal/scan"
-	"github.com/Paksonite/gitnest/internal/state"
-	"github.com/Paksonite/gitnest/internal/theme"
+	"github.com/Paksonite/gitnest/v2/internal/config"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/scan"
+	"github.com/Paksonite/gitnest/v2/internal/state"
+	"github.com/Paksonite/gitnest/v2/internal/theme"
+	"github.com/Paksonite/gitnest/v2/internal/update"
 )
 
 // shared is what all panes see: the commit clipboard (copy in one pane,
 // paste in another).
 type shared struct {
 	copied *clipboard
-	update string // newer gitnest release, shown in the header
+	update string          // newer gitnest release, shown in the header
+	fav    map[string]bool // starred repositories (*)
 }
 
 // Smallest window the layout supports; below it a notice is shown instead.
@@ -35,6 +39,7 @@ type screen int
 const (
 	scrRepos screen = iota
 	scrRepo
+	scrDash // the dashboard: activity and what needs attention
 )
 
 // ----------------------------------------------------------------- messages
@@ -44,7 +49,10 @@ type reposMsg struct {
 	paths  []string // repository paths when the list came from a scan or its cache
 	cached bool     // paths came from the scan cache; a rescan should follow
 }
-type previewMsg struct{ path, text string }
+type previewMsg struct {
+	path    string
+	details gitx.Details
+}
 type repoDataMsg struct {
 	dir string
 	d   repoData
@@ -100,6 +108,11 @@ type App struct {
 	quitAll   bool        // quitting leaves gitnest entirely (o for gn), not just this pane
 	plan      *planner    // interactive rebase being planned
 	pull      *pullAll    // choosing what "pull all" updates
+	menu      *menu       // filters, actions or the sort & view chooser
+	browse    *browser    // every file of the open repository (B)
+	dash      dashState   // the dashboard
+	sel       textSel     // text selected with the mouse in the right-hand panel
+	from      screen      // where esc in a repository goes back to
 	lastErr   *report     // details of the last failed operation, shown with "!"
 	toast     string
 	toastErr  bool
@@ -113,7 +126,27 @@ func Run(cfg config.Config, noConfig bool, startDir, cdFile string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	a := newApp(ctx, cfg, noConfig, startDir, cdFile)
-	_, err := tea.NewProgram(newShell(a), tea.WithAltScreen(), tea.WithReportFocus()).Run()
+	if startDir == "" {
+		switch config.StartScreen(cfg) {
+		case "dashboard":
+			a.scr = scrDash
+		case "last":
+			if a.st.Screen != "list" { // the dashboard the first time
+				a.scr = scrDash
+			}
+		}
+	}
+	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
+	if config.MouseOn(cfg) {
+		opts = append(opts, tea.WithMouseCellMotion())
+		// While gitnest takes the mouse, ask for the plain arrow pointer
+		// rather than a text or selection one (OSC 22: kitty, Ghostty,
+		// WezTerm, foot, xterm; other terminals ignore it), and give the
+		// text pointer back afterwards.
+		fmt.Fprint(os.Stdout, "\x1b]22;default\x1b\\")
+		defer fmt.Fprint(os.Stdout, "\x1b]22;text\x1b\\")
+	}
+	_, err := tea.NewProgram(newShell(a), opts...).Run()
 	return err
 }
 
@@ -129,7 +162,14 @@ func newApp(ctx context.Context, cfg config.Config, noConfig bool, startDir, cdF
 	for _, d := range a.st.Collapsed {
 		a.rs.collapsed[d] = true
 	}
+	a.sh.fav = map[string]bool{}
+	for _, p := range a.st.Favorites {
+		a.sh.fav[p] = true
+	}
 	a.rs.tree = a.st.ListTree
+	if a.st.ListGroup == groupNames[groupRemote] {
+		a.rs.group = groupRemote
+	}
 	return a
 }
 
@@ -179,7 +219,17 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.w, a.h = m.Width, m.Height
 		a.sizeEditor()
 	case reposMsg:
-		return a, a.onRepos(m)
+		cmd := a.onRepos(m)
+		if a.scr == scrDash && !a.dash.ready && !a.dash.loading {
+			cmd = tea.Batch(cmd, a.loadActivity())
+		}
+		return a, cmd
+	case activityMsg:
+		a.onActivity(m)
+	case previewDueMsg:
+		return a, a.onPreviewDue(m)
+	case tea.MouseMsg:
+		return a, a.onMouse(m)
 	case scanMsg:
 		return a, a.onScan(m)
 	case statusMsg:
@@ -200,9 +250,15 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.onRescanTick()
 	case statusTickMsg:
 		return a, a.onStatusTick()
+	case browseFilesMsg:
+		a.onBrowseFiles(m)
+	case openPanesMsg: // a lone App (no shell) opens the first one itself
+		if len(m.paths) > 0 {
+			return a, a.openDir(m.paths[0])
+		}
 	case previewMsg:
 		if m.path == a.rs.previewPath {
-			a.rs.preview = m.text
+			a.rs.details = &m.details
 		}
 	case repoDataMsg:
 		return a, a.onRepoData(m)
@@ -234,6 +290,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.err != nil {
 			a.setToast(m.err.Error(), true)
 		}
+		if b := a.browse; b != nil { // show the edited file as it is now
+			b.path = ""
+			b.show()
+		}
 		return a, a.reloadCurrent()
 	case tea.KeyMsg:
 		return a, a.onKey(m)
@@ -252,6 +312,7 @@ func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 		return tea.Quit
 	}
 	a.toast = ""
+	a.sel.on = false
 	if a.ed != nil {
 		return a.editorKey(k)
 	}
@@ -269,6 +330,12 @@ func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 	}
 	if a.pull != nil {
 		return a.pullAllKey(k)
+	}
+	if a.menu != nil {
+		return a.menuKey(k)
+	}
+	if a.browse != nil && global != actHelp && global != actThemes {
+		return a.browserKey(k)
 	}
 	if a.scr == scrRepos && a.rs.filtering {
 		return a.reposKey(k) // every key belongs to the search query, "?" too
@@ -290,8 +357,11 @@ func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 	}
-	if a.scr == scrRepos {
+	switch a.scr {
+	case scrRepos:
 		return a.reposKey(k)
+	case scrDash:
+		return a.dashKey(k)
 	}
 	return a.repoKey(k)
 }
@@ -341,7 +411,7 @@ func (a *App) confirm(text string, ok func() tea.Cmd) {
 }
 
 func (a *App) setToast(s string, isErr bool) {
-	a.toast = strings.ReplaceAll(s, "\n", " ")
+	a.toast = gitx.Redact(strings.ReplaceAll(s, "\n", " "))
 	a.toastErr = isErr
 }
 
@@ -446,7 +516,10 @@ func (a *App) gather(paths []string) tea.Cmd {
 
 // --------------------------------------------------------------------- views
 
-func (a *App) View() string {
+func (a *App) View() string { return a.withSelection(a.screen()) }
+
+// screen renders the current screen.
+func (a *App) screen() string {
 	if a.w == 0 || a.h == 0 {
 		return ""
 	}
@@ -474,8 +547,14 @@ func (a *App) View() string {
 		return a.viewPlanner()
 	case a.pull != nil:
 		return a.viewPullAll()
+	case a.menu != nil:
+		return a.viewMenu()
+	case a.browse != nil:
+		return a.viewBrowser()
 	case a.scr == scrRepos:
 		return a.viewRepos()
+	case a.scr == scrDash:
+		return a.viewDashboard()
 	}
 	return a.viewRepo()
 }
@@ -506,7 +585,51 @@ func (a *App) footer(hints string) string {
 	case a.toast != "":
 		t = fg(cGreen, a.toast)
 	}
-	return fit(t, a.w) + "\n" + fit(fg(cDim, hints), a.w)
+	// The hints, and the version in the bottom-right corner. The very last
+	// column stays empty: writing the bottom-right cell makes some terminals
+	// leave marks behind while the window is resized.
+	ver := versionLabel()
+	room := a.w - 1 - lipgloss.Width(ver) - 2
+	if room < 20 { // a narrow window: the hints matter more
+		return fit(t, a.w) + "\n" + fitHints(hints, a.w-1)
+	}
+	return fit(t, a.w) + "\n" + fitHints(hints, room) + "  " + fg(cDim, ver)
+}
+
+// versionLabel is the running version as the footer shows it: v1.2.0, or
+// dev-<commit> for preview builds.
+func versionLabel() string {
+	if update.IsRelease(Version) {
+		return "v" + strings.TrimPrefix(Version, "v")
+	}
+	return Version
+}
+
+// fitHints shortens a footer to w columns by leaving out hints from the end,
+// most specific first, but keeps "? help" last so the rest is a key away.
+func fitHints(hints string, w int) string {
+	if lipgloss.Width(hints) <= w {
+		return fit(hints, w)
+	}
+	parts := strings.Split(hints, "  ")
+	var help string
+	if last := parts[len(parts)-1]; strings.Contains(ansi.Strip(last), "? help") {
+		help, parts = last, parts[:len(parts)-1]
+	}
+	for len(parts) > 1 {
+		s := strings.Join(parts, "  ")
+		if help != "" {
+			s += "  " + help
+		}
+		if lipgloss.Width(s) <= w {
+			return fit(s, w)
+		}
+		parts = parts[:len(parts)-1]
+		for len(parts) > 1 && strings.TrimSpace(ansi.Strip(parts[len(parts)-1])) == "·" {
+			parts = parts[:len(parts)-1] // no separator left dangling
+		}
+	}
+	return fit(strings.Join(parts, "  "), w)
 }
 
 // cdQuit leaves gitnest so the gn shell function cds into path.

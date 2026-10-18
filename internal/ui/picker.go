@@ -7,8 +7,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/Paksonite/gitnest/internal/config"
-	"github.com/Paksonite/gitnest/internal/theme"
+	"github.com/Paksonite/gitnest/v2/internal/config"
+	"github.com/Paksonite/gitnest/v2/internal/theme"
 )
 
 // themePicker is the theme chooser (T). Moving the cursor applies the theme
@@ -32,6 +32,12 @@ func (a *App) openPicker() {
 
 func (a *App) previewTheme(t theme.Theme) {
 	usePalette(t.Palette, a.cfg.Theme.Accent, a.cfg.Theme.Diff == "git")
+	if t.Kind == theme.KindLight {
+		// Light themes keep the terminal's own background: a light screen
+		// painted over the whole terminal glares. They are made for light
+		// terminals, which gitnest picks them for by itself (mode: auto).
+		cBack, cSurface = lipgloss.NoColor{}, lipgloss.NoColor{}
+	}
 }
 
 func (a *App) pickerKey(k tea.KeyMsg) tea.Cmd {
@@ -142,6 +148,9 @@ func (a *App) viewPicker() string {
 			name = lipgloss.NewStyle().Bold(true).Background(cSel).Foreground(cText).Render(name)
 		}
 		kind := string(t.Kind)
+		if t.Kind == theme.KindLight && lipgloss.HasDarkBackground() {
+			kind = "light terminal" // they keep the terminal's background
+		}
 		if t.Source != "" {
 			kind += ", custom"
 		}
@@ -165,6 +174,9 @@ func (a *App) viewPicker() string {
 		fg(cAccent, "@@ -1,3 +1,4 @@") + "  " + fg(cGreen, "+ added line") + "  " + fg(cRed, "- removed line"),
 	}
 	body := bold("Theme") + fg(cDim, fmt.Sprintf("  %d/%d", p.cur+1, len(p.names))) + "\n\n" + strings.Join(rows, "\n")
+	if t, ok := a.themes.Get(p.names[p.cur]); ok && t.Kind == theme.KindLight && lipgloss.HasDarkBackground() {
+		body += "\n\n" + fg(cYellow, "Light themes use the terminal's background: they are for light terminals.")
+	}
 	if showPreview {
 		body += "\n\n" + fg(cDim, "Preview") + "\n" + strings.Join(sample, "\n")
 	}

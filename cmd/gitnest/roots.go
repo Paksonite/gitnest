@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Paksonite/gitnest/internal/config"
-	"github.com/Paksonite/gitnest/internal/scan"
+	"github.com/Paksonite/gitnest/v2/internal/config"
+	"github.com/Paksonite/gitnest/v2/internal/scan"
 )
 
 // rootsCmd implements `gitnest roots [list|add|rm] [dir...]`.

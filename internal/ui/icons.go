@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Paksonite/gitnest/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
 )
 
 // Icons come in three sets (config "icons"):

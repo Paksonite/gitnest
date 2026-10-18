@@ -9,8 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/Paksonite/gitnest/internal/config"
-	"github.com/Paksonite/gitnest/internal/theme"
+	"github.com/Paksonite/gitnest/v2/internal/config"
+	"github.com/Paksonite/gitnest/v2/internal/theme"
 )
 
 func themedApp(t *testing.T) *App {
@@ -25,35 +25,35 @@ func themedApp(t *testing.T) *App {
 	a.cfg = cfg
 	a.cfg.Theme.Mode = "dark"
 	a.loadThemes()
-	t.Cleanup(func() { mocha, _ := theme.Builtin("catppuccin-mocha"); usePalette(mocha.Palette, "", true) })
+	t.Cleanup(func() { mocha, _ := theme.Builtin("gitnest-dark"); usePalette(mocha.Palette, "", true) })
 	return a
 }
 
 func TestPickerPreviewCancelAndSave(t *testing.T) {
 	a := themedApp(t)
-	if a.theme.Name != "catppuccin-mocha" {
+	if a.theme.Name != "gitnest-dark" {
 		t.Fatalf("start theme %s", a.theme.Name)
 	}
 	a.onKey(key("T"))
 	if a.picker == nil {
 		t.Fatal("T should open the theme chooser")
 	}
-	a.onKey(key("j")) // catppuccin-latte, previewed at once
-	if cAccent != lipgloss.Color("#8839ef") {
+	a.onKey(tea.KeyMsg{Type: tea.KeyDown}) // gitnest-light, previewed at once
+	if cAccent != lipgloss.Color("#047857") {
 		t.Errorf("preview not applied: accent %v", cAccent)
 	}
-	if v := a.View(); !strings.Contains(v, "catppuccin-latte") || !strings.Contains(v, "Preview") {
+	if v := a.View(); !strings.Contains(v, "gitnest-light") || !strings.Contains(v, "Preview") {
 		t.Error("chooser view lacks the list or the preview")
 	}
 	a.onKey(tea.KeyMsg{Type: tea.KeyEsc})
-	if a.picker != nil || cAccent != lipgloss.Color("#cba6f7") {
+	if a.picker != nil || cAccent != lipgloss.Color("#2fd896") {
 		t.Errorf("esc should restore the previous theme, accent %v", cAccent)
 	}
 
 	// Save tokyo-night (dark): written to theme.dark, mode unchanged.
 	a.onKey(key("T"))
 	for a.picker.names[a.picker.cur] != "tokyo-night" {
-		a.onKey(key("j"))
+		a.onKey(tea.KeyMsg{Type: tea.KeyDown})
 	}
 	a.onKey(tea.KeyMsg{Type: tea.KeyEnter})
 	cfg, _, _ := config.Load()
@@ -64,7 +64,7 @@ func TestPickerPreviewCancelAndSave(t *testing.T) {
 	// Picking a light theme on a dark background also switches the mode.
 	a.onKey(key("T"))
 	for a.picker.names[a.picker.cur] != "gruvbox-light" {
-		a.onKey(key("k"))
+		a.onKey(tea.KeyMsg{Type: tea.KeyUp})
 	}
 	a.onKey(tea.KeyMsg{Type: tea.KeyEnter})
 	cfg, _, _ = config.Load()
@@ -81,7 +81,7 @@ func TestUnknownThemeFallsBack(t *testing.T) {
 	a := themedApp(t)
 	a.cfg.Theme.Dark = "does-not-exist"
 	a.loadThemes()
-	if a.theme.Name != "catppuccin-mocha" || !strings.Contains(a.themeWarn, "does-not-exist") {
+	if a.theme.Name != "gitnest-dark" || !strings.Contains(a.themeWarn, "does-not-exist") {
 		t.Errorf("theme %s warn %q", a.theme.Name, a.themeWarn)
 	}
 }

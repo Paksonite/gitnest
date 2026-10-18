@@ -257,3 +257,37 @@ func TestApplyDev(t *testing.T) {
 		t.Fatalf("second run: changed %v, err %v", changed, err)
 	}
 }
+
+func TestCheckDev(t *testing.T) {
+	var calls atomic.Int32
+	commit := "a5a638ccdf3c38428dc3545d56e548b45f8d44b4"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/releases/tags/dev" {
+			http.NotFound(w, r)
+			return
+		}
+		calls.Add(1)
+		fmt.Fprintf(w, `{"target_commitish":%q,"published_at":"2026-10-18T16:25:45Z"}`, commit)
+	}))
+	defer srv.Close()
+	old := APIBase
+	APIBase = srv.URL + "/api"
+	defer func() { APIBase = old }()
+
+	cache := filepath.Join(t.TempDir(), "update-dev.json")
+	b, newer, err := CheckDev(context.Background(), "a61760d", cache, time.Hour)
+	if err != nil || !newer || b.Version() != "dev-a5a638c" || b.Published.IsZero() {
+		t.Fatalf("CheckDev = %+v %v %v", b, newer, err)
+	}
+	for _, running := range []string{"a5a638c", "dev-a5a638c", commit} {
+		if _, newer, _ := CheckDev(context.Background(), running, cache, time.Hour); newer {
+			t.Errorf("running %s: the same build reported as newer", running)
+		}
+	}
+	if calls.Load() != 1 {
+		t.Errorf("GitHub asked %d times, want 1 (cache)", calls.Load())
+	}
+	if _, _, err := CheckDev(context.Background(), "a61760d", cache, 0); err != nil || calls.Load() != 2 {
+		t.Errorf("expired cache: calls %d, err %v", calls.Load(), err)
+	}
+}

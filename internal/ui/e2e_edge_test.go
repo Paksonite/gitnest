@@ -13,7 +13,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Paksonite/gitnest/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
 )
 
 // newRepoIn makes an empty repository root/name and rescans, so the app
@@ -156,7 +156,7 @@ func TestE2EDetachedHEADAndNoRemote(t *testing.T) {
 	if !strings.Contains(a.toast, "no remote") {
 		t.Errorf("tag push without a remote: %q", a.toast)
 	}
-	press(t, a, "ctrl+f")
+	press(t, a, "f")
 	if a.toastErr {
 		t.Errorf("fetch without a remote: %q", a.toast)
 	}
@@ -292,7 +292,7 @@ func TestE2ENetworkTimeout(t *testing.T) {
 
 	openRepo(t, a, app)
 	start := time.Now()
-	press(t, a, "ctrl+f")
+	press(t, a, "f")
 	if !strings.Contains(a.toast, "timed out after 1s") {
 		t.Errorf("fetch: %q", a.toast)
 	}

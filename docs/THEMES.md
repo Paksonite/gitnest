@@ -5,7 +5,8 @@
 Press `T` to pick a theme: the list previews each one live, `enter` saves it
 for dark or light backgrounds, `esc` goes back, `i` switches icons.
 
-Built in: `catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`,
+Built in: `gitnest-dark` and `gitnest-light` (the defaults: deep green-black
+or light with an emerald accent), `catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`,
 `gruvbox-light`, `nord`, `solarized-dark`, `solarized-light`, `tokyo-night`,
 `dracula`, and `terminal`, which uses your terminal's own 16 colours (best
 for terminals without true colour, such as macOS Terminal.app).
@@ -19,6 +20,14 @@ extends: tokyo-night
 colors:
   accent: "#ff9e64"
 ```
+
+Dark themes paint the whole screen: `background` behind everything and
+`surface` behind the panels (cards), with their `text` colour, so they look
+the same in any terminal. Light themes keep the terminal's own background
+(a light screen painted over everything glares): they are for light
+terminals, and with `mode: auto` gitnest picks the light theme there by
+itself. Leave `background` and `surface` empty (`""`) in your own dark theme
+to keep the terminal's colours, as the `terminal` theme does.
 
 ```sh
 gitnest theme                                    # all themes, and which are in use

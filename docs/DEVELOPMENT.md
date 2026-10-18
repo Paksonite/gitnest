@@ -17,12 +17,21 @@ presses (`press(t, app, "3", "s", "y")`): the list, every panel of the
 repository view, conflicts, panes, the update notice, and edge cases such as
 empty repositories, detached HEAD, huge diffs, odd file names, network
 timeouts and tiny windows. `go test -short ./...` skips them.
+The end-to-end tests in [e2e/](../e2e/README.md) run gitnest in tmux against
+a git server and a developer machine in Docker, through every screen and
+key: `python3 e2e/run.py`.
+
+`go test -run '^$' -bench . ./internal/ui` times the screens redrawn on every
+key with 1000 repositories (about a millisecond a frame) and the dashboard.
 `TestReadmeKeyTablesMatchKeymap` fails when the key tables in
 [KEYS.md](KEYS.md) and `keymap.go` disagree.
 
 CI (`.github/workflows/ci.yml`) runs gofmt, vet, staticcheck and the tests
 with `-race` on macOS and Ubuntu, the tests again on Debian 12, shellcheck
-on `install.sh`, and installs the built `.deb` on a clean Debian.
+on the scripts, installs the built `.deb` on a clean Debian, and runs
+`scripts/linux-smoke.sh` on Ubuntu and Debian 12: the commands, the terminal
+UI driven through tmux (dashboard, list, search, a repository, the file
+browser, the view menu, help) and the one-line installer.
 
 ## Layout
 
@@ -69,9 +78,7 @@ publishes them to the rolling `dev` pre-release (replaced on every push, never
 `gitnest-dev` is installed next to `gitnest`, which stays untouched:
 
 ```sh
-t=darwin_universal   # or linux_amd64, linux_arm64
-curl -fsSL -o ~/.local/bin/gitnest-dev "https://github.com/Paksonite/gitnest/releases/download/dev/gitnest-dev_$t"
-chmod +x ~/.local/bin/gitnest-dev
+curl -fsSL https://raw.githubusercontent.com/Paksonite/gitnest/main/install.sh | sh -s -- --dev
 ```
 
 `gitnest-dev update` then fetches the newest dev build (checked against the

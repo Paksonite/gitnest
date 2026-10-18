@@ -17,10 +17,12 @@ jobs: 8                # parallel git processes
 editor: ""             # for e; empty = $VISUAL, then $EDITOR, then vi
 icons: symbols         # nerd (needs a Nerd Font) or plain
 update_check: true     # look for a new release once a day (false = never)
+start: last            # or dashboard, list: what gitnest opens with (last = as you left it)
+mouse: true            # click and scroll; false leaves the mouse to the terminal
 theme:
   mode: auto           # follows the terminal background; dark or light to force
-  dark: catppuccin-mocha
-  light: catppuccin-latte
+  dark: gitnest-dark
+  light: gitnest-light
   diff: theme          # "git" keeps your own git diff colours
   accent: ""           # overrides the theme's accent colour
 ```

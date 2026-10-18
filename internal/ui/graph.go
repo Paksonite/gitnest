@@ -5,7 +5,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/Paksonite/gitnest/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
 )
 
 // The commit graph: one row per commit,
@@ -192,7 +192,8 @@ func laneColor(i int) lipgloss.TerminalColor {
 
 // graphText renders a graph row as plain and coloured text. The commit's
 // own node takes node (its author's colour, like the initials beside it);
-// the lines keep their lane's colour.
+// the lines keep their lane's colour, toned down so they don't read as
+// authors.
 func graphText(row []gcell, node lipgloss.TerminalColor) (plain, styled string) {
 	var p, st strings.Builder
 	for _, c := range row {
@@ -203,7 +204,7 @@ func graphText(row []gcell, node lipgloss.TerminalColor) (plain, styled string) 
 		case c.color < 0 || c.ch == ' ':
 			st.WriteRune(c.ch)
 		default:
-			st.WriteString(fg(laneColor(c.color), string(c.ch)))
+			st.WriteString(fg(tint(laneColor(c.color), 0.6), string(c.ch)))
 		}
 	}
 	return p.String(), st.String()

@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Toplevel returns the repository root containing dir.
@@ -33,6 +35,7 @@ type Info struct {
 	LastRel   string
 	State     State
 	RemoteURL string // origin's URL, or the first remote's; empty without remotes
+	Stashes   int
 }
 
 func GetInfo(ctx context.Context, dir string) (Info, error) {
@@ -53,7 +56,11 @@ func GetInfo(ctx context.Context, dir string) (Info, error) {
 	if gitDir, common, ok := gitDirs(dir); ok {
 		in.State = stateIn(gitDir)
 		in.RemoteURL = remoteFromConfig(filepath.Join(common, "config"))
+		in.Stashes = fileLines(filepath.Join(common, "logs", "refs", "stash"))
 		return in, nil
+	}
+	if o, err := run(ctx, kRead, dir, nil, "stash", "list"); err == nil {
+		in.Stashes = countLines(o)
 	}
 	in.State, _ = GetState(ctx, dir)
 	if o, err := run(ctx, kRead, dir, nil, "config", "--get-regexp", `^remote\..*\.url$`); err == nil {
@@ -196,6 +203,61 @@ func RemoteHost(url string) string {
 		before = before[j+1:]
 	}
 	return strings.ToLower(before)
+}
+
+// credentials matches the password or token in a URL's user info:
+// https://user:token@host.
+var credentials = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+):[^/\s@]+@`)
+
+// Redact hides passwords and tokens in URLs anywhere in s (a remote URL,
+// git's output), so they never reach the screen: https://user:token@host
+// becomes https://user:***@host.
+func Redact(s string) string { return credentials.ReplaceAllString(s, "$1:***@") }
+
+// WebURL guesses the web page of a remote: https://host/owner/repo for
+// https, ssh:// and scp-like (git@host:owner/repo.git) remotes. Local paths
+// and empty URLs give "".
+func WebURL(url string) string {
+	host := RemoteHost(url)
+	if host == "" {
+		return ""
+	}
+	path := url
+	if i := strings.Index(url, "://"); i >= 0 {
+		_, path, _ = strings.Cut(url[i+3:], "/")
+	} else {
+		_, path, _ = strings.Cut(url, ":")
+	}
+	path = strings.TrimSuffix(strings.Trim(path, "/"), ".git")
+	if path == "" {
+		return "https://" + host
+	}
+	return "https://" + host + "/" + path
+}
+
+// RemoteGroup splits a remote URL into the host and the owner path, without
+// the repository's own name: git@github.com:ann/api.git gives
+// [github.com ann], https://gitlab.com/platform/infra/dns gives
+// [gitlab.com platform infra]. Local paths and empty URLs give nil.
+func RemoteGroup(url string) []string {
+	host := RemoteHost(url)
+	if host == "" {
+		return nil
+	}
+	path := url
+	if i := strings.Index(url, "://"); i >= 0 {
+		_, path, _ = strings.Cut(url[i+3:], "/")
+	} else {
+		_, path, _ = strings.Cut(url, ":")
+	}
+	parts := []string{host}
+	segs := strings.Split(strings.Trim(path, "/"), "/")
+	for _, s := range segs[:max(0, len(segs)-1)] { // the last one is the repository
+		if s != "" && s != "~" {
+			parts = append(parts, s)
+		}
+	}
+	return parts
 }
 
 // Sync returns a compact plain-text summary like "↑1 ↓2 ~3".
@@ -1000,15 +1062,147 @@ func StashShow(ctx context.Context, dir, ref string) string {
 
 // ---------------------------------------------------------------- preview
 
-// Preview is the right-hand pane of the repository list.
-func Preview(ctx context.Context, dir string) string {
-	var b strings.Builder
-	o, _ := run(ctx, kRead, dir, nil, colored("status", "-sb")...)
-	b.WriteString(o)
-	b.WriteString("\n")
-	o, _ = run(ctx, kRead, dir, nil, colored("log", "--oneline", "--decorate", "-n", "15")...)
-	b.WriteString(o)
-	return b.String()
+// Details is what the repository list's preview card shows about the
+// selected repository, besides its status.
+type Details struct {
+	Upstream    string          // e.g. origin/main; empty without one
+	Tag         string          // the latest tag reachable from HEAD
+	Description string          // the first line of prose in the README
+	Changes     []string        // git status --short, at most maxChanges lines
+	More        int             // changes beyond those
+	Commits     []DetailsCommit // the latest commits, newest first
+}
+
+type DetailsCommit struct {
+	Short, Subject, Author, Refs string
+	Unix                         int64
+}
+
+const maxChanges = 8
+
+// RepoDetails collects Details with three git processes.
+func RepoDetails(ctx context.Context, dir string, commits int) Details {
+	var d Details
+	if o, err := run(ctx, kRead, dir, nil, "status", "--porcelain=v1", "--branch"); err == nil {
+		for _, l := range strings.Split(strings.TrimRight(o, "\n"), "\n") {
+			switch {
+			case strings.HasPrefix(l, "## "):
+				if _, up, ok := strings.Cut(strings.TrimPrefix(l, "## "), "..."); ok {
+					d.Upstream, _, _ = strings.Cut(up, " ")
+				}
+			case l == "":
+			case len(d.Changes) < maxChanges:
+				d.Changes = append(d.Changes, l)
+			default:
+				d.More++
+			}
+		}
+	}
+	if o, err := run(ctx, kRead, dir, nil, "log", "-n", strconv.Itoa(commits), "--format=%h%x1f%s%x1f%an%x1f%ct%x1f%D"); err == nil {
+		for _, l := range strings.Split(strings.TrimSpace(o), "\n") {
+			f := strings.Split(l, "\x1f")
+			if len(f) < 5 {
+				continue
+			}
+			unix, _ := strconv.ParseInt(f[3], 10, 64)
+			d.Commits = append(d.Commits, DetailsCommit{Short: f[0], Subject: f[1], Author: f[2], Unix: unix, Refs: f[4]})
+		}
+	}
+	if o, err := run(ctx, kRead, dir, nil, "describe", "--tags", "--abbrev=0"); err == nil {
+		d.Tag = strings.TrimSpace(o)
+	}
+	d.Description = readmeLine(dir)
+	return d
+}
+
+// readmeLine is the first line of prose in dir's README: not a heading,
+// badge, image, HTML, list or table.
+func readmeLine(dir string) string {
+	for _, name := range []string{"README.md", "README", "README.markdown", "README.rst", "README.txt", "readme.md"} {
+		b, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			continue
+		}
+		if len(b) > 64<<10 {
+			b = b[:64<<10]
+		}
+		inCode := false
+		for _, l := range strings.Split(string(b), "\n") {
+			l = strings.TrimSpace(l)
+			if strings.HasPrefix(l, "```") {
+				inCode = !inCode
+				continue
+			}
+			if inCode || l == "" || strings.ContainsAny(l[:1], "#![<|>-=*_:.`") || strings.HasPrefix(l, "+") {
+				continue
+			}
+			return l
+		}
+		return ""
+	}
+	return ""
+}
+
+// RefsFingerprint changes whenever a branch, tag, remote branch, HEAD or
+// the stash moves — in gitnest or anywhere else (another terminal, an
+// IDE). One git process, plus reading HEAD and the stash's reflog.
+func RefsFingerprint(ctx context.Context, dir string) string {
+	out, err := run(ctx, kRead, dir, nil, "for-each-ref", "--format=%(objectname) %(refname)")
+	if err != nil {
+		return ""
+	}
+	fp := out
+	if gitDir, common, ok := gitDirs(dir); ok {
+		head, _ := os.ReadFile(filepath.Join(gitDir, "HEAD"))
+		fp += "HEAD " + string(head) + fmt.Sprintf("stash %d", fileLines(filepath.Join(common, "logs", "refs", "stash")))
+	} else if h, err := run(ctx, kRead, dir, nil, "rev-parse", "HEAD"); err == nil {
+		fp += "HEAD " + h
+	}
+	return fp
+}
+
+// ActivityCommit is one commit for the activity dashboard.
+type ActivityCommit struct {
+	Unix                   int64
+	Short, Subject, Author string
+}
+
+// Activity lists the commits on the local branches since since, newest
+// first, at most max of them.
+func Activity(ctx context.Context, dir string, since time.Time, max int) ([]ActivityCommit, error) {
+	out, err := run(ctx, kRead, dir, nil, "log", "--branches", "--no-merges",
+		"--since="+strconv.FormatInt(since.Unix(), 10), "-n", strconv.Itoa(max), "--format=%ct%x1f%h%x1f%an%x1f%s")
+	if err != nil {
+		return nil, err
+	}
+	var cs []ActivityCommit
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		f := strings.SplitN(l, "\x1f", 4)
+		if len(f) < 4 {
+			continue
+		}
+		unix, _ := strconv.ParseInt(f[0], 10, 64)
+		cs = append(cs, ActivityCommit{Unix: unix, Short: f[1], Author: f[2], Subject: f[3]})
+	}
+	return cs, nil
+}
+
+// ListFiles lists the repository's files: tracked ones and untracked ones
+// that aren't ignored, as slash paths relative to dir.
+func ListFiles(ctx context.Context, dir string) ([]string, error) {
+	out, err := run(ctx, kRead, dir, nil, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var files []string
+	for _, f := range strings.Split(out, "\x00") {
+		if f != "" && !seen[f] { // a conflicted file is listed once per stage
+			seen[f] = true
+			files = append(files, f)
+		}
+	}
+	return files, nil
 }
 
 // MinGitVersion is the oldest git gitnest is tested with (Debian 12 ships
@@ -1043,4 +1237,24 @@ func VersionAtLeast(have, want string) bool {
 		}
 	}
 	return true
+}
+
+// countLines counts the non-empty text's lines.
+func countLines(s string) int {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0
+	}
+	return strings.Count(s, "\n") + 1
+}
+
+// fileLines counts a file's lines (0 when it doesn't exist). The stash's
+// reflog has one per stash, on every git version (status --show-stash
+// only reports the count from git 2.35).
+func fileLines(path string) int {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	return countLines(string(b))
 }

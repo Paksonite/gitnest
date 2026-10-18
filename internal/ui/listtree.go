@@ -1,12 +1,16 @@
 package ui
 
 import (
+	"github.com/charmbracelet/lipgloss"
+
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/Paksonite/gitnest/internal/config"
+	"github.com/Paksonite/gitnest/v2/internal/config"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/scan"
 )
 
 // listRow is one row of the repository list: a repository, or (in tree
@@ -18,6 +22,7 @@ type listRow struct {
 	depth int
 	count int // directories: repositories below (after filtering)
 	dirty int // directories: of which with uncommitted changes
+	sync  syncCount
 }
 
 func (r listRow) key(a *App) string {
@@ -25,6 +30,66 @@ func (r listRow) key(a *App) string {
 		return "d:" + r.dir
 	}
 	return a.rs.all[r.repo].Path
+}
+
+// Ways the list tree groups repositories.
+const (
+	groupFolders = iota // by the directories below the scan roots
+	groupRemote         // by remote host and owner (github.com/ann/), "local" without one
+)
+
+var groupNames = [...]string{groupFolders: "folders", groupRemote: "remote"}
+
+// setListView switches the list between flat and grouped, remembers it and
+// rebuilds the rows around the selection.
+func (a *App) setListView(tree bool, group int) {
+	a.rs.tree, a.rs.group = tree, group
+	a.st.SetListTree(tree)
+	a.st.SetListGroup(groupNames[group])
+	a.rebuildView(a.selectedKey())
+}
+
+func (a *App) listViewName() string {
+	switch {
+	case !a.rs.tree:
+		return "flat"
+	case a.rs.group == groupRemote:
+		return "grouped by remote"
+	}
+	return "grouped by folder"
+}
+
+// groupParts is where repository idx goes in the tree: its directories below
+// the scan root, or its remote host and owner.
+func (a *App) groupParts(idx int) []string {
+	if a.rs.group == groupRemote {
+		if parts := gitx.RemoteGroup(a.rs.all[idx].RemoteURL); parts != nil {
+			return parts
+		}
+		return []string{"local"}
+	}
+	base, rel, ok := a.underRoot(a.rs.all[idx].Path)
+	if !ok {
+		return nil
+	}
+	var parts []string
+	if rel != "" {
+		parts = strings.Split(rel, "/")
+	}
+	if len(a.cfg.Roots) > 1 {
+		parts = append([]string{config.Abbrev(base)}, parts...)
+	}
+	return parts
+}
+
+// groupKey identifies a tree directory; remote groups get their own
+// namespace so folding github.com/ann doesn't fold a folder of that name.
+func (a *App) groupKey(parts []string) string {
+	k := strings.Join(parts, "/")
+	if a.rs.group == groupRemote {
+		return "remote:" + k
+	}
+	return k
 }
 
 type dirNode struct {
@@ -36,8 +101,9 @@ type dirNode struct {
 
 // buildRows turns the filtered, sorted repositories (rs.view) into rows. In
 // tree mode repositories are grouped by the directories they live in below
-// their scan root (one top-level entry per root when there are several);
-// directories come first, then repositories in the current sort order.
+// their scan root (one top-level entry per root when there are several), or
+// by remote host and owner; groups come first, then repositories in the
+// current sort order.
 // While searching, every directory is expanded so all matches show.
 func (a *App) buildRows() {
 	rs := &a.rs
@@ -48,23 +114,14 @@ func (a *App) buildRows() {
 		}
 		return
 	}
-	roots := a.cfg.Roots
 	root := &dirNode{children: map[string]*dirNode{}}
 	for _, idx := range rs.view {
-		var parts []string
-		if base, rel, ok := a.underRoot(rs.all[idx].Path); ok {
-			if rel != "" {
-				parts = strings.Split(rel, "/")
-			}
-			if len(roots) > 1 {
-				parts = append([]string{config.Abbrev(base)}, parts...)
-			}
-		}
+		parts := a.groupParts(idx)
 		n := root
 		for i, part := range parts {
 			c := n.children[part]
 			if c == nil {
-				c = &dirNode{name: part, path: strings.Join(parts[:i+1], "/"), children: map[string]*dirNode{}}
+				c = &dirNode{name: part, path: a.groupKey(parts[:i+1]), children: map[string]*dirNode{}}
 				n.children[part] = c
 			}
 			n = c
@@ -89,7 +146,7 @@ func (a *App) buildRows() {
 				name += "/" + d.name
 			}
 			count, dirty := a.countBelow(d)
-			rs.rows = append(rs.rows, listRow{repo: -1, dir: d.path, name: name, depth: depth, count: count, dirty: dirty})
+			rs.rows = append(rs.rows, listRow{repo: -1, dir: d.path, name: name, depth: depth, count: count, dirty: dirty, sync: a.syncBelow(d)})
 			if searching || !rs.collapsed[d.path] {
 				walk(d, depth+1)
 			}
@@ -127,6 +184,54 @@ func (a *App) buildRows() {
 		}
 	}
 	walk(root, 0)
+}
+
+// syncCount says how the repositories of a group stand against their
+// upstreams: how many have commits to push, to pull, and how many track one.
+type syncCount struct{ ahead, behind, tracked int }
+
+func (s syncCount) add(r scan.Repo) syncCount {
+	if r.Upstream {
+		s.tracked++
+		if r.Ahead > 0 {
+			s.ahead++
+		}
+		if r.Behind > 0 {
+			s.behind++
+		}
+	}
+	return s
+}
+
+// styled is "✓" when every tracking repository is up to date, else how many
+// are ahead (↑) and behind (↓); nothing when none tracks an upstream.
+func (s syncCount) styled() (plain, styled string) {
+	switch {
+	case s.tracked == 0:
+		return "", ""
+	case s.ahead == 0 && s.behind == 0:
+		return "✓", fg(cGreen, "✓")
+	}
+	var ps, ss []string
+	if s.ahead > 0 {
+		ps, ss = append(ps, "↑"+strconv.Itoa(s.ahead)), append(ss, fg(cGreen, "↑"+strconv.Itoa(s.ahead)))
+	}
+	if s.behind > 0 {
+		ps, ss = append(ps, "↓"+strconv.Itoa(s.behind)), append(ss, fg(cRed, "↓"+strconv.Itoa(s.behind)))
+	}
+	return strings.Join(ps, " "), strings.Join(ss, " ")
+}
+
+func (a *App) syncBelow(n *dirNode) syncCount {
+	var s syncCount
+	for _, idx := range n.repos {
+		s = s.add(a.rs.all[idx])
+	}
+	for _, c := range n.children {
+		cs := a.syncBelow(c)
+		s.ahead, s.behind, s.tracked = s.ahead+cs.ahead, s.behind+cs.behind, s.tracked+cs.tracked
+	}
+	return s
 }
 
 // bestBelow is the best search score of the repositories below n.
@@ -188,33 +293,46 @@ func (a *App) underRoot(p string) (base, rel string, ok bool) {
 
 // rowDir is the directory key a repository falls under in tree mode.
 func (a *App) rowDir(idx int) string {
-	base, d, ok := a.underRoot(a.rs.all[idx].Path)
-	if !ok {
+	parts := a.groupParts(idx)
+	if parts == nil && a.rs.group == groupFolders {
 		return ""
 	}
-	if len(a.cfg.Roots) > 1 {
-		if d == "" {
-			return config.Abbrev(base)
-		}
-		return config.Abbrev(base) + "/" + d
-	}
-	return d
+	return a.groupKey(parts)
 }
 
-func dirRow(r listRow, collapsed bool, w int) rowItem {
+// dirRow is a group of the list tree: its name and how many repositories
+// it holds, then, in the status column, how they stand: how many are dirty,
+// ✓ when all are up to date, or how many have commits to push (↑) and pull
+// (↓).
+func dirRow(r listRow, collapsed bool, w, nameW int) rowItem {
 	indent := strings.Repeat("  ", r.depth)
 	arrow := "▾"
 	if collapsed {
 		arrow = "▸"
 	}
 	icon := fileIcon(r.dir, true, collapsed)
-	plain := indent + "  " + arrow + " " + icon + r.name + "/"
-	styled := indent + "  " + fg(cDim, arrow) + " " + fg(cCyan, icon) + bold(r.name+"/")
-	info := " " + strconv.Itoa(r.count)
-	sinfo := fg(cDim, info)
+	count := " " + strconv.Itoa(r.count)
+	plain := indent + "  " + arrow + " " + icon + r.name + "/" + count
+	styled := indent + "  " + fg(cDim, arrow) + " " + fg(cCyan, icon) + bold(r.name+"/") + fg(cDim, count)
+	// The status column starts after the mark, name and branch columns.
+	at := 2 + nameW + 1 + 16 + 1
+	var sp, ss string
 	if r.dirty > 0 {
-		info += " ●" + strconv.Itoa(r.dirty)
-		sinfo += fg(cYellow, " ●"+strconv.Itoa(r.dirty))
+		sp = strconv.Itoa(r.dirty) + " dirty"
+		ss = fg(cYellow, sp)
 	}
-	return rowItem{plain: fit(plain+info, w), styled: styled + sinfo}
+	if p, s := r.sync.styled(); p != "" {
+		if sp != "" {
+			sp, ss = sp+" ", ss+" "
+		}
+		sp, ss = sp+p, ss+s
+	}
+	switch {
+	case sp == "":
+	case lipgloss.Width(plain) < at:
+		plain, styled = fit(plain, at), fit(styled, at)
+	default: // a long name: right after it
+		plain, styled = plain+"  ", styled+"  "
+	}
+	return rowItem{plain: fit(plain+sp, w), styled: styled + ss}
 }

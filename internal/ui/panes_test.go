@@ -12,8 +12,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/Paksonite/gitnest/internal/gitx"
-	"github.com/Paksonite/gitnest/internal/scan"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/scan"
 )
 
 // shape describes a layout as panes per row, e.g. "2+2" for a 2×2 grid.
@@ -328,6 +328,24 @@ func TestWrapPassesProgramMessages(t *testing.T) {
 	}
 }
 
+func TestMenuShowsTopWhenItFits(t *testing.T) {
+	s := shellOf(t, 120, 40, "/r/a", "/r/b")
+	press(t, s, "v")
+	a := s.focused().app
+	for i := 0; i < 4; i++ {
+		press(t, s, "down")
+	}
+	if v := a.View(); !strings.Contains(v, "View & filters") || !strings.Contains(v, "Sort by") {
+		t.Errorf("moving down hid the top of the menu:\n%s", v)
+	}
+	// In a short window the menu scrolls, and says so.
+	s.Update(tea.WindowSizeMsg{Width: 120, Height: 14})
+	press(t, s, "down", "down", "down")
+	if v := a.View(); !strings.Contains(v, "more") {
+		t.Errorf("a scrolled menu should say there is more:\n%s", v)
+	}
+}
+
 func TestCenterOff(t *testing.T) {
 	for _, c := range []struct{ cur, n, h, want int }{
 		{5, 8, 10, 0},  // everything fits: never scroll
@@ -338,5 +356,17 @@ func TestCenterOff(t *testing.T) {
 		if got := centerOff(c.cur, c.n, c.h); got != c.want {
 			t.Errorf("centerOff(%d, %d, %d) = %d, want %d", c.cur, c.n, c.h, got, c.want)
 		}
+	}
+}
+
+// A window that changes size is cleared and drawn whole: terminals rewrap
+// the old frame, and redrawing only changed lines left pieces of it.
+func TestResizeClearsTheScreen(t *testing.T) {
+	s := shellOf(t, 120, 40, "/r/a")
+	if _, cmd := s.Update(tea.WindowSizeMsg{Width: 60, Height: 30}); cmd == nil || fmt.Sprintf("%T", cmd()) != "tea.clearScreenMsg" {
+		t.Fatalf("resize should clear the screen, got %v", cmd)
+	}
+	if _, cmd := s.Update(tea.WindowSizeMsg{Width: 60, Height: 30}); cmd != nil {
+		t.Error("the same size again needs no clearing")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 )
 
 // mkrepo creates dir/rel with an empty .git directory (enough for discovery).
@@ -53,7 +54,24 @@ func tree(t *testing.T) string {
 	mkfile(t, filepath.Join(root, "wt/.git"), "gitdir: /src/main/.git/worktrees/wt\n")
 	mkfile(t, filepath.Join(root, "a/mod/.git"), "gitdir: ../.git/modules/mod\n") // submodule of a
 	mkfile(t, filepath.Join(root, "notes.txt"), "not a dir")
+	backdate(t, root)
 	return root
+}
+
+// backdate sets every mtime under root to an hour ago, so the scanner
+// trusts them (it reads directories changed in the last moments again).
+func backdate(t *testing.T, root string) {
+	t.Helper()
+	old := time.Now().Add(-time.Hour)
+	err := filepath.Walk(root, func(p string, _ os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Chtimes(p, old, old)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestScanFindsRepositories(t *testing.T) {

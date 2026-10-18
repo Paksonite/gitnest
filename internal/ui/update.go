@@ -2,13 +2,14 @@ package ui
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Paksonite/gitnest/internal/config"
-	"github.com/Paksonite/gitnest/internal/state"
-	"github.com/Paksonite/gitnest/internal/update"
+	"github.com/Paksonite/gitnest/v2/internal/config"
+	"github.com/Paksonite/gitnest/v2/internal/state"
+	"github.com/Paksonite/gitnest/v2/internal/update"
 )
 
 // Version is the running gitnest's version, set by main; development
@@ -19,12 +20,27 @@ var Version = "dev"
 type updateMsg struct{ version string }
 
 // updateCheck asks GitHub (at most once a day, see update.Check) whether a
-// newer release exists. Failures are quiet: being offline is not news.
+// newer release exists; preview builds (dev-<commit>) ask hourly for a newer
+// dev build. Failures are quiet: being offline is not news.
 func (a *App) updateCheck() tea.Cmd {
-	if !update.IsRelease(Version) || !config.UpdateCheck(a.cfg) {
+	if !config.UpdateCheck(a.cfg) {
 		return nil
 	}
 	ctx := a.ctx
+	if strings.HasPrefix(Version, "dev-") {
+		return func() tea.Msg {
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			b, newer, err := update.CheckDev(ctx, Version, state.DevUpdateCachePath(), time.Hour)
+			if err != nil || !newer {
+				return nil
+			}
+			return updateMsg{b.Version()}
+		}
+	}
+	if !update.IsRelease(Version) {
+		return nil
+	}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
@@ -41,5 +57,13 @@ func (a *App) updateBadge() string {
 	if a.sh.update == "" {
 		return ""
 	}
-	return "  " + fg(cGreen, "⬆ "+a.sh.update+" · gitnest update")
+	return "  " + badge("⬆ "+a.sh.update+" · "+updateCommand(a.sh.update), cGreen)
+}
+
+// updateCommand is what installs version v: dev builds update gitnest-dev.
+func updateCommand(v string) string {
+	if strings.HasPrefix(v, "dev-") {
+		return "gitnest-dev update"
+	}
+	return "gitnest update"
 }

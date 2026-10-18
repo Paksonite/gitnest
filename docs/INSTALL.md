@@ -1,61 +1,59 @@
 # Install, update and uninstall
 
-- [Install on macOS](#install-on-macos)
-- [Install on Debian / Ubuntu](#install-on-debian--ubuntu)
+- [Install](#install): [macOS (Homebrew)](#macos-homebrew), [Linux (one line)](#linux-one-line)
 - [Other ways to install](#other-ways-to-install)
 - [First start](#first-start)
 - [Shell integration: completion and `gn`](#shell-integration-completion-and-gn)
-- [Update and uninstall](#update-and-uninstall)
+- [Update](#update)
+- [Uninstall](#uninstall)
 
-## Install on macOS
+## Install
 
-Requires macOS 13 (Ventura) or newer, Apple Silicon or Intel.
+### macOS: Homebrew
 
-1. **Homebrew** — if you don't have it yet, see [brew.sh](https://brew.sh).
-2. **git** — macOS asks to install the Command Line Tools the first time you
-   run `git`. A newer git from Homebrew works too:
-   ```sh
-   brew install git
-   ```
-3. **gitnest:**
-   ```sh
-   brew install --cask paksonite/tap/gitnest
-   ```
-   The cask also installs zsh completion.
-
-Check it:
+macOS 13 (Ventura) or newer, Apple Silicon or Intel:
 
 ```sh
-gitnest doctor
+brew install --cask paksonite/tap/gitnest
 ```
 
-## Install on Debian / Ubuntu
+The cask installs zsh completion too; add the
+[shell integration](#shell-integration-completion-and-gn) for `gn`. git comes
+with the Command Line Tools, which macOS offers the first time you run `git`
+(or `brew install git`).
 
-Works on Debian 12+ and Ubuntu 22.04+ (amd64 and arm64).
+### Linux: one line
 
-1. **git** (2.35 or newer; Debian 12 has 2.39, Ubuntu 22.04 has 2.34 — see
-   the note below):
-   ```sh
-   sudo apt update && sudo apt install -y git curl
-   ```
-2. **gitnest** from the `.deb` package of the latest release:
-   ```sh
-   arch=$(dpkg --print-architecture)   # amd64 or arm64
-   version=$(curl -fsSL https://api.github.com/repos/Paksonite/gitnest/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
-   curl -fsSLO "https://github.com/Paksonite/gitnest/releases/download/v${version}/gitnest_${version}_${arch}.deb"
-   sudo apt install -y "./gitnest_${version}_${arch}.deb"
-   ```
-   The package installs `/usr/bin/gitnest` and bash and zsh completion, and
-   depends on `git`.
-
-   Fedora / RHEL: the same release has `.rpm` packages
-   (`sudo dnf install ./gitnest_<version>_amd64.rpm`).
-
-Check it:
+Debian 12+, Ubuntu 22.04+, Fedora and others (amd64, arm64), without root —
+and on macOS too, if you'd rather not use Homebrew:
 
 ```sh
-gitnest doctor
+curl -fsSL https://raw.githubusercontent.com/Paksonite/gitnest/main/install.sh | sh
 ```
+
+It:
+
+1. downloads the latest release for your system and checks it against the
+   release's `checksums.txt`;
+2. installs `gitnest` into `~/.local/bin` (`/usr/local/bin` when run as
+   root);
+3. adds that folder to your `PATH` and the [shell integration](#shell-integration-completion-and-gn)
+   (`gn`, completion) to `~/.bashrc` or `~/.zshrc` (`~/.bash_profile` with
+   bash on macOS) — each line once, marked "added by the gitnest installer".
+
+Open a new terminal (or `exec $SHELL`) and run `gn`. Running the line again
+installs the latest version over the old one and adds nothing twice.
+
+Options go after `sh -s --`:
+
+| | |
+|---|---|
+| `… \| sh -s -- v1.2.0` | that version instead of the latest |
+| `… \| sh -s -- --no-modify` | don't touch your shell's startup files (or `GITNEST_NO_MODIFY=1`) |
+| `… \| sh -s -- --dev` | the `gitnest-dev` preview build, next to `gitnest` (see [preview builds](DEVELOPMENT.md#preview-builds-gitnest-dev)) |
+| `GITNEST_INSTALL_DIR=/opt/bin` | install somewhere else |
+
+gitnest needs **git** 2.35 or newer for everything (`sudo apt install git`).
 
 > **Ubuntu 22.04** ships git 2.34. gitnest works with it, except "stash only
 > staged changes" (`S`), which needs git 2.35. For a newer git:
@@ -63,34 +61,30 @@ gitnest doctor
 
 ## Other ways to install
 
-**Install script** (macOS or Linux, no root needed — installs into
-`~/.local/bin`, or `/usr/local/bin` as root, and verifies the checksum):
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/Paksonite/gitnest/main/install.sh | sh
-```
-
-A specific version: `… | sh -s -- v1.0.0`. Make sure `~/.local/bin` is on
-your `PATH`.
+**Packages**: every release has `.deb` and `.rpm` packages for amd64 and
+arm64 on the [releases page](https://github.com/Paksonite/gitnest/releases):
+`sudo apt install ./gitnest_<version>_amd64.deb` or
+`sudo dnf install ./gitnest_<version>_amd64.rpm`. They install
+`/usr/bin/gitnest` and the bash and zsh completion. (Switching to the install
+script later? Remove the package first: `sudo apt remove gitnest`.)
 
 **From source** (Go 1.24 or newer):
 
 ```sh
-go install github.com/Paksonite/gitnest/cmd/gitnest@latest
+go install github.com/Paksonite/gitnest/v2/cmd/gitnest@latest
 ```
 
-The binary lands in `$(go env GOPATH)/bin` (usually `~/go/bin`).
-
 **Release archives** for every platform are on the
-[releases page](https://github.com/Paksonite/gitnest/releases).
+[releases page](https://github.com/Paksonite/gitnest/releases) too.
+
+`gitnest update` works for every one of these ([below](#update)).
 
 ## First start
 
-Tell gitnest where your repositories live, then start it:
-
 ```sh
-gitnest roots add ~/repos          # as many folders as you like
-gitnest                            # the repository list
+gitnest doctor                     # checks git, config, icons, terminal, shell, updates
+gitnest roots add ~/work           # more folders to scan, as many as you like
+gn                                 # or gitnest
 ```
 
 Without configuration gitnest looks in the usual project folders that exist
@@ -103,64 +97,59 @@ Other entry points:
 gitnest .                          # open the repository you are in
 gitnest roots                      # list the scanned folders (roots rm <dir> to remove)
 gitnest scan                       # print every repository found
-gitnest doctor                     # check git, config, icons, terminal, shell and updates
 ```
 
-Press `?` in the app for every key binding.
+Press `?` in the app for every key.
 
 ## Shell integration: completion and `gn`
 
-One line in your shell's startup file gives you completion for `gitnest` and
-the **`gn`** command: it opens gitnest, and when you press `o` on a
-repository (in the list or inside it) gitnest quits and your shell is in that
-repository's folder. After it, `gitnest` itself does the same — `gn` is just
-shorter.
-
-**zsh** — add to `~/.zshrc` (anywhere: before or after `compinit` or oh-my-zsh):
+The installer adds it for you. By hand, it is one line in your shell's
+startup file:
 
 ```sh
-eval "$(gitnest shell zsh)"
+eval "$(gitnest shell zsh)"        # ~/.zshrc
+eval "$(gitnest shell bash)"       # ~/.bashrc
 ```
 
-**bash** — add to `~/.bashrc`:
+It gives you completion and the **`gn`** command: it opens gitnest, and when
+you press `o` on a repository (in the list or inside it) gitnest quits and
+your shell is in that repository's folder. `gitnest` itself then does the
+same — `gn` is just shorter. (Completion alone: `gitnest completion zsh` or
+`gitnest completion bash`.)
 
-```sh
-eval "$(gitnest shell bash)"
-```
-
-Open a new terminal and try `gn` (or `gitnest`), then `o`. (Completion alone: `gitnest completion zsh`
-or `gitnest completion bash`.)
-
-## Update and uninstall
+## Update
 
 gitnest looks for a new release on GitHub at most once a day (one small
-request, nothing else is sent). When there is one, the header shows
-`⬆ 1.2.0 · gitnest update`. Turn this off with `update_check: false` or
-`GITNEST_NO_UPDATE_CHECK=1`; development builds never check.
+request, nothing else is sent) and shows `⬆ 1.2.0 · gitnest update` in the
+header when there is one. Turn this off with `update_check: false` or
+`GITNEST_NO_UPDATE_CHECK=1`.
 
-```bash
-gitnest update --check
+```sh
+gitnest update                     # install it (--check only looks)
 ```
 
-```bash
-gitnest update
-```
+`gitnest update` updates gitnest the way it was installed:
 
-`gitnest update` works out how gitnest was installed and updates it the same
-way:
+| Installed with | `gitnest update` runs |
+|---|---|
+| Homebrew | `brew update && brew upgrade --cask gitnest` |
+| the install script, a release archive | downloads the release, checks it and replaces the binary in place |
+| `.deb` | downloads the new `.deb`, checks it, `sudo apt-get install` |
+| `.rpm` | the same with `sudo dnf install` (or `rpm -U`) |
+| `go install` | `go install …/cmd/gitnest@<new version>` |
 
-| Installed with | `gitnest update` runs | Uninstall |
-|---|---|---|
-| Homebrew | `brew update && brew upgrade --cask gitnest` | `brew uninstall --cask gitnest` |
-| `.deb` (Debian / Ubuntu) | downloads the new `.deb`, checks it against `checksums.txt`, `sudo apt-get install` | `sudo apt remove gitnest` |
-| `.rpm` | the same with `sudo dnf install` (or `rpm -U`) | `sudo dnf remove gitnest` |
-| install script / archive | downloads the release archive, checks it and replaces the binary in place | `rm ~/.local/bin/gitnest` |
-| `go install` | `go install …/cmd/gitnest@<new version>` | `rm "$(go env GOPATH)/bin/gitnest"` |
+If the binary is in a folder you can't write to (e.g. `/usr/local/bin`), run
+`sudo gitnest update`. `gitnest update --force` reinstalls the latest
+release. `gitnest doctor` also says whether an update is waiting.
 
-If the binary sits in a directory you can't write to (e.g. `/usr/local/bin`),
-run `sudo gitnest update`. `gitnest update --force` reinstalls the latest
-release, e.g. over a development build. `gitnest doctor` also says whether an
-update is waiting.
+## Uninstall
+
+| Installed with | Remove |
+|---|---|
+| Homebrew | `brew uninstall --cask gitnest` |
+| the install script | `rm ~/.local/bin/gitnest`, and the lines marked "added by the gitnest installer" in `~/.zshrc` / `~/.bashrc` |
+| `.deb` / `.rpm` | `sudo apt remove gitnest` / `sudo dnf remove gitnest` |
+| `go install` | `rm "$(go env GOPATH)/bin/gitnest"` |
 
 Configuration lives in `~/.config/gitnest`, caches in `~/.cache/gitnest` and
 state in `~/.local/state/gitnest`; remove them to start from scratch.

@@ -16,7 +16,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Paksonite/gitnest/internal/config"
+	"github.com/Paksonite/gitnest/v2/internal/config"
 )
 
 // drive runs cmd and everything that follows from it. Timer messages are
@@ -169,6 +169,10 @@ func e2eSetup(t *testing.T) (a *App, root, origin string) {
 		t.Fatal(err)
 	}
 	cfg, _, _ := config.Load()
+	// The background rescan and status timers fire after a minute and 15 s:
+	// the harness would wait for each (see drive). Tests trigger both
+	// themselves.
+	cfg.RescanInterval, cfg.StatusInterval = 0, 0
 	a = newApp(context.Background(), cfg, false, "", "")
 	a.w, a.h = 140, 40
 	drive(t, a, a.loadRepos())
@@ -272,7 +276,7 @@ func TestE2EWorkflow(t *testing.T) {
 		sh(t, lib, "commit", "-q", "-m", "add "+n)
 	}
 	drive(t, a, loadRepoData(a.ctx, lib))
-	press(t, a, "3", "j", "i", "j", "d", "enter")
+	press(t, a, "3", "down", "i", "down", "d", "enter")
 	if a.p == nil || !strings.Contains(a.p.title, "Run the rebase plan on 2 commits") {
 		t.Fatalf("plan confirmation: %+v", a.p)
 	}
@@ -296,7 +300,8 @@ func TestE2EList(t *testing.T) {
 	}
 
 	// Mark two repositories and pull: lib has no upstream, so the report opens.
-	press(t, a, "s") // sort by name: app, lib, lib-copy
+	a.rs.sortMode = sortName // app, lib, lib-copy (v sets it in the app)
+	a.rebuildView("")
 	press(t, a, "g", "space", "space", "p")
 	if a.report == nil || !strings.Contains(a.report.title, "1 of 2 failed") {
 		t.Fatalf("report: %+v (toast %q)", a.report, a.toast)
@@ -322,5 +327,7 @@ func TestE2EList(t *testing.T) {
 // messages are dropped by drive anyway).
 func TestMain(m *testing.M) {
 	liveRefresh = time.Millisecond
+	previewDelay = time.Millisecond
+	cursorBlink = false
 	os.Exit(m.Run())
 }

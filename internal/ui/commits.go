@@ -10,7 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/Paksonite/gitnest/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
 )
 
 // refIcon is the icon and colour for a reflog action (see refGlyph).
@@ -197,7 +197,7 @@ func (a *App) copiedBadge() string {
 	if a.sh.copied == nil {
 		return ""
 	}
-	return "  " + fg(cAccent, fmt.Sprintf("⎘ %d copied from %s · v pastes", len(a.sh.copied.commits), a.sh.copied.name))
+	return "  " + badge(fmt.Sprintf("⎘ %d copied from %s · v pastes", len(a.sh.copied.commits), a.sh.copied.name), cAccent)
 }
 
 // paste cherry-picks the copied commits, oldest first, onto the current

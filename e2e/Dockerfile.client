@@ -1,0 +1,12 @@
+# The developer's machine: git, tmux and an SSH key for gitserver; gitnest
+# itself is mounted at /gitnest/bin.
+FROM debian:12
+RUN apt-get update -q && apt-get install -y -q --no-install-recommends git tmux openssh-client ca-certificates curl less vim-tiny locales >/dev/null \
+ && sed -i 's/# en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen && locale-gen >/dev/null
+ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 TERM=xterm-256color COLORTERM=truecolor
+COPY e2e/key /root/.ssh/id_ed25519
+RUN chmod 600 /root/.ssh/id_ed25519 \
+ && printf 'Host gitserver\n  User git\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  LogLevel ERROR\n' > /root/.ssh/config \
+ && git config --global user.name "Dev Example" && git config --global user.email dev@example.com \
+ && git config --global init.defaultBranch main && git config --global pull.rebase false
+CMD ["sleep", "infinity"]

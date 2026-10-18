@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Paksonite/gitnest/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
 )
 
 // fileNode is one row of the Files panel: a changed file, or (in tree mode)

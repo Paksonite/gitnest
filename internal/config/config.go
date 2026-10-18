@@ -33,6 +33,8 @@ type Config struct {
 	Icons          string   `yaml:"icons"` // "symbols", "nerd" (needs a Nerd Font) or "plain"
 	Theme          Theme    `yaml:"theme"`
 	UpdateCheck    *bool    `yaml:"update_check"` // nil means on
+	Start          string   `yaml:"start"`        // "dashboard" (default) or "list"
+	Mouse          *bool    `yaml:"mouse"`        // nil means on
 }
 
 const template = `# gitnest configuration
@@ -64,13 +66,20 @@ icons: symbols
 # Check GitHub once a day for a new gitnest release and say so in the
 # header ("gitnest update" installs it). GITNEST_NO_UPDATE_CHECK=1 also turns it off.
 update_check: true
+# What gitnest opens with: "last" (whichever was shown when it last quit),
+# "dashboard" (activity, what needs attention) or "list" (the repositories).
+# H switches between them.
+start: last
+# Click and scroll with the mouse. While it is on, select text in the
+# terminal with shift (or option on macOS) held down.
+mouse: true
 theme:
   # auto follows the terminal background; set dark or light if it guesses wrong.
   mode: auto
   # Themes for dark and light backgrounds: press T in the app to pick one,
   # "gitnest theme list" shows them all; custom ones live in themes/*.yaml.
-  dark: catppuccin-mocha
-  light: catppuccin-latte
+  dark: gitnest-dark
+  light: gitnest-light
   # "theme" colours diffs with the theme; "git" keeps your git colours.
   diff: theme
   # Overrides the theme's accent colour; empty keeps the theme's.
@@ -131,7 +140,7 @@ func Default() Config {
 		RescanInterval: 60,
 		StatusInterval: 15,
 		Jobs:           8,
-		Theme:          Theme{Mode: "auto", Dark: "catppuccin-mocha", Light: "catppuccin-latte", Diff: "theme"},
+		Theme:          Theme{Mode: "auto", Dark: "gitnest-dark", Light: "gitnest-light", Diff: "theme"},
 	}
 }
 
@@ -316,3 +325,16 @@ func UpdateCheck(cfg Config) bool {
 	}
 	return cfg.UpdateCheck == nil || *cfg.UpdateCheck
 }
+
+// StartScreen is what gitnest opens with: "dashboard", "list", or "last"
+// (the default: whichever was shown when gitnest last quit).
+func StartScreen(cfg Config) string {
+	switch v := strings.ToLower(strings.TrimSpace(cfg.Start)); v {
+	case "dashboard", "list":
+		return v
+	}
+	return "last"
+}
+
+// MouseOn reports whether the mouse is used (mouse: true, the default).
+func MouseOn(cfg Config) bool { return cfg.Mouse == nil || *cfg.Mouse }

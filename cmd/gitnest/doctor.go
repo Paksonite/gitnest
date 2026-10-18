@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Paksonite/gitnest/internal/config"
-	"github.com/Paksonite/gitnest/internal/gitx"
-	"github.com/Paksonite/gitnest/internal/scan"
-	"github.com/Paksonite/gitnest/internal/state"
-	"github.com/Paksonite/gitnest/internal/theme"
-	"github.com/Paksonite/gitnest/internal/update"
+	"github.com/Paksonite/gitnest/v2/internal/config"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/scan"
+	"github.com/Paksonite/gitnest/v2/internal/state"
+	"github.com/Paksonite/gitnest/v2/internal/theme"
+	"github.com/Paksonite/gitnest/v2/internal/update"
 )
 
 // doctorCmd checks the environment gitnest depends on and says how to fix
@@ -84,8 +84,8 @@ func doctorCmd(args []string) error {
 			warn("theme", fmt.Sprintf("%s theme %q not found (gitnest theme list)", slot.kind, slot.name))
 		}
 	}
-	ok("theme", fmt.Sprintf("dark %s, light %s, mode %s", orDefault(cfg.Theme.Dark, "catppuccin-mocha"),
-		orDefault(cfg.Theme.Light, "catppuccin-latte"), orAuto(cfg.Theme.Mode)))
+	ok("theme", fmt.Sprintf("dark %s, light %s, mode %s", orDefault(cfg.Theme.Dark, "gitnest-dark"),
+		orDefault(cfg.Theme.Light, "gitnest-light"), orAuto(cfg.Theme.Mode)))
 
 	mode, src := config.Icons(cfg)
 	switch mode {

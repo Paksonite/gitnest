@@ -9,7 +9,7 @@ import (
 
 func TestBuiltinsAreCompleteAndReadable(t *testing.T) {
 	names := BuiltinNames()
-	if len(names) != 10 {
+	if len(names) != 12 {
 		t.Fatalf("%d built-in themes: %v", len(names), names)
 	}
 	for _, n := range names {
@@ -71,7 +71,7 @@ func TestUserThemesExtend(t *testing.T) {
 		t.Errorf("orange-calm = %+v", c)
 	}
 	names := set.Names()
-	if names[0] != "catppuccin-mocha" || names[len(names)-1] != "orange-calm" {
+	if names[0] != "gitnest-dark" || names[len(names)-1] != "orange-calm" {
 		t.Errorf("order: %v", names)
 	}
 	if _, ok := set.Get("broken"); ok {

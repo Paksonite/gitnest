@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/Paksonite/gitnest/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
 )
 
 // staging is the line-by-line staging view of one file (enter on a file in
@@ -210,15 +210,13 @@ func (a *App) stagingKey(s string) tea.Cmd {
 	case actToggleStage:
 		d, sel, staged := st.diff, st.selection(), st.staged
 		st.anchor = -1
-		label := "stage lines"
 		if staged {
-			label = "unstage lines"
+			return tea.Sequence(a.doMsg("unstage lines", func() (string, error) {
+				return "unstaged ✓ — back among the changes (tab)", gitx.UnstageLines(ctx, dir, d, sel)
+			}), reload())
 		}
-		return tea.Sequence(a.do(label, func() error {
-			if staged {
-				return gitx.UnstageLines(ctx, dir, d, sel)
-			}
-			return gitx.StageLines(ctx, dir, d, sel)
+		return tea.Sequence(a.doMsg("stage lines", func() (string, error) {
+			return "staged ✓ — tab shows the staged lines, where space unstages them", gitx.StageLines(ctx, dir, d, sel)
 		}), reload())
 	case actDiscard:
 		if st.staged {

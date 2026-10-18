@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"github.com/charmbracelet/lipgloss"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -10,9 +11,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Paksonite/gitnest/internal/gitx"
-	"github.com/Paksonite/gitnest/internal/scan"
-	"github.com/Paksonite/gitnest/internal/state"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/scan"
+	"github.com/Paksonite/gitnest/v2/internal/state"
 )
 
 func testApp(paths ...string) *App {
@@ -166,7 +167,8 @@ func TestSortModes(t *testing.T) {
 	}
 	want := []string{"abc", "bca", "cba"} // name, last commit, status
 	for _, w := range want {
-		a.reposKey(key("s"))
+		a.rs.sortMode = (a.rs.sortMode + 1) % sortModes
+		a.rebuildView("")
 		if got := order(); got != w {
 			t.Errorf("%s: got %s, want %s", sortNames[a.rs.sortMode], got, w)
 		}
@@ -238,4 +240,51 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeySpace, Runes: []rune(" ")}
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
+}
+
+func TestStatusCell(t *testing.T) {
+	cases := []struct {
+		info gitx.Info
+		want string
+	}{
+		{gitx.Info{Upstream: true}, "✓"},
+		{gitx.Info{Upstream: true, Changes: 3}, "~3"},
+		{gitx.Info{Upstream: true, Ahead: 1, Behind: 2}, "↑1 ↓2"},
+		{gitx.Info{}, "∅"},
+		{gitx.Info{Upstream: true, Conflicts: true, Changes: 1}, "! conflict"},
+		{gitx.Info{Upstream: true, State: gitx.StateRebasing}, "! rebasing"},
+	}
+	for _, c := range cases {
+		if got, _ := statusCell(scan.Repo{Info: c.info}); got != c.want {
+			t.Errorf("%+v: %q, want %q", c.info, got, c.want)
+		}
+	}
+	// The mark column holds only the mark: no second status dot.
+	row := repoRow(scan.Repo{Name: "api", Info: gitx.Info{Upstream: true, Changes: 2}}, rowOpts{nameW: 20})
+	if strings.Count(row.plain, "●") != 0 || !strings.HasPrefix(row.plain, "  api") {
+		t.Errorf("row: %q", row.plain)
+	}
+}
+
+func TestBranchColor(t *testing.T) {
+	rp := &repoState{mainBranch: "origin/main"}
+	cases := []struct {
+		b    gitx.Branch
+		want lipgloss.TerminalColor
+	}{
+		{gitx.Branch{Name: "main"}, cYellow},
+		{gitx.Branch{Name: "feature/x"}, cCyan},
+		{gitx.Branch{Name: "origin/main", Remote: true}, tint(cYellow, 0.6)},
+		{gitx.Branch{Name: "origin/feature/x", Remote: true}, cDim},
+	}
+	for _, c := range cases {
+		if got := rp.branchColor(c.b); got != c.want {
+			t.Errorf("%s: %v, want %v", c.b.Name, got, c.want)
+		}
+	}
+	// Without origin/HEAD, master counts when there is no main.
+	rp = &repoState{local: []gitx.Branch{{Name: "master"}, {Name: "dev"}}}
+	if rp.branchColor(gitx.Branch{Name: "master"}) != cYellow || rp.branchColor(gitx.Branch{Name: "dev"}) != cCyan {
+		t.Error("master as the main branch")
+	}
 }

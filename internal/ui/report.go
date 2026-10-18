@@ -11,9 +11,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/Paksonite/gitnest/internal/config"
-	"github.com/Paksonite/gitnest/internal/gitx"
-	"github.com/Paksonite/gitnest/internal/scan"
+	"github.com/Paksonite/gitnest/v2/internal/config"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
+	"github.com/Paksonite/gitnest/v2/internal/scan"
 )
 
 type bulkFail struct {
@@ -91,7 +91,7 @@ func newReport(m bulkMsg, labels map[string]string) *report {
 			lines = append(lines[:8], "…")
 		}
 		for _, l := range lines {
-			r.lines = append(r.lines, "    "+fg(cDim, expandTabs(l)))
+			r.lines = append(r.lines, "    "+fg(cDim, expandTabs(gitx.Redact(l))))
 		}
 	}
 	return r
@@ -106,7 +106,7 @@ func errorReport(label string, err error) *report {
 		out = "$ git " + strings.Join(ge.Args, " ") + "\n\n" + ge.Output
 	}
 	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
-		r.lines = append(r.lines, expandTabs(l))
+		r.lines = append(r.lines, expandTabs(gitx.Redact(l)))
 	}
 	return r
 }
@@ -148,7 +148,7 @@ func (a *App) viewReport() string {
 		more = fmt.Sprintf("  ·  %d–%d of %d lines", r.off+1, min(r.off+h, len(r.lines)), len(r.lines))
 	}
 	text := bold(r.title) + "\n\n" + strings.Join(body, "\n") + "\n\n" +
-		fg(cDim, "j/k scroll  "+hints(scOverlay)+more)
+		fg(cDim, "↑/↓ scroll  "+hints(scOverlay)+more)
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cRed).
 		Padding(1, 2).Width(w).Render(text)
 	return lipgloss.Place(a.w, a.h, lipgloss.Center, lipgloss.Center, box)
