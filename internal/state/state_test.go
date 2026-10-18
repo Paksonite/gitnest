@@ -51,3 +51,33 @@ func TestStateKeepsUnknownKeys(t *testing.T) {
 		t.Errorf("temporary files left: %v", leftovers)
 	}
 }
+
+// gitnest v1.1.x rewrites recent.json with only the keys it knows
+// (recent, list_tree, pane_layout, collapsed) whenever it saves — opening
+// a repository is enough. Run before or after gitnest-dev, even not at
+// the same time, it must not lose the settings newer versions keep.
+func TestStateSurvivesOlderGitnest(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	s := Load()
+	s.SetScreen("list")
+	s.SetListTree(true)
+	s.SetListGroup("remote")
+	s.SetFavorites([]string{"/r/a"})
+
+	// What v1.1.2 writes: its own struct, nothing else.
+	old := struct {
+		Recent     map[string]int64 `json:"recent"`
+		ListTree   bool             `json:"list_tree"`
+		PaneLayout string           `json:"pane_layout"`
+		Collapsed  []string         `json:"collapsed"`
+	}{Recent: map[string]int64{"/r/a": 1}, ListTree: true}
+	b, _ := json.Marshal(old)
+	if err := os.WriteFile(statePath(), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := Load()
+	if got.Screen != "list" || got.ListGroup != "remote" || !got.ListTree || len(got.Favorites) != 1 {
+		t.Fatalf("after an older gitnest saved: %+v", got)
+	}
+}
