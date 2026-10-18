@@ -93,6 +93,9 @@ release:
   github:
     owner: Paksonite
     name: gitnest
+  # v1.1.0-rc.1 and the like become GitHub pre-releases: never "latest", so
+  # gitnest update, install.sh and the update notice don't offer them.
+  prerelease: auto
 
 homebrew_casks:
   - name: gitnest
@@ -103,6 +106,8 @@ homebrew_casks:
     homepage: https://github.com/Paksonite/gitnest
     description: Terminal UI for managing many git repositories
     directory: Casks
+    # Pre-releases don't touch the tap: brew users stay on the last release.
+    skip_upload: auto
     commit_msg_template: "gitnest {{ .Tag }}"
     custom_block: |
       depends_on macos: ">= :ventura"

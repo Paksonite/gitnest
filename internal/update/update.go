@@ -258,7 +258,7 @@ func Apply(ctx context.Context, m Method, rel Release, exe string, run Runner, o
 		defer os.RemoveAll(tmp)
 		asset := fmt.Sprintf("gitnest_%s_%s.%s", v, runtime.GOARCH, ext)
 		file := filepath.Join(tmp, asset)
-		if err := download(ctx, v, asset, file); err != nil {
+		if err := download(ctx, "v"+v, asset, file); err != nil {
 			return err
 		}
 		installer := []string{"apt-get", "install", "-y", file}
@@ -305,17 +305,23 @@ func replaceBinary(ctx context.Context, v, exe string, out io.Writer) error {
 	asset := fmt.Sprintf("gitnest_%s_%s.tar.gz", v, t)
 	archive := filepath.Join(tmp, asset)
 	fmt.Fprintf(out, "→ downloading %s\n", asset)
-	if err := download(ctx, v, asset, archive); err != nil {
+	if err := download(ctx, "v"+v, asset, archive); err != nil {
 		return err
 	}
 	bin, err := extract(archive, "gitnest")
 	if err != nil {
 		return err
 	}
-	next := filepath.Join(filepath.Dir(exe), ".gitnest.new")
+	return swap(exe, bin, out)
+}
+
+// swap writes bin over the executable exe with a rename, so a running
+// copy keeps working.
+func swap(exe string, bin []byte, out io.Writer) error {
+	next := filepath.Join(filepath.Dir(exe), "."+filepath.Base(exe)+".new")
 	if err := os.WriteFile(next, bin, 0o755); err != nil {
 		if errors.Is(err, os.ErrPermission) {
-			return fmt.Errorf("can't write to %s — run: sudo gitnest update", filepath.Dir(exe))
+			return fmt.Errorf("can't write to %s — run: sudo %s update", filepath.Dir(exe), filepath.Base(exe))
 		}
 		return err
 	}
@@ -327,10 +333,49 @@ func replaceBinary(ctx context.Context, v, exe string, out io.Writer) error {
 	return nil
 }
 
-// download fetches a release asset to path and checks it against the
-// release's checksums.txt.
-func download(ctx context.Context, v, asset, path string) error {
-	base := DownloadBase + "/v" + v + "/"
+// ---------------------------------------------------------- dev builds
+
+// DevTag is the rolling pre-release that holds the latest gitnest-dev
+// builds of the ui-next branch (see .github/workflows/dev.yml). Being a
+// pre-release, it is never what /releases/latest returns.
+const DevTag = "dev"
+
+// IsDevBinary reports whether exe is a gitnest-dev preview build, which
+// updates from DevTag instead of the releases.
+func IsDevBinary(exe string) bool { return filepath.Base(exe) == "gitnest-dev" }
+
+// ApplyDev replaces the gitnest-dev at exe with the latest dev build. It
+// reports false when exe already is that build.
+func ApplyDev(ctx context.Context, exe string, out io.Writer) (bool, error) {
+	t, err := target()
+	if err != nil {
+		return false, err
+	}
+	tmp, err := os.MkdirTemp("", "gitnest-update")
+	if err != nil {
+		return false, err
+	}
+	defer os.RemoveAll(tmp)
+	asset := "gitnest-dev_" + t
+	file := filepath.Join(tmp, asset)
+	fmt.Fprintf(out, "→ downloading %s from the %s pre-release\n", asset, DevTag)
+	if err := download(ctx, DevTag, asset, file); err != nil {
+		return false, err
+	}
+	bin, err := os.ReadFile(file)
+	if err != nil {
+		return false, err
+	}
+	if cur, err := os.ReadFile(exe); err == nil && sha256.Sum256(cur) == sha256.Sum256(bin) {
+		return false, nil
+	}
+	return true, swap(exe, bin, out)
+}
+
+// download fetches an asset of the release tagged tag to path and checks
+// it against the release's checksums.txt.
+func download(ctx context.Context, tag, asset, path string) error {
+	base := DownloadBase + "/" + tag + "/"
 	sums, err := get(ctx, base+"checksums.txt")
 	if err != nil {
 		return err
@@ -342,7 +387,7 @@ func download(ctx context.Context, v, asset, path string) error {
 		}
 	}
 	if want == "" {
-		return fmt.Errorf("%s is not part of release %s", asset, v)
+		return fmt.Errorf("%s is not part of release %s", asset, tag)
 	}
 	body, err := get(ctx, base+asset)
 	if err != nil {

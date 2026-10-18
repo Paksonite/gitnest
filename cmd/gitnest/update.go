@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/Paksonite/gitnest/internal/state"
@@ -29,6 +30,9 @@ func updateCmd(args []string) error {
 	defer stop()
 
 	cur, _, _ := buildVersion()
+	if exe, err := update.Executable(); err == nil && update.IsDevBinary(exe) {
+		return updateDev(ctx, exe, cur, check)
+	}
 	checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	rel, newer, err := update.Check(checkCtx, cur, state.UpdateCachePath(), 0)
 	cancel()
@@ -66,5 +70,25 @@ func updateCmd(args []string) error {
 		return fmt.Errorf("update: %w", err)
 	}
 	fmt.Printf("\ngitnest %s installed ✓  (restart gitnest to use it)\n", rel.Version)
+	return nil
+}
+
+// updateDev updates a gitnest-dev preview build from the rolling dev
+// pre-release; release versions are left alone.
+func updateDev(ctx context.Context, exe, cur string, check bool) error {
+	fmt.Printf("gitnest-dev %s (preview build of the ui-next branch)\n", cur)
+	if check {
+		fmt.Printf("builds: %s/%s\nrun `gitnest-dev update` to install the latest one\n", strings.TrimSuffix(update.DownloadBase, "/download"), "tag/"+update.DevTag)
+		return nil
+	}
+	changed, err := update.ApplyDev(ctx, exe, os.Stdout)
+	if err != nil {
+		return fmt.Errorf("update: %w", err)
+	}
+	if !changed {
+		fmt.Println("already the latest dev build")
+		return nil
+	}
+	fmt.Println("\nlatest gitnest-dev installed ✓  (restart it to use it)")
 	return nil
 }

@@ -229,3 +229,31 @@ func TestPackageManagers(t *testing.T) {
 		t.Fatalf("ran %v", ran)
 	}
 }
+
+func TestApplyDev(t *testing.T) {
+	tgt, err := target()
+	if err != nil {
+		t.Skip(err)
+	}
+	f := &fakeGitHub{tag: DevTag}
+	f.start(t)
+	asset := "gitnest-dev_" + tgt
+	sum := sha256.Sum256([]byte("dev build 2"))
+	f.assets = map[string][]byte{asset: []byte("dev build 2"), "checksums.txt": []byte(hex.EncodeToString(sum[:]) + "  " + asset + "\n")}
+
+	exe := filepath.Join(t.TempDir(), "gitnest-dev")
+	os.WriteFile(exe, []byte("dev build 1"), 0o755)
+	if !IsDevBinary(exe) || IsDevBinary(filepath.Join(filepath.Dir(exe), "gitnest")) {
+		t.Fatal("IsDevBinary")
+	}
+	changed, err := ApplyDev(context.Background(), exe, io.Discard)
+	if err != nil || !changed {
+		t.Fatalf("changed %v, err %v", changed, err)
+	}
+	if b, _ := os.ReadFile(exe); string(b) != "dev build 2" {
+		t.Fatalf("binary = %q", b)
+	}
+	if changed, err = ApplyDev(context.Background(), exe, io.Discard); err != nil || changed {
+		t.Fatalf("second run: changed %v, err %v", changed, err)
+	}
+}
