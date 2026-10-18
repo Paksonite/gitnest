@@ -68,7 +68,7 @@ func (a *App) selMouse(m tea.MouseMsg) (tea.Cmd, bool) {
 			s.on = false
 			return nil, true
 		}
-		a.setToast(fmt.Sprintf("copied %d characters", len([]rune(text))), false)
+		a.setToast(fmt.Sprintf("copied %d characters to the clipboard — paste with cmd/ctrl+v (no need to copy)", len([]rune(text))), false)
 		return copyText(text), true
 	}
 	return nil, false
