@@ -3,7 +3,9 @@ package ui
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -312,5 +314,34 @@ func TestTabBar(t *testing.T) {
 	}
 	if bar := tabBar(titles[:3], 0, 200); !strings.Contains(bar, "ctrl+←/→") || strings.Contains(bar, "‹") || strings.Contains(bar, "›") {
 		t.Errorf("all tabs fit: %q", bar)
+	}
+}
+
+// Bubble Tea's own requests, such as running the editor, must reach the
+// program unwrapped; anything else goes back to its pane.
+func TestWrapPassesProgramMessages(t *testing.T) {
+	if msg := wrap(1, tea.ExecProcess(exec.Command("true"), nil))(); reflect.TypeOf(msg).Name() != "execMsg" {
+		t.Errorf("exec request wrapped: %T", msg)
+	}
+	if msg := wrap(1, func() tea.Msg { return execDoneMsg{} })(); reflect.TypeOf(msg) != reflect.TypeOf(paneMsg{}) {
+		t.Errorf("own message not wrapped: %T", msg)
+	}
+}
+
+func TestMenuShowsTopWhenItFits(t *testing.T) {
+	s := shellOf(t, 120, 40, "/r/a", "/r/b")
+	press(t, s, "F")
+	a := s.focused().app
+	for i := 0; i < 4; i++ {
+		press(t, s, "j")
+	}
+	if v := a.View(); !strings.Contains(v, "Status") || !strings.Contains(v, "All repositories") {
+		t.Errorf("moving down hid the top of the menu:\n%s", v)
+	}
+	// In a short window the menu scrolls, and says so.
+	s.Update(tea.WindowSizeMsg{Width: 120, Height: 14})
+	press(t, s, "j", "j", "j")
+	if v := a.View(); !strings.Contains(v, "more") {
+		t.Errorf("a scrolled menu should say there is more:\n%s", v)
 	}
 }

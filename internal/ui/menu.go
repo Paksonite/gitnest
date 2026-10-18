@@ -97,16 +97,16 @@ func (a *App) viewMenu() string {
 	m := a.menu
 	w := clamp(a.w-4, 30, 62)
 	inner := w - 6
-	listH := clamp(a.h-8-2*editorPad(a.h), 1, len(m.items))
-	off := scrollTo(m.cur, clamp(m.cur-listH/2, 0, len(m.items)), listH)
-	var lines []string
-	for i := off; i < len(m.items) && i < off+listH; i++ {
-		it := m.items[i]
+	// Every item is a line, with a blank line before each section but the
+	// first; the window over them keeps the cursor in view.
+	var all []string
+	curLine := 0
+	for i, it := range m.items {
 		if it.header {
-			if i > off {
-				lines = append(lines, "")
+			if i > 0 {
+				all = append(all, "")
 			}
-			lines = append(lines, bold(fg(cAccent, it.label)))
+			all = append(all, bold(fg(cAccent, it.label)))
 			continue
 		}
 		mark, smark := "  ", "  "
@@ -123,14 +123,28 @@ func (a *App) viewMenu() string {
 		label := fit(it.label, max(1, inner-2-lipgloss.Width(right)-1))
 		gap := strings.Repeat(" ", max(1, inner-2-lipgloss.Width(label)-lipgloss.Width(right)))
 		if i == m.cur {
-			lines = append(lines, lipgloss.NewStyle().Bold(true).Background(cSel).Foreground(cText).Render(fit(mark+label+gap+right, inner)))
+			curLine = len(all)
+			all = append(all, lipgloss.NewStyle().Bold(true).Background(cSel).Foreground(cText).Render(fit(mark+label+gap+right, inner)))
 			continue
 		}
 		sright := fg(cDim, it.right)
 		if it.key != "" {
 			sright = strings.TrimSpace(fg(cDim, it.right) + "  " + fg(cAccent, keyLabel(it.key)))
 		}
-		lines = append(lines, fit(smark+label+gap+sright, inner))
+		all = append(all, fit(smark+label+gap+sright, inner))
+	}
+	room := a.h - 8 - 2*editorPad(a.h)
+	if m.note != "" {
+		room--
+	}
+	listH := clamp(room, 1, len(all))
+	off := centerOff(curLine, len(all), listH)
+	lines := all[off : off+listH]
+	if off > 0 && listH >= 3 {
+		lines[0] = fg(cDim, fit("  ↑ more", inner))
+	}
+	if off+listH < len(all) && listH >= 3 {
+		lines[len(lines)-1] = fg(cDim, fit("  ↓ more", inner))
 	}
 	body := bold(m.title)
 	if m.note != "" {

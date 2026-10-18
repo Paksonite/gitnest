@@ -133,7 +133,7 @@ func (a *App) viewPlanner() string {
 	p := a.plan
 	w := min(90, a.w-2)
 	listH := clamp(a.h-10-2*editorPad(a.h), 1, len(p.rows))
-	off := scrollTo(p.cur, clamp(p.cur-listH/2, 0, len(p.rows)), listH)
+	off := centerOff(p.cur, len(p.rows), listH)
 	var lines []string
 	for i := off; i < len(p.rows) && i < off+listH; i++ {
 		r := p.rows[i]

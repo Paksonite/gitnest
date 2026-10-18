@@ -254,6 +254,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.err != nil {
 			a.setToast(m.err.Error(), true)
 		}
+		if b := a.browse; b != nil { // show the edited file as it is now
+			b.path = ""
+			b.show()
+		}
 		return a, a.reloadCurrent()
 	case tea.KeyMsg:
 		return a, a.onKey(m)
