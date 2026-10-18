@@ -91,7 +91,7 @@ func newReport(m bulkMsg, labels map[string]string) *report {
 			lines = append(lines[:8], "…")
 		}
 		for _, l := range lines {
-			r.lines = append(r.lines, "    "+fg(cDim, expandTabs(l)))
+			r.lines = append(r.lines, "    "+fg(cDim, expandTabs(gitx.Redact(l))))
 		}
 	}
 	return r
@@ -106,7 +106,7 @@ func errorReport(label string, err error) *report {
 		out = "$ git " + strings.Join(ge.Args, " ") + "\n\n" + ge.Output
 	}
 	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
-		r.lines = append(r.lines, expandTabs(l))
+		r.lines = append(r.lines, expandTabs(gitx.Redact(l)))
 	}
 	return r
 }

@@ -322,5 +322,6 @@ func TestE2EList(t *testing.T) {
 // messages are dropped by drive anyway).
 func TestMain(m *testing.M) {
 	liveRefresh = time.Millisecond
+	previewDelay = time.Millisecond
 	os.Exit(m.Run())
 }

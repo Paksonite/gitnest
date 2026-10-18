@@ -2,6 +2,7 @@ package ui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"os"
 	"regexp"
 	"strings"
@@ -198,5 +199,16 @@ func TestHelpShowsMainKeys(t *testing.T) {
 	}
 	if strings.Contains(help, "backspace") {
 		t.Error("the help lists backspace")
+	}
+}
+
+// A footer too long for the window loses hints from the end, never "? help".
+func TestFooterKeepsHelp(t *testing.T) {
+	a := testApp("/r/a")
+	a.w, a.h = 80, 24
+	f := a.footer(hints(scList, scPanes, scGlobal))
+	last := strings.Split(f, "\n")[1]
+	if lipgloss.Width(last) > 80 || !strings.Contains(last, "? help") || !strings.HasPrefix(last, "enter open") {
+		t.Errorf("footer: %q", last)
 	}
 }

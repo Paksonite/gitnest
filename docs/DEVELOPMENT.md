@@ -17,6 +17,8 @@ presses (`press(t, app, "3", "s", "y")`): the list, every panel of the
 repository view, conflicts, panes, the update notice, and edge cases such as
 empty repositories, detached HEAD, huge diffs, odd file names, network
 timeouts and tiny windows. `go test -short ./...` skips them.
+`go test -run '^$' -bench . ./internal/ui` times the screens redrawn on every
+key with 1000 repositories (about a millisecond a frame) and the dashboard.
 `TestReadmeKeyTablesMatchKeymap` fails when the key tables in
 [KEYS.md](KEYS.md) and `keymap.go` disagree.
 

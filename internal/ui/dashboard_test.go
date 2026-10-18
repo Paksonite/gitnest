@@ -23,11 +23,11 @@ func dashApp(t *testing.T) *App {
 	a.rs.all[1].Behind = 1  // web: to pull
 	now := time.Now()
 	ago := func(d int) int64 { return now.AddDate(0, 0, -d).Unix() }
-	a.dash.act = map[string][]gitx.ActivityCommit{
+	a.onActivity(activityMsg{act: map[string][]gitx.ActivityCommit{
 		"/r/api": {{Unix: ago(0), Short: "a1", Subject: "add health check", Author: "Ann Example"},
 			{Unix: ago(1), Short: "a2", Subject: "fix", Author: "Ann Example"}, {Unix: ago(20), Short: "a3", Subject: "old", Author: "Bob Example"}},
 		"/r/web": {{Unix: ago(3), Short: "w1", Subject: "style", Author: "Bob Example"}},
-	}
+	}})
 	a.scr, a.w, a.h = scrDash, 150, 40
 	return a
 }

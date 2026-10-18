@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -201,6 +202,15 @@ func RemoteHost(url string) string {
 	}
 	return strings.ToLower(before)
 }
+
+// credentials matches the password or token in a URL's user info:
+// https://user:token@host.
+var credentials = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+):[^/\s@]+@`)
+
+// Redact hides passwords and tokens in URLs anywhere in s (a remote URL,
+// git's output), so they never reach the screen: https://user:token@host
+// becomes https://user:***@host.
+func Redact(s string) string { return credentials.ReplaceAllString(s, "$1:***@") }
 
 // WebURL guesses the web page of a remote: https://host/owner/repo for
 // https, ssh:// and scp-like (git@host:owner/repo.git) remotes. Local paths

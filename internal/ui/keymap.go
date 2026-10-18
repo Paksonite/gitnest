@@ -103,7 +103,7 @@ const (
 	actUnmarkAll
 	actMark
 	actRescan
-	actRefreshList
+	actRefresh
 	actFetchMany
 	actPullMany
 	actPullAll
@@ -365,7 +365,7 @@ var keymap = [scopes][]binding{
 		b(actOpen, "open the repository", "open", "enter"),
 		b(actSearch, "search the repositories", "search", "/"),
 		b(actBack, "the repository list", "list", "esc", "H"),
-		b(actRefreshList, "read the activity again", "refresh", "r"),
+		b(actRefresh, "read the activity again", "refresh", "r"),
 		b(actQuit, "quit", "quit", "q"),
 	},
 	scBrowser: {

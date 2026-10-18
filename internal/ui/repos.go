@@ -478,7 +478,23 @@ func (a *App) previewCmd() tea.Cmd {
 		a.rs.details = nil
 	}
 	a.rs.previewPath = p
-	ctx := a.ctx
+	// Wait a moment before asking git: holding a key down moves through
+	// many rows, and only the one it stops on needs its details.
+	return tea.Tick(previewDelay, func(time.Time) tea.Msg { return previewDueMsg{path: p} })
+}
+
+// previewDelay is how long the selection must rest before its details load
+// (a variable so tests can shorten it).
+var previewDelay = 80 * time.Millisecond
+
+type previewDueMsg struct{ path string }
+
+// onPreviewDue loads the details if the selection is still where it was.
+func (a *App) onPreviewDue(m previewDueMsg) tea.Cmd {
+	if m.path != a.rs.previewPath {
+		return nil
+	}
+	ctx, p := a.ctx, m.path
 	return func() tea.Msg { return previewMsg{path: p, details: gitx.RepoDetails(ctx, p, 12)} }
 }
 

@@ -1118,9 +1118,6 @@ func (a *App) push() tea.Cmd {
 	})
 }
 
-// branchSync shows how a local branch stands against its upstream, after
-// its name: ✓ in sync, ↑ commits to push, ↓ commits to pull, "gone" when
-// the upstream was deleted, ∅ without an upstream (as in the list).
 // branchColor colours a branch's icon: the main branch (main, master, or
 // what origin/HEAD names) apart from working branches, remote ones dimmed.
 func (rp *repoState) branchColor(b gitx.Branch) lipgloss.TerminalColor {
@@ -1149,6 +1146,9 @@ func (rp *repoState) branchColor(b gitx.Branch) lipgloss.TerminalColor {
 	return cCyan
 }
 
+// branchSync shows how a local branch stands against its upstream, after
+// its name: ✓ in sync, ↑ commits to push, ↓ commits to pull, "gone" when
+// the upstream was deleted, ∅ without an upstream (as in the list).
 func branchSync(b gitx.Branch) (plain, styled string) {
 	if b.Remote {
 		return "", ""

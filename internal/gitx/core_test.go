@@ -429,3 +429,18 @@ func TestWebURL(t *testing.T) {
 		}
 	}
 }
+
+func TestRedact(t *testing.T) {
+	cases := map[string]string{
+		"https://ann:ghp_secret@github.com/ann/api.git":                           "https://ann:***@github.com/ann/api.git",
+		"fatal: unable to access 'https://x:tok@gitea.example.com/a/b.git/': 403": "fatal: unable to access 'https://x:***@gitea.example.com/a/b.git/': 403",
+		"git@github.com:ann/api.git":                                              "git@github.com:ann/api.git",
+		"https://github.com/ann/api":                                              "https://github.com/ann/api",
+		"ssh://git@host:2222/a/b.git":                                             "ssh://git@host:2222/a/b.git",
+	}
+	for in, want := range cases {
+		if got := Redact(in); got != want {
+			t.Errorf("Redact(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

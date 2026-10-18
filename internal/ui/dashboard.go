@@ -21,10 +21,15 @@ import (
 type dashState struct {
 	loading bool
 	loaded  time.Time
-	act     map[string][]gitx.ActivityCommit // by repository path
-	cur     int
-	items   []string  // repositories the cursor can be on, in screen order
-	hits    []dashHit // where they are on screen, for the mouse
+	ready   bool // the activity has been read
+	// Worked out once when the activity arrives, not on every frame:
+	byDay  map[time.Time]int // commits per local day
+	feed   []feedCommit      // the newest commits across repositories
+	active []repoActivity    // repositories by commits in the last weeks
+	total  int
+	cur    int
+	items  []string  // repositories the cursor can be on, in screen order
+	hits   []dashHit // where they are on screen, for the mouse
 }
 
 // dashHit is a selectable row on screen: item i at row y, columns x0..x1.
@@ -69,15 +74,34 @@ func (a *App) loadActivity() tea.Cmd {
 }
 
 func (a *App) onActivity(m activityMsg) {
-	a.dash.loading, a.dash.loaded, a.dash.act = false, time.Now(), m.act
+	d := &a.dash
+	// Only the totals, the feed and the ranking are kept, not every commit.
+	d.loading, d.loaded, d.ready = false, time.Now(), true
+	d.byDay, d.feed, d.total = map[time.Time]int{}, nil, 0
+	for p, cs := range m.act {
+		for _, c := range cs {
+			t := time.Unix(c.Unix, 0)
+			d.byDay[time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())]++
+			d.feed = append(d.feed, feedCommit{c, p})
+			d.total++
+		}
+	}
+	sort.Slice(d.feed, func(i, j int) bool { return d.feed[i].Unix > d.feed[j].Unix })
+	if len(d.feed) > maxFeed {
+		d.feed = d.feed[:maxFeed]
+	}
+	d.active = mostActive(m.act, a.rs.all, time.Now())
 }
+
+// maxFeed is how many recent commits the dashboard keeps for its feed.
+const maxFeed = 200
 
 // openDashboard shows the dashboard, loading the activity when it is
 // missing or older than ten minutes.
 func (a *App) openDashboard() tea.Cmd {
 	a.scr = scrDash
 	a.st.SetScreen("dashboard")
-	if a.dash.act == nil || time.Since(a.dash.loaded) > 10*time.Minute {
+	if !a.dash.ready || time.Since(a.dash.loaded) > 10*time.Minute {
 		return a.loadActivity()
 	}
 	return nil
@@ -113,8 +137,8 @@ func (a *App) dashKey(k tea.KeyMsg) tea.Cmd {
 		a.scr = scrRepos
 		a.st.SetScreen("list")
 		return a.previewCmd()
-	case actRefreshList:
-		a.dash.act = nil
+	case actRefresh:
+		a.dash.ready = false
 		return a.loadActivity()
 	case actQuit:
 		return tea.Quit
@@ -138,16 +162,7 @@ func (a *App) viewDashboard() string {
 	}
 	head += a.updateBadge()
 
-	byDay := map[time.Time]int{}
-	var all []feedCommit
-	for p, cs := range d.act {
-		for _, c := range cs {
-			t := time.Unix(c.Unix, 0)
-			byDay[time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())]++
-			all = append(all, feedCommit{c, p})
-		}
-	}
-	sort.Slice(all, func(i, j int) bool { return all[i].Unix > all[j].Unix })
+	byDay, all := d.byDay, d.feed
 
 	// Selectable rows, filled in while the panels are drawn.
 	d.items, d.hits = d.items[:0], d.hits[:0]
@@ -156,6 +171,14 @@ func (a *App) viewDashboard() string {
 		return len(d.items)-1 == d.cur
 	}
 
+	if len(a.rs.all) == 0 { // nothing to show yet
+		msg := "No repositories yet — add the folders you keep them in: gitnest roots add ~/repos"
+		if a.rs.loading {
+			msg = "Looking for repositories…"
+		}
+		body := lipgloss.Place(a.w, bodyH, lipgloss.Center, lipgloss.Center, fg(cDim, msg))
+		return strings.Join([]string{fit(head, a.w), body, a.footer(hints(scDash, scGlobal))}, "\n")
+	}
 	wide := a.w >= 110
 	heatW := min(a.w, 2*heatWeeks+10)
 	if wide {
@@ -163,8 +186,8 @@ func (a *App) viewDashboard() string {
 	}
 	heatH := 12
 	var top string
-	heat := panel(subtitle("Activity", fmt.Sprintf("%d commits · %d weeks", len(all), heatWeeks)),
-		heatmap(byDay, now, panelInner(heatW), d.loading && d.act == nil), heatW, heatH, false)
+	heat := panel(subtitle("Activity", fmt.Sprintf("%d commits · %d weeks", d.total, heatWeeks)),
+		heatmap(byDay, now, panelInner(heatW), d.loading && !d.ready), heatW, heatH, false)
 	if wide {
 		top = lipgloss.JoinHorizontal(lipgloss.Top, heat,
 			panel("Overview", overviewLines(sum, byDay, now, panelInner(a.w-heatW)), a.w-heatW, heatH, false))
@@ -231,8 +254,11 @@ func (a *App) viewDashboard() string {
 		recentLines = append(recentLines, a.dashRow(row, pick(c.path), panelInner(recentW)))
 		d.hits = append(d.hits, dashHit{len(d.items) - 1, y, 0, recentW})
 	}
-	if d.act == nil {
+	switch {
+	case !d.ready:
 		recentLines = []string{fg(cDim, "reading the history of every repository…")}
+	case len(all) == 0:
+		recentLines = []string{fg(cDim, fmt.Sprintf("no commits in the last %d weeks", heatWeeks))}
 	}
 	recentPanel := panel("Recent commits", recentLines, recentW, recentH, false)
 
@@ -241,8 +267,8 @@ func (a *App) viewDashboard() string {
 		activeW = a.w
 	}
 	var activeLines []string
-	if d.act != nil {
-		for i, s := range mostActive(d.act, a.rs.all, now) {
+	if d.ready {
+		for i, s := range d.active {
 			if i >= activeH-3 {
 				break
 			}

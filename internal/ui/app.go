@@ -10,6 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/Paksonite/gitnest/internal/config"
 	"github.com/Paksonite/gitnest/internal/gitx"
@@ -218,12 +219,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.sizeEditor()
 	case reposMsg:
 		cmd := a.onRepos(m)
-		if a.scr == scrDash && a.dash.act == nil {
+		if a.scr == scrDash && !a.dash.ready && !a.dash.loading {
 			cmd = tea.Batch(cmd, a.loadActivity())
 		}
 		return a, cmd
 	case activityMsg:
 		a.onActivity(m)
+	case previewDueMsg:
+		return a, a.onPreviewDue(m)
 	case tea.MouseMsg:
 		return a, a.onMouse(m)
 	case scanMsg:
@@ -407,7 +410,7 @@ func (a *App) confirm(text string, ok func() tea.Cmd) {
 }
 
 func (a *App) setToast(s string, isErr bool) {
-	a.toast = strings.ReplaceAll(s, "\n", " ")
+	a.toast = gitx.Redact(strings.ReplaceAll(s, "\n", " "))
 	a.toastErr = isErr
 }
 
@@ -581,7 +584,34 @@ func (a *App) footer(hints string) string {
 	case a.toast != "":
 		t = fg(cGreen, a.toast)
 	}
-	return fit(t, a.w) + "\n" + fit(hints, a.w) // hints() colours keys and text
+	return fit(t, a.w) + "\n" + fitHints(hints, a.w) // hints() colours keys and text
+}
+
+// fitHints shortens a footer to w columns by leaving out hints from the end,
+// most specific first, but keeps "? help" last so the rest is a key away.
+func fitHints(hints string, w int) string {
+	if lipgloss.Width(hints) <= w {
+		return fit(hints, w)
+	}
+	parts := strings.Split(hints, "  ")
+	var help string
+	if last := parts[len(parts)-1]; strings.Contains(ansi.Strip(last), "? help") {
+		help, parts = last, parts[:len(parts)-1]
+	}
+	for len(parts) > 1 {
+		s := strings.Join(parts, "  ")
+		if help != "" {
+			s += "  " + help
+		}
+		if lipgloss.Width(s) <= w {
+			return fit(s, w)
+		}
+		parts = parts[:len(parts)-1]
+		for len(parts) > 1 && strings.TrimSpace(ansi.Strip(parts[len(parts)-1])) == "·" {
+			parts = parts[:len(parts)-1] // no separator left dangling
+		}
+	}
+	return fit(strings.Join(parts, "  "), w)
 }
 
 // cdQuit leaves gitnest so the gn shell function cds into path.

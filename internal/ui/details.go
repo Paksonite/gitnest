@@ -49,7 +49,7 @@ func detailsCard(r scan.Repo, label string, d *gitx.Details, w, h int, now time.
 		}
 	}
 	field("Path", config.Abbrev(r.Path))
-	field("Remote", r.RemoteURL)
+	field("Remote", gitx.Redact(r.RemoteURL))
 	if web := gitx.WebURL(r.RemoteURL); web != "" {
 		linkRow = len(out)
 		field("Link", hyperlink(web, fg(cCyan, web)))
