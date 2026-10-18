@@ -149,8 +149,16 @@ func broadcast(msg tea.Msg) bool {
 func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
+		resized := s.w != 0 && (s.w != m.Width || s.h != m.Height)
 		s.w, s.h = m.Width, m.Height
 		s.resize()
+		if resized {
+			// Terminals rewrap what was on screen when the window changes
+			// (iTerm2 splitting a pane, say); redrawing only the changed
+			// lines would leave pieces of the old frame behind, at the
+			// bottom right especially. Clear and draw it all.
+			return s, tea.ClearScreen
+		}
 		return s, nil
 	case tea.KeyMsg:
 		return s, s.onKey(m)

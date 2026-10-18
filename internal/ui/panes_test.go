@@ -358,3 +358,15 @@ func TestCenterOff(t *testing.T) {
 		}
 	}
 }
+
+// A window that changes size is cleared and drawn whole: terminals rewrap
+// the old frame, and redrawing only changed lines left pieces of it.
+func TestResizeClearsTheScreen(t *testing.T) {
+	s := shellOf(t, 120, 40, "/r/a")
+	if _, cmd := s.Update(tea.WindowSizeMsg{Width: 60, Height: 30}); cmd == nil || fmt.Sprintf("%T", cmd()) != "tea.clearScreenMsg" {
+		t.Fatalf("resize should clear the screen, got %v", cmd)
+	}
+	if _, cmd := s.Update(tea.WindowSizeMsg{Width: 60, Height: 30}); cmd != nil {
+		t.Error("the same size again needs no clearing")
+	}
+}
