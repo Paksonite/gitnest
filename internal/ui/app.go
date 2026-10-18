@@ -17,6 +17,7 @@ import (
 	"github.com/Paksonite/gitnest/internal/scan"
 	"github.com/Paksonite/gitnest/internal/state"
 	"github.com/Paksonite/gitnest/internal/theme"
+	"github.com/Paksonite/gitnest/internal/update"
 )
 
 // shared is what all panes see: the commit clipboard (copy in one pane,
@@ -584,7 +585,24 @@ func (a *App) footer(hints string) string {
 	case a.toast != "":
 		t = fg(cGreen, a.toast)
 	}
-	return fit(t, a.w) + "\n" + fitHints(hints, a.w) // hints() colours keys and text
+	// The hints, and the version in the bottom-right corner. The very last
+	// column stays empty: writing the bottom-right cell makes some terminals
+	// leave marks behind while the window is resized.
+	ver := versionLabel()
+	room := a.w - 1 - lipgloss.Width(ver) - 2
+	if room < 20 { // a narrow window: the hints matter more
+		return fit(t, a.w) + "\n" + fitHints(hints, a.w-1)
+	}
+	return fit(t, a.w) + "\n" + fitHints(hints, room) + "  " + fg(cDim, ver)
+}
+
+// versionLabel is the running version as the footer shows it: v1.2.0, or
+// dev-<commit> for preview builds.
+func versionLabel() string {
+	if update.IsRelease(Version) {
+		return "v" + strings.TrimPrefix(Version, "v")
+	}
+	return Version
 }
 
 // fitHints shortens a footer to w columns by leaving out hints from the end,

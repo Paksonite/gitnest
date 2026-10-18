@@ -35,60 +35,73 @@ func DevUpdateCachePath() string {
 // ScanCachePath is where the repository scanner keeps its directory listings.
 func ScanCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "scan.json") }
 
+// State is what gitnest remembers between runs. It lives in two files:
+// recent.json (what every version knows) and settings.json (what newer
+// versions added, which older ones would drop when they rewrite
+// recent.json). Every change rewrites only its own key in the file as it is
+// on disk now, so several gitnests running at once (a pane in another
+// terminal, the released gitnest next to gitnest-dev, the copy still
+// running after an update) don't undo each other's changes.
 type State struct {
 	Recent     map[string]int64 `json:"recent"`
 	ListTree   bool             `json:"list_tree"`   // repository list grouped (by directory or remote)
-	ListGroup  string           `json:"list_group"`  // "folders" (default) or "remote"
-	Screen     string           `json:"screen"`      // "dashboard" or "list": where gitnest was last
 	PaneLayout string           `json:"pane_layout"` // grid, side by side or stacked
 	Collapsed  []string         `json:"collapsed"`   // folded directories of the list tree
-	Favorites  []string         `json:"favorites"`   // starred repositories (*)
+	// In settings.json:
+	ListGroup string   `json:"list_group"` // "folders" (default) or "remote"
+	Screen    string   `json:"screen"`     // "dashboard" or "list": where gitnest was last
+	Favorites []string `json:"favorites"`  // starred repositories (*)
+}
+
+func settingsPath() string {
+	return filepath.Join(dir("XDG_STATE_HOME", ".local/state"), "settings.json")
 }
 
 // SetScreen remembers whether the dashboard or the list was shown last.
 func (s *State) SetScreen(screen string) {
-	if s.Screen == screen {
-		return
-	}
 	s.Screen = screen
-	_ = s.save()
+	_ = setKey(settingsPath(), "screen", screen)
 }
 
 // SetListGroup remembers how the list tree groups repositories.
 func (s *State) SetListGroup(group string) {
 	s.ListGroup = group
-	_ = s.save()
+	_ = setKey(settingsPath(), "list_group", group)
 }
 
 // SetFavorites remembers the starred repositories.
 func (s *State) SetFavorites(paths []string) {
 	sort.Strings(paths)
 	s.Favorites = paths
-	_ = s.save()
+	_ = setKey(settingsPath(), "favorites", paths)
 }
 
 // SetCollapsed remembers which directories of the list tree are folded.
 func (s *State) SetCollapsed(dirs []string) {
 	s.Collapsed = dirs
-	_ = s.save()
+	_ = setKey(statePath(), "collapsed", dirs)
 }
 
 // SetPaneLayout remembers how panes are arranged.
 func (s *State) SetPaneLayout(name string) {
 	s.PaneLayout = name
-	_ = s.save()
+	_ = setKey(statePath(), "pane_layout", name)
 }
 
 // SetListTree remembers the repository list layout for the next start.
 func (s *State) SetListTree(on bool) {
 	s.ListTree = on
-	_ = s.save()
+	_ = setKey(statePath(), "list_tree", on)
 }
 
+// Load reads both files; settings.json wins for the keys it has (older
+// versions of gitnest kept them in recent.json).
 func Load() *State {
 	s := &State{Recent: map[string]int64{}}
-	if b, err := os.ReadFile(statePath()); err == nil {
-		_ = json.Unmarshal(b, s)
+	for _, p := range []string{statePath(), settingsPath()} {
+		if b, err := os.ReadFile(p); err == nil {
+			_ = json.Unmarshal(b, s)
+		}
 	}
 	if s.Recent == nil {
 		s.Recent = map[string]int64{}
@@ -105,30 +118,78 @@ func (s *State) Snapshot() map[string]int64 {
 	return m
 }
 
-// Touch marks a repo as used now and saves the state.
+// maxRecent is how many repositories' last use is remembered.
+const maxRecent = 1000
+
+// Touch marks a repo as used now and saves it, merged with what other
+// gitnests recorded meanwhile.
 func (s *State) Touch(path string) {
-	s.Recent[path] = time.Now().Unix()
-	if len(s.Recent) > 1000 {
+	now := time.Now().Unix()
+	s.Recent[path] = now
+	recent := map[string]int64{}
+	if b, err := os.ReadFile(statePath()); err == nil {
+		var disk struct {
+			Recent map[string]int64 `json:"recent"`
+		}
+		if json.Unmarshal(b, &disk) == nil && disk.Recent != nil {
+			recent = disk.Recent
+		}
+	}
+	for k, v := range s.Recent {
+		if v > recent[k] {
+			recent[k] = v
+		}
+	}
+	for len(recent) > maxRecent {
 		var oldest string
 		var ot int64 = 1 << 62
-		for k, v := range s.Recent {
+		for k, v := range recent {
 			if v < ot {
 				oldest, ot = k, v
 			}
 		}
-		delete(s.Recent, oldest)
+		delete(recent, oldest)
 	}
-	_ = s.save()
+	s.Recent = recent
+	_ = setKey(statePath(), "recent", recent)
 }
 
-func (s *State) save() error {
-	p := statePath()
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		return err
+// setKey sets one key of the JSON object in file p, keeping every other
+// key as it is on disk (including ones this version doesn't know), and
+// replaces the file in one rename.
+func setKey(p, key string, value any) error {
+	obj := map[string]json.RawMessage{}
+	if b, err := os.ReadFile(p); err == nil {
+		_ = json.Unmarshal(b, &obj)
 	}
-	b, err := json.Marshal(s)
+	v, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(p, b, 0o644)
+	obj[key] = v
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(p), ".state-*")
+	if err != nil {
+		return err
+	}
+	if _, err := tmp.Write(b); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmp.Name())
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+		os.Remove(tmp.Name())
+		return err
+	}
+	return os.Rename(tmp.Name(), p)
 }

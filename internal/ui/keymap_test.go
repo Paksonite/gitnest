@@ -208,7 +208,8 @@ func TestFooterKeepsHelp(t *testing.T) {
 	a.w, a.h = 80, 24
 	f := a.footer(hints(scList, scPanes, scGlobal))
 	last := strings.Split(f, "\n")[1]
-	if lipgloss.Width(last) > 80 || !strings.Contains(last, "? help") || !strings.HasPrefix(last, "enter open") {
+	if lipgloss.Width(last) > 79 || !strings.Contains(last, "? help") || !strings.HasPrefix(last, "enter open") ||
+		!strings.HasSuffix(last, versionLabel()) {
 		t.Errorf("footer: %q", last)
 	}
 }

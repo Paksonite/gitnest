@@ -278,7 +278,11 @@ func paintScreen(view string, w, h int) string {
 		lines = append(lines, "")
 	}
 	for i, l := range lines {
-		lines[i] = paintBG(fit(l, w), seq)
+		width := w
+		if i == len(lines)-1 {
+			width = w - 1 // never write the bottom-right cell (see App.footer)
+		}
+		lines[i] = paintBG(fit(l, width), seq)
 	}
 	return strings.Join(lines, "\n")
 }
