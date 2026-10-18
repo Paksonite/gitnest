@@ -6,6 +6,12 @@ version: 2
 
 project_name: gitnest
 
+git:
+  # "dev" is the rolling tag of the gitnest-dev preview builds
+  # (.github/workflows/dev.yml), not a version: never use it for version
+  # numbers or as the previous release in changelogs.
+  ignore_tags: [dev]
+
 before:
   hooks:
     - go mod download
