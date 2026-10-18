@@ -1,0 +1,50 @@
+# Preview builds of the ui-next branch as gitnest-dev, published to the
+# rolling "dev" GitHub pre-release (replaced on every push). Being a
+# pre-release whose tag doesn't start with v, it never becomes "latest" and
+# never runs the release workflow: users of gitnest don't see it.
+name: dev
+
+on:
+  push:
+    branches: [ui-next]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dev-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest # lipo for the universal macOS binary
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27.x"
+      - name: Test
+        run: go test -short ./...
+      - name: Build
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse --short HEAD)
+          ld="-s -w -X main.version=dev-$sha -X main.commit=$sha -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          mkdir -p dist
+          for t in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+            GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -trimpath -ldflags "$ld" -o "dist/gitnest-dev_${t%/*}_${t#*/}" ./cmd/gitnest
+          done
+          lipo -create -output dist/gitnest-dev_darwin_universal dist/gitnest-dev_darwin_amd64 dist/gitnest-dev_darwin_arm64
+          rm dist/gitnest-dev_darwin_amd64 dist/gitnest-dev_darwin_arm64
+          (cd dist && shasum -a 256 gitnest-dev_* > checksums.txt)
+          echo "SHA=$sha" >> "$GITHUB_ENV"
+      - name: Publish the dev pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release delete dev --yes --cleanup-tag 2>/dev/null || true
+          gh release create dev dist/* --prerelease --latest=false --target "$GITHUB_SHA" \
+            --title "gitnest-dev (ui-next @ $SHA)" \
+            --notes "Preview build of the ui-next branch at $SHA — not a release. Install as gitnest-dev next to gitnest (see docs/DEVELOPMENT.md); gitnest-dev update fetches the newest one."

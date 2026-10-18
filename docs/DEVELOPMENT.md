@@ -52,6 +52,33 @@ a `HOMEBREW_TAP_TOKEN` repository secret: a fine-grained token with
 
 `make snapshot` builds the same artifacts locally without publishing.
 
+A tag with a suffix (`v1.1.0-rc.1`) becomes a GitHub **pre-release**: the
+Homebrew cask is not updated, and neither `gitnest update`, the update notice
+nor `install.sh` (without a version) offers it. Testers install it on purpose:
+`install.sh v1.1.0-rc.1`.
+
+## Preview builds: gitnest-dev
+
+Bigger changes (the UI redesign) are developed on the long-lived `ui-next`
+branch: pull requests go into it, `main` is merged into it now and then, and
+`main` stays ready to release. Every push to `ui-next` runs
+`.github/workflows/dev.yml`, which builds **`gitnest-dev`** binaries and
+publishes them to the rolling `dev` pre-release (replaced on every push, never
+"latest", so gitnest users never see it).
+
+`gitnest-dev` is installed next to `gitnest`, which stays untouched:
+
+```sh
+t=darwin_universal   # or linux_amd64, linux_arm64
+curl -fsSL -o ~/.local/bin/gitnest-dev "https://github.com/Paksonite/gitnest/releases/download/dev/gitnest-dev_$t"
+chmod +x ~/.local/bin/gitnest-dev
+```
+
+`gitnest-dev update` then fetches the newest dev build (checked against the
+release's `checksums.txt`). From a checkout, `make dev` builds and installs
+the same thing locally. Both share gitnest's config and state; to keep them
+apart, run `XDG_CONFIG_HOME=~/.config/gitnest-dev gitnest-dev`.
+
 `gitnest update` (in `internal/update`) and `install.sh` depend on the asset
 names in `.goreleaser.yaml` — `gitnest_<version>_darwin_universal.tar.gz`,
 `gitnest_<version>_linux_<arch>.tar.gz`, `gitnest_<version>_<arch>.deb|.rpm`
