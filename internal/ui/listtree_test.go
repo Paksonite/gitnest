@@ -108,3 +108,29 @@ func TestTreeSearchLandsOnRepository(t *testing.T) {
 		t.Errorf("cursor on %q (row %d of %v)", a.selectedKey(), a.rs.cur, rowsText(a))
 	}
 }
+
+func TestSearchRanksAndIgnoresScatteredPaths(t *testing.T) {
+	a := treeApp(t, []string{"/r"}, "/r/mwadecki-k8s", "/r/team/client-craftware", "/r/team/org-core-dns", "/r/team/wadec-tools")
+	for i := range a.rs.all {
+		a.rs.all[i].RemoteURL = "git@gitea.devops.ps.oktawave.com:team/" + a.rs.all[i].Name + ".git"
+	}
+	a.rs.filter = "wadec"
+	a.rebuildView("")
+	// Only names with "wadec" in them: the letters scattered over the host
+	// (gitea.devops.ps.oktawave.com) don't count.
+	if got := rowsText(a); !reflect.DeepEqual(got, []string{"team/", "  wadec-tools", "mwadecki-k8s"}) {
+		t.Errorf("tree search: %v", got)
+	}
+	// A contiguous match in the host still finds repositories.
+	a.rs.filter = "oktawave"
+	a.rebuildView("")
+	if len(a.rs.view) != 4 {
+		t.Errorf("host search: %d", len(a.rs.view))
+	}
+	// The better name match comes first even when it is in the root.
+	a.rs.filter = "mwadecki"
+	a.rebuildView("")
+	if got := rowsText(a); !reflect.DeepEqual(got, []string{"mwadecki-k8s"}) {
+		t.Errorf("exact: %v", got)
+	}
+}

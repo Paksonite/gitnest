@@ -25,8 +25,9 @@ type reposState struct {
 	filter      string
 	filtering   bool
 	dirtyOnly   bool
-	loading     bool // initial load or full status refresh running
-	scanning    bool // background scan for new/removed repositories running
+	score       map[int]int // search score of each shown repository (rs.all index)
+	loading     bool        // initial load or full status refresh running
+	scanning    bool        // background scan for new/removed repositories running
 	marked      map[string]bool
 	isNew       map[string]bool   // found by a rescan, not opened yet
 	label       map[string]string // tells apart clones that share a name, e.g. "forgejo"
@@ -312,6 +313,7 @@ func (a *App) rebuildView(keep string) {
 	rs.hl = map[string][]int{}
 	terms := strings.Fields(rs.filter)
 	type cand struct{ idx, score int }
+	rs.score = map[int]int{}
 	var cs []cand
 	for i, r := range rs.all {
 		if rs.dirtyOnly && r.Changes == 0 {
@@ -322,6 +324,7 @@ func (a *App) rebuildView(keep string) {
 			continue
 		}
 		cs = append(cs, cand{i, score})
+		rs.score[i] = score
 	}
 	sort.SliceStable(cs, func(x, y int) bool {
 		if cs[x].score != cs[y].score {
@@ -368,12 +371,20 @@ func (a *App) matchRepo(r scan.Repo, terms []string) (int, bool) {
 			namePos = append(namePos, pos...)
 			continue
 		}
+		// Elsewhere a term must match within one part of the clone label,
+		// remote host or parent path ("grp" finds the folder "group"):
+		// letters scattered over a whole host or path match almost anything.
 		where := a.rs.label[r.Path] + " " + gitx.RemoteHost(r.RemoteURL) + " " + config.Abbrev(filepath.Dir(r.Path))
-		sc, _, ok := fuzzyMatch(where, t)
-		if !ok {
+		best, found := 0, false
+		for _, part := range strings.FieldsFunc(where, func(c rune) bool { return c == ' ' || c == '/' || c == '.' }) {
+			if sc, _, ok := fuzzyMatch(part, t); ok && (!found || sc > best) {
+				best, found = sc, true
+			}
+		}
+		if !found {
 			return 0, false
 		}
-		total += sc / 3
+		total += best / 3
 	}
 	if len(namePos) > 0 {
 		a.rs.hl[r.Path] = namePos
