@@ -8,6 +8,7 @@ import (
 
 	"github.com/Paksonite/gitnest/internal/config"
 	"github.com/Paksonite/gitnest/internal/gitx"
+	"github.com/Paksonite/gitnest/internal/scan"
 )
 
 // listRow is one row of the repository list: a repository, or (in tree
@@ -19,6 +20,7 @@ type listRow struct {
 	depth int
 	count int // directories: repositories below (after filtering)
 	dirty int // directories: of which with uncommitted changes
+	sync  syncCount
 }
 
 func (r listRow) key(a *App) string {
@@ -142,7 +144,7 @@ func (a *App) buildRows() {
 				name += "/" + d.name
 			}
 			count, dirty := a.countBelow(d)
-			rs.rows = append(rs.rows, listRow{repo: -1, dir: d.path, name: name, depth: depth, count: count, dirty: dirty})
+			rs.rows = append(rs.rows, listRow{repo: -1, dir: d.path, name: name, depth: depth, count: count, dirty: dirty, sync: a.syncBelow(d)})
 			if searching || !rs.collapsed[d.path] {
 				walk(d, depth+1)
 			}
@@ -180,6 +182,55 @@ func (a *App) buildRows() {
 		}
 	}
 	walk(root, 0)
+}
+
+// syncCount says how the repositories of a group stand against their
+// upstreams: how many have commits to push, to pull, and how many track one.
+type syncCount struct{ ahead, behind, tracked int }
+
+func (s syncCount) add(r scan.Repo) syncCount {
+	if r.Upstream {
+		s.tracked++
+		if r.Ahead > 0 {
+			s.ahead++
+		}
+		if r.Behind > 0 {
+			s.behind++
+		}
+	}
+	return s
+}
+
+// styled is "✓" when every tracking repository is up to date, else how many
+// are ahead (↑) and behind (↓); nothing when none tracks an upstream.
+func (s syncCount) styled() (plain, styled string) {
+	switch {
+	case s.tracked == 0:
+		return "", ""
+	case s.ahead == 0 && s.behind == 0:
+		return " ✓", fg(cGreen, " ✓")
+	}
+	if s.ahead > 0 {
+		plain += " ↑" + strconv.Itoa(s.ahead)
+		styled += fg(cGreen, " ↑"+strconv.Itoa(s.ahead))
+	}
+	if s.behind > 0 {
+		plain += " ↓" + strconv.Itoa(s.behind)
+		styled += fg(cRed, " ↓"+strconv.Itoa(s.behind))
+	}
+	return plain, styled
+}
+
+func (a *App) syncBelow(n *dirNode) syncCount {
+	var s syncCount
+	for _, idx := range n.repos {
+		s = s.add(a.rs.all[idx])
+	}
+	for _, c := range n.children {
+		cs := a.syncBelow(c)
+		s.ahead, s.behind, s.tracked = s.ahead+cs.ahead, s.behind+cs.behind, s.tracked+cs.tracked
+	}
+	return s
 }
 
 // bestBelow is the best search score of the repositories below n.
@@ -263,5 +314,7 @@ func dirRow(r listRow, collapsed bool, w int) rowItem {
 		info += " ●" + strconv.Itoa(r.dirty)
 		sinfo += fg(cYellow, " ●"+strconv.Itoa(r.dirty))
 	}
+	sp, ss := r.sync.styled()
+	info, sinfo = info+sp, sinfo+ss
 	return rowItem{plain: fit(plain+info, w), styled: styled + sinfo}
 }

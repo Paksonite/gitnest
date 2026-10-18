@@ -117,7 +117,9 @@ func detailsCard(r scan.Repo, label string, d *gitx.Details, w, h int, now time.
 			if refs := compactRefs(c.Refs); refs != "" {
 				subject = fg(cYellow, "("+refs+")") + " " + subject
 			}
-			line := fg(authorColor(c.Author), "●") + " " + fg(cYellow, c.Short) + "  "
+			ac := authorColor(c.Author)
+			line := fg(ac, "●") + " " + fg(cYellow, c.Short) + " " +
+				lipgloss.NewStyle().Bold(true).Foreground(ac).Render(initials(c.Author)) + "  "
 			room := inner - lipgloss.Width(line) - ageW - 1
 			add(line + fit(subject, max(1, room)) + " " + fg(cDim, age))
 		}
@@ -151,20 +153,33 @@ func groupCard(name string, paths []string, all map[string]scan.Repo, w, h int) 
 	inner := max(10, w)
 	var out []string
 	dirty := 0
+	var sc syncCount
 	for _, p := range paths {
 		if all[p].Changes > 0 {
 			dirty++
 		}
+		sc = sc.add(all[p])
 	}
-	out = append(out, fit(bold(name+"/"), inner),
-		fit(fg(cDim, fmt.Sprintf("%d repositories · %d dirty", len(paths), dirty)), inner), "")
+	summary := fmt.Sprintf("%d repositories · %d dirty", len(paths), dirty)
+	switch {
+	case sc.tracked == 0:
+	case sc.ahead == 0 && sc.behind == 0:
+		summary = fg(cDim, summary+" · ") + fg(cGreen, "✓ all up to date")
+	default:
+		summary = fg(cDim, fmt.Sprintf("%s · %d to push · %d to pull", summary, sc.ahead, sc.behind))
+	}
+	out = append(out, fit(bold(name+"/"), inner), fit(fg(cDim, summary), inner), "")
 	for _, p := range paths {
 		r := all[p]
 		mark := fg(cDim, "·")
 		if r.Changes > 0 {
 			mark = fg(cYellow, "●")
 		}
-		out = append(out, fit(mark+" "+r.Name+"  "+fg(cCyan, r.Branch)+" "+syncStyled(r.Info), inner))
+		sync := syncStyled(r.Info)
+		if r.Upstream && r.Ahead == 0 && r.Behind == 0 {
+			sync = strings.TrimSpace(fg(cGreen, "✓") + " " + sync)
+		}
+		out = append(out, fit(mark+" "+r.Name+"  "+fg(cCyan, r.Branch)+" "+sync, inner))
 	}
 	return clip(out, h)
 }

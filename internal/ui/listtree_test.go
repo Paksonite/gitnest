@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/Paksonite/gitnest/internal/scan"
 	"github.com/Paksonite/gitnest/internal/state"
 )
 
@@ -164,5 +165,32 @@ func TestSearchRanksAndIgnoresScatteredPaths(t *testing.T) {
 	a.rebuildView("")
 	if got := rowsText(a); !reflect.DeepEqual(got, []string{"mwadecki-k8s"}) {
 		t.Errorf("exact: %v", got)
+	}
+}
+
+func TestGroupSyncMarks(t *testing.T) {
+	a := treeApp(t, []string{"/r"}, "/r/ok/a", "/r/ok/b", "/r/mixed/c", "/r/mixed/d", "/r/none/e")
+	for i := range a.rs.all {
+		r := &a.rs.all[i]
+		switch r.Name {
+		case "a", "b", "d":
+			r.Upstream = true
+		case "c":
+			r.Upstream, r.Ahead, r.Behind = true, 1, 2
+		}
+	}
+	a.rebuildView("")
+	got := map[string]string{}
+	for _, r := range a.rs.rows {
+		if r.repo < 0 {
+			got[r.name] = dirRow(r, false, 60).plain
+		}
+	}
+	if !strings.Contains(got["ok"], "2 ✓") || !strings.Contains(got["mixed"], "↑1 ↓1") || strings.ContainsAny(got["none"], "✓↑↓") {
+		t.Errorf("group rows: %q", got)
+	}
+	card := strings.Join(groupCard("ok", []string{"/r/ok/a", "/r/ok/b"}, map[string]scan.Repo{"/r/ok/a": a.rs.all[0], "/r/ok/b": a.rs.all[1]}, 60, 10), "\n")
+	if !strings.Contains(card, "✓ all up to date") {
+		t.Errorf("group card: %s", card)
 	}
 }

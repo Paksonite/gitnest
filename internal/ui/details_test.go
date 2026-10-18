@@ -27,7 +27,7 @@ func TestDetailsCard(t *testing.T) {
 	card := strings.Join(detailsCard(r, "", d, 70, 40, now), "\n")
 	for _, want := range []string{"platform", "main", "gitlab.com/platform/platform", "Path", "/r/platform", "Upstream",
 		"origin/main", "Stashes", "Last commit", "3w ago · Ann Example", "Tag", "v1.2.0", "About", "Infrastructure",
-		"Changes", "src/main.go", "Recent commits", "a3f9e2", "(main) Add health check endpoint"} {
+		"Changes", "src/main.go", "Recent commits", "a3f9e2 AE", "7c1d4e BE", "(main) Add health check endpoint"} {
 		if !strings.Contains(card, want) {
 			t.Errorf("card lacks %q:\n%s", want, card)
 		}

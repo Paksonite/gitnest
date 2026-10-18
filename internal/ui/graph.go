@@ -190,16 +190,22 @@ func laneColor(i int) lipgloss.TerminalColor {
 	return palette[i%len(palette)]
 }
 
-// graphText renders a graph row as plain and coloured text.
-func graphText(row []gcell) (plain, styled string) {
+// graphText renders a graph row as plain and coloured text. The commit's
+// own node takes node (its author's colour, like the initials beside it);
+// the lines keep their lane's colour, toned down so they don't read as
+// authors.
+func graphText(row []gcell, node lipgloss.TerminalColor) (plain, styled string) {
 	var p, st strings.Builder
 	for _, c := range row {
 		p.WriteRune(c.ch)
-		if c.color < 0 || c.ch == ' ' {
+		switch {
+		case c.ch == nodeCommit || c.ch == nodeMerge:
+			st.WriteString(lipgloss.NewStyle().Bold(true).Foreground(node).Render(string(c.ch)))
+		case c.color < 0 || c.ch == ' ':
 			st.WriteRune(c.ch)
-			continue
+		default:
+			st.WriteString(fg(tint(laneColor(c.color), 0.6), string(c.ch)))
 		}
-		st.WriteString(fg(laneColor(c.color), string(c.ch)))
 	}
 	return p.String(), st.String()
 }
