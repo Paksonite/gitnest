@@ -345,3 +345,16 @@ func TestMenuShowsTopWhenItFits(t *testing.T) {
 		t.Errorf("a scrolled menu should say there is more:\n%s", v)
 	}
 }
+
+func TestCenterOff(t *testing.T) {
+	for _, c := range []struct{ cur, n, h, want int }{
+		{5, 8, 10, 0},  // everything fits: never scroll
+		{0, 30, 10, 0}, // the top
+		{15, 30, 10, 10},
+		{29, 30, 10, 20}, // the bottom: no blank rows below
+	} {
+		if got := centerOff(c.cur, c.n, c.h); got != c.want {
+			t.Errorf("centerOff(%d, %d, %d) = %d, want %d", c.cur, c.n, c.h, got, c.want)
+		}
+	}
+}
