@@ -3,7 +3,9 @@ package ui
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -312,5 +314,29 @@ func TestTabBar(t *testing.T) {
 	}
 	if bar := tabBar(titles[:3], 0, 200); !strings.Contains(bar, "ctrl+←/→") || strings.Contains(bar, "‹") || strings.Contains(bar, "›") {
 		t.Errorf("all tabs fit: %q", bar)
+	}
+}
+
+// Bubble Tea's own requests, such as running the editor, must reach the
+// program unwrapped; anything else goes back to its pane.
+func TestWrapPassesProgramMessages(t *testing.T) {
+	if msg := wrap(1, tea.ExecProcess(exec.Command("true"), nil))(); reflect.TypeOf(msg).Name() != "execMsg" {
+		t.Errorf("exec request wrapped: %T", msg)
+	}
+	if msg := wrap(1, func() tea.Msg { return execDoneMsg{} })(); reflect.TypeOf(msg) != reflect.TypeOf(paneMsg{}) {
+		t.Errorf("own message not wrapped: %T", msg)
+	}
+}
+
+func TestCenterOff(t *testing.T) {
+	for _, c := range []struct{ cur, n, h, want int }{
+		{5, 8, 10, 0},  // everything fits: never scroll
+		{0, 30, 10, 0}, // the top
+		{15, 30, 10, 10},
+		{29, 30, 10, 20}, // the bottom: no blank rows below
+	} {
+		if got := centerOff(c.cur, c.n, c.h); got != c.want {
+			t.Errorf("centerOff(%d, %d, %d) = %d, want %d", c.cur, c.n, c.h, got, c.want)
+		}
 	}
 }

@@ -128,7 +128,7 @@ func (a *App) viewPicker() string {
 		fixed += 8
 	}
 	listH := clamp(a.h-fixed, 1, len(p.names))
-	off := scrollTo(p.cur, clamp(p.cur-listH/2, 0, len(p.names)), listH)
+	off := centerOff(p.cur, len(p.names), listH)
 	var rows []string
 	for i := off; i < len(p.names) && i < off+listH; i++ {
 		t, _ := a.themes.Get(p.names[i])
