@@ -27,6 +27,11 @@ func StatusCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cac
 // most once a day.
 func UpdateCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "update.json") }
 
+// DevUpdateCachePath remembers the last check for gitnest-dev builds.
+func DevUpdateCachePath() string {
+	return filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "update-dev.json")
+}
+
 // ScanCachePath is where the repository scanner keeps its directory listings.
 func ScanCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "scan.json") }
 

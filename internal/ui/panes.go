@@ -158,7 +158,7 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, s.deliver(s.focused(), msg)
 	case updateMsg:
 		s.panes[0].app.sh.update = m.version // every pane shares sh
-		s.focused().app.setToast("gitnest "+m.version+" is out — quit and run: gitnest update", false)
+		s.focused().app.setToast("gitnest "+m.version+" is out — quit and run: "+updateCommand(m.version), false)
 		return s, nil
 	case shellRescanTickMsg:
 		a := s.panes[0].app

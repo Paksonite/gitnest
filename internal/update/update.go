@@ -340,6 +340,82 @@ func swap(exe string, bin []byte, out io.Writer) error {
 // pre-release, it is never what /releases/latest returns.
 const DevTag = "dev"
 
+// DevBuild is the newest gitnest-dev build: the commit of ui-next it was
+// built from.
+type DevBuild struct {
+	Commit    string    `json:"commit"` // full hash
+	Published time.Time `json:"published"`
+}
+
+// Version is the build's version as gitnest-dev reports it: dev-<short hash>.
+func (b DevBuild) Version() string { return "dev-" + short(b.Commit) }
+
+func short(hash string) string { return hash[:min(7, len(hash))] }
+
+// LatestDev asks GitHub which commit the dev pre-release was built from.
+func LatestDev(ctx context.Context) (DevBuild, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, APIBase+"/releases/tags/"+DevTag, nil)
+	if err != nil {
+		return DevBuild{}, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "gitnest-update")
+	resp, err := client.Do(req)
+	if err != nil {
+		return DevBuild{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return DevBuild{}, fmt.Errorf("checking for dev builds: %s", resp.Status)
+	}
+	var r struct {
+		Target    string    `json:"target_commitish"`
+		Published time.Time `json:"published_at"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+		return DevBuild{}, err
+	}
+	if r.Target == "" {
+		return DevBuild{}, errors.New("checking for dev builds: the dev release names no commit")
+	}
+	return DevBuild{Commit: r.Target, Published: r.Published}, nil
+}
+
+// NewerDev reports whether build b differs from the running commit (a short
+// or full hash): dev builds are only ever replaced by the next one.
+func NewerDev(running string, b DevBuild) bool {
+	running = strings.TrimPrefix(running, "dev-")
+	if running == "" || b.Commit == "" {
+		return false
+	}
+	return !strings.HasPrefix(b.Commit, running) && !strings.HasPrefix(running, b.Commit)
+}
+
+type devCache struct {
+	Checked time.Time `json:"checked"`
+	Latest  DevBuild  `json:"latest"`
+}
+
+// CheckDev is LatestDev, asking GitHub at most once per maxAge (the answer
+// is kept in cachePath), and whether that build is not the running one.
+func CheckDev(ctx context.Context, running, cachePath string, maxAge time.Duration) (DevBuild, bool, error) {
+	if b, err := os.ReadFile(cachePath); err == nil {
+		var c devCache
+		if json.Unmarshal(b, &c) == nil && c.Latest.Commit != "" && time.Since(c.Checked) < maxAge {
+			return c.Latest, NewerDev(running, c.Latest), nil
+		}
+	}
+	b, err := LatestDev(ctx)
+	if err != nil {
+		return DevBuild{}, false, err
+	}
+	if data, err := json.Marshal(devCache{Checked: time.Now(), Latest: b}); err == nil {
+		_ = os.MkdirAll(filepath.Dir(cachePath), 0o755)
+		_ = os.WriteFile(cachePath, data, 0o644)
+	}
+	return b, NewerDev(running, b), nil
+}
+
 // IsDevBinary reports whether exe is a gitnest-dev preview build, which
 // updates from DevTag instead of the releases.
 func IsDevBinary(exe string) bool { return filepath.Base(exe) == "gitnest-dev" }
