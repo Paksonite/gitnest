@@ -31,9 +31,16 @@ func ScanCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cache
 
 type State struct {
 	Recent     map[string]int64 `json:"recent"`
-	ListTree   bool             `json:"list_tree"`   // repository list grouped by directory
+	ListTree   bool             `json:"list_tree"`   // repository list grouped (by directory or remote)
+	ListGroup  string           `json:"list_group"`  // "folders" (default) or "remote"
 	PaneLayout string           `json:"pane_layout"` // grid, side by side or stacked
 	Collapsed  []string         `json:"collapsed"`   // folded directories of the list tree
+}
+
+// SetListGroup remembers how the list tree groups repositories.
+func (s *State) SetListGroup(group string) {
+	s.ListGroup = group
+	_ = s.save()
 }
 
 // SetCollapsed remembers which directories of the list tree are folded.

@@ -82,11 +82,43 @@ func TestRepoTree(t *testing.T) {
 	if got := rowsText(a); !reflect.DeepEqual(got, []string{"forgejo.int/roles/", "  role-a"}) {
 		t.Errorf("search: %v", got)
 	}
-	// ` switches back to a flat list
+	// ` groups by remote next, then switches back to a flat list
 	a.rs.filter = ""
+	a.reposKey(key("`"))
+	if !a.rs.tree || a.rs.group != groupRemote || a.st.ListGroup != "remote" {
+		t.Errorf("remote: tree=%v group=%d saved %q", a.rs.tree, a.rs.group, a.st.ListGroup)
+	}
 	a.reposKey(key("`"))
 	if a.rs.tree || len(a.rs.rows) != 5 || !a.st.ListTree == a.rs.tree {
 		t.Errorf("flat: tree=%v rows=%d", a.rs.tree, len(a.rs.rows))
+	}
+}
+
+func TestRepoTreeByRemote(t *testing.T) {
+	a := treeApp(t, []string{"/r"}, "/r/api", "/r/web", "/r/infra", "/r/dns", "/r/scratch")
+	urls := map[string]string{
+		"api": "git@github.com:ann/api.git", "web": "https://github.com/ann/web",
+		"infra": "git@gitlab.com:platform/infra.git", "dns": "https://gitlab.com/platform/net/dns.git",
+	}
+	for i := range a.rs.all {
+		a.rs.all[i].RemoteURL = urls[a.rs.all[i].Name]
+	}
+	a.rs.group = groupRemote
+	a.rebuildView("")
+	want := []string{"github.com/ann/", "  api", "  web", "gitlab.com/platform/", "  net/", "    dns", "  infra", "local/", "  scratch"}
+	if got := rowsText(a); !reflect.DeepEqual(got, want) {
+		t.Errorf("by remote:\n%v\nwant\n%v", got, want)
+	}
+	// Folding a remote group doesn't fold a folder of the same name.
+	a.rs.cur = 0
+	a.reposKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if !a.rs.collapsed["remote:github.com/ann"] || len(a.rs.rows) != len(want)-2 {
+		t.Errorf("fold: %v rows %d", a.rs.collapsed, len(a.rs.rows))
+	}
+	// Space on a group marks its repositories.
+	a.reposKey(key(" "))
+	if !a.rs.marked["/r/api"] || !a.rs.marked["/r/web"] || len(a.rs.marked) != 2 {
+		t.Errorf("marked: %v", a.rs.marked)
 	}
 }
 

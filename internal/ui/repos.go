@@ -24,15 +24,17 @@ type reposState struct {
 	listH       int // rows of the list on screen (set while rendering)
 	filter      string
 	filtering   bool
-	dirtyOnly   bool
-	loading     bool // initial load or full status refresh running
-	scanning    bool // background scan for new/removed repositories running
+	status      int    // status filter: stAll, stDirty… (F, d)
+	host        string // remote host filter ("" = all, "local" = no remote)
+	loading     bool   // initial load or full status refresh running
+	scanning    bool   // background scan for new/removed repositories running
 	marked      map[string]bool
 	isNew       map[string]bool   // found by a rescan, not opened yet
 	label       map[string]string // tells apart clones that share a name, e.g. "forgejo"
 	hl          map[string][]int  // name runes matched by the filter
 	sortMode    int
-	tree        bool            // group repositories by directory
+	tree        bool            // group repositories (by directory or remote)
+	group       int             // groupFolders or groupRemote, when tree
 	rows        []listRow       // what is shown: repositories and, in tree mode, directories
 	collapsed   map[string]bool // collapsed directories in tree mode
 	preview     string
@@ -205,7 +207,7 @@ func (a *App) onStatus(m statusMsg) tea.Cmd {
 	rs.all = out
 	// A plain refresh updates rows in place: indexes in rs.view stay valid
 	// and rows don't jump around under the cursor.
-	if m.added || len(out) != before || rs.dirtyOnly {
+	if m.added || len(out) != before || rs.listFiltered() {
 		a.rebuildView(keep)
 	}
 	return nil
@@ -314,7 +316,7 @@ func (a *App) rebuildView(keep string) {
 	type cand struct{ idx, score int }
 	var cs []cand
 	for i, r := range rs.all {
-		if rs.dirtyOnly && r.Changes == 0 {
+		if !rs.keeps(r) {
 			continue
 		}
 		score, ok := a.matchRepo(r, terms)
@@ -556,15 +558,29 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 		if p := a.selectedPath(); p != "" {
 			return a.openDir(p)
 		}
-	case actToggleTree:
-		rs.tree = !rs.tree
-		a.st.SetListTree(rs.tree)
-		a.rebuildView(a.selectedKey())
+	case actToggleTree: // flat → by folder → by remote → flat
+		switch {
+		case !rs.tree:
+			rs.tree, rs.group = true, groupFolders
+		case rs.group == groupFolders:
+			rs.group = groupRemote
+		default:
+			rs.tree = false
+		}
+		a.setListView(rs.tree, rs.group)
+		a.setToast("list: "+a.listViewName()+" (` changes)", false)
 		return a.previewCmd()
 	case actDirtyOnly:
-		rs.dirtyOnly = !rs.dirtyOnly
+		if rs.status == stDirty {
+			rs.status = stAll
+		} else {
+			rs.status = stDirty
+		}
 		a.rebuildView(a.selectedKey())
 		return a.previewCmd()
+	case actFilters:
+		a.openFilters()
+		return nil
 	case actSort:
 		rs.sortMode = (rs.sortMode + 1) % sortModes
 		a.rebuildView(a.selectedKey())
@@ -780,8 +796,8 @@ func (a *App) viewRepos() string {
 	if rs.sortMode != sortRecent {
 		head += "  " + fg(cDim, "sort: "+sortNames[rs.sortMode])
 	}
-	if rs.dirtyOnly {
-		head += "  " + fg(cYellow, "[dirty only]")
+	if tags := rs.filterTags(); tags != "" {
+		head += "  " + fg(cYellow, tags)
 	}
 	if rs.filtering || rs.filter != "" {
 		cursor := ""

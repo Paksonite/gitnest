@@ -30,6 +30,7 @@ const (
 	scStaging               // line-by-line staging of a file
 	scPanes                 // several gitnests side by side
 	scPullAll               // choosing what "pull all" updates
+	scMenu                  // filters, actions, sort & view
 	scopes
 )
 
@@ -53,6 +54,7 @@ var scopeTitles = [scopes]string{
 	scStaging:  "Staging lines (enter on a file)",
 	scPanes:    "Panes (several repositories side by side)",
 	scPullAll:  "Pull all (ctrl+p in the list)",
+	scMenu:     "Menus: filters (F), actions (a), sort & view (v)",
 }
 
 type action int
@@ -88,6 +90,7 @@ const (
 	actSearch
 	actClearSearch
 	actDirtyOnly
+	actFilters
 	actSort
 	actMark
 	actRescan
@@ -251,8 +254,9 @@ var keymap = [scopes][]binding{
 		b(actBottom, "last repository", "", "end", "G").show(1),
 		b(actSort, "sort: recent, name, last commit, status", "sort", "s"),
 		b(actDirtyOnly, "only repositories with changes", "dirty only", "d"),
+		b(actFilters, "filters: dirty, stashed, ahead, behind, no remote; by remote host", "filters", "F"),
 		b(actMark, "mark for fetch/pull (on a directory: everything below)", "mark", " "),
-		b(actToggleTree, "group repositories by directory (tree) or flat list; enter folds a directory", "tree", "`"),
+		b(actToggleTree, "list: flat, grouped by folder, grouped by remote host; enter folds a group", "tree", "`"),
 		b(actFetchMany, "fetch marked (or all) repositories", "fetch", "f"),
 		b(actPullMany, "pull --ff-only marked (or selected) repositories", "pull", "p"),
 		b(actPullAll, "pull all: fetch everything, choose which branches to update", "pull all", "ctrl+p"),
@@ -350,6 +354,12 @@ var keymap = [scopes][]binding{
 		b(actPaneUp, "focus the pane above", "", "ctrl+up", "alt+up").hidden(),
 		b(actPaneDown, "focus the pane below", "", "ctrl+down", "alt+down").hidden(),
 		b(actPaneLayout, "pane layout: grid, side by side, stacked", "", "ctrl+g"),
+	},
+	scMenu: {
+		b(actUp, "previous option", "", "up", "k"),
+		b(actDown, "next option", "", "down", "j"),
+		b(actSave, "choose", "choose", "enter", " "),
+		b(actCancel, "close", "close", "esc", "q"),
 	},
 	scPullAll: {
 		b(actUp, "previous branch", "", "up", "k"),
@@ -492,7 +502,7 @@ func otherHints(panel scope, scs ...scope) string {
 
 // helpLines renders every scope's bindings for the help overlay.
 func helpLines() []string {
-	order := []scope{scPanes, scList, scFilter, scPullAll, scRepo, scFiles, scBranches, scCommits, scStash, scStaging, scPlan, scTags, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
+	order := []scope{scPanes, scList, scFilter, scMenu, scPullAll, scRepo, scFiles, scBranches, scCommits, scStash, scStaging, scPlan, scTags, scReflog, scState, scMain, scEditor, scPicker, scOverlay, scGlobal}
 	var out []string
 	for _, sc := range order {
 		if len(out) > 0 {

@@ -1,6 +1,7 @@
 package gitx
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -381,4 +382,33 @@ func TestCherryPickAcrossRepositories(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustState(t, dst, StateNone)
+}
+
+func TestRemoteGroup(t *testing.T) {
+	cases := map[string]string{
+		"git@github.com:ann/api.git":                    "github.com/ann",
+		"https://gitlab.com/platform/infra/dns.git":     "gitlab.com/platform/infra",
+		"ssh://git@forge.example.com:2222/team/app.git": "forge.example.com/team",
+		"https://example.com/solo.git":                  "example.com",
+		"/srv/git/local.git":                            "",
+		"":                                              "",
+	}
+	for url, want := range cases {
+		if got := strings.Join(RemoteGroup(url), "/"); got != want {
+			t.Errorf("RemoteGroup(%q) = %q, want %q", url, got, want)
+		}
+	}
+}
+
+func TestStashCount(t *testing.T) {
+	dir := newRepo(t)
+	commit(t, dir, "a.txt", "a\n", "first")
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("changed"), 0o644)
+	git(t, dir, "stash")
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("again"), 0o644)
+	git(t, dir, "stash")
+	info, err := GetInfo(context.Background(), dir)
+	if err != nil || info.Stashes != 2 {
+		t.Fatalf("stashes %d, err %v", info.Stashes, err)
+	}
 }

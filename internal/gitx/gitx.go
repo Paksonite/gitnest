@@ -33,10 +33,11 @@ type Info struct {
 	LastRel   string
 	State     State
 	RemoteURL string // origin's URL, or the first remote's; empty without remotes
+	Stashes   int
 }
 
 func GetInfo(ctx context.Context, dir string) (Info, error) {
-	out, err := run(ctx, kRead, dir, nil, "status", "--porcelain=v2", "--branch")
+	out, err := run(ctx, kRead, dir, nil, "status", "--porcelain=v2", "--branch", "--show-stash")
 	if err != nil {
 		return Info{}, err
 	}
@@ -73,6 +74,8 @@ func parseStatusV2(out string) Info {
 		case strings.HasPrefix(l, "# branch.ab "):
 			in.Upstream = true
 			fmt.Sscanf(strings.TrimPrefix(l, "# branch.ab "), "+%d -%d", &in.Ahead, &in.Behind)
+		case strings.HasPrefix(l, "# stash "):
+			in.Stashes, _ = strconv.Atoi(strings.TrimPrefix(l, "# stash "))
 		case strings.HasPrefix(l, "#"):
 		default:
 			in.Changes++
@@ -196,6 +199,31 @@ func RemoteHost(url string) string {
 		before = before[j+1:]
 	}
 	return strings.ToLower(before)
+}
+
+// RemoteGroup splits a remote URL into the host and the owner path, without
+// the repository's own name: git@github.com:ann/api.git gives
+// [github.com ann], https://gitlab.com/platform/infra/dns gives
+// [gitlab.com platform infra]. Local paths and empty URLs give nil.
+func RemoteGroup(url string) []string {
+	host := RemoteHost(url)
+	if host == "" {
+		return nil
+	}
+	path := url
+	if i := strings.Index(url, "://"); i >= 0 {
+		_, path, _ = strings.Cut(url[i+3:], "/")
+	} else {
+		_, path, _ = strings.Cut(url, ":")
+	}
+	parts := []string{host}
+	segs := strings.Split(strings.Trim(path, "/"), "/")
+	for _, s := range segs[:max(0, len(segs)-1)] { // the last one is the repository
+		if s != "" && s != "~" {
+			parts = append(parts, s)
+		}
+	}
+	return parts
 }
 
 // Sync returns a compact plain-text summary like "↑1 ↓2 ~3".

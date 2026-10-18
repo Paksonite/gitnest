@@ -100,6 +100,7 @@ type App struct {
 	quitAll   bool        // quitting leaves gitnest entirely (o for gn), not just this pane
 	plan      *planner    // interactive rebase being planned
 	pull      *pullAll    // choosing what "pull all" updates
+	menu      *menu       // filters, actions or the sort & view chooser
 	lastErr   *report     // details of the last failed operation, shown with "!"
 	toast     string
 	toastErr  bool
@@ -130,6 +131,9 @@ func newApp(ctx context.Context, cfg config.Config, noConfig bool, startDir, cdF
 		a.rs.collapsed[d] = true
 	}
 	a.rs.tree = a.st.ListTree
+	if a.st.ListGroup == groupNames[groupRemote] {
+		a.rs.group = groupRemote
+	}
 	return a
 }
 
@@ -269,6 +273,9 @@ func (a *App) onKey(k tea.KeyMsg) tea.Cmd {
 	}
 	if a.pull != nil {
 		return a.pullAllKey(k)
+	}
+	if a.menu != nil {
+		return a.menuKey(k)
 	}
 	if a.scr == scrRepos && a.rs.filtering {
 		return a.reposKey(k) // every key belongs to the search query, "?" too
@@ -474,6 +481,8 @@ func (a *App) View() string {
 		return a.viewPlanner()
 	case a.pull != nil:
 		return a.viewPullAll()
+	case a.menu != nil:
+		return a.viewMenu()
 	case a.scr == scrRepos:
 		return a.viewRepos()
 	}

@@ -9,9 +9,10 @@ Press `?` in the app for the same list. Panes are described in
 |---|---|
 | `/` | search by name (also git host and folder; `@text` searches branches); `enter` opens, `tab` keeps the filter, `esc` clears |
 | `enter` | open the repository |
-| `` ` `` | group repositories by folder (tree) or show a flat list; `enter` folds a folder |
+| `` ` `` | list view: flat, grouped by folder, grouped by remote host and owner (github.com/ann/; local/ without a remote); `enter` folds a group |
 | `s` | sort: recently used, name, last commit, needs attention |
 | `d` | only repositories with uncommitted changes |
+| `F` | filters, with how many repositories each keeps: dirty, stashed changes, ahead of or behind the remote, no remote; and by remote host |
 | `space` | mark (on a folder: everything below); `f` fetch / `p` pull the marked ones |
 | `ctrl+p` | pull all: fetches every repository, lists every branch that is behind (also main when it isn't checked out); pick with `space` / `a`, `enter` updates them (fast-forward only) |
 | `R` / `r` | rescan the folders / refresh the status |
@@ -23,8 +24,9 @@ Press `?` in the app for the same list. Panes are described in
 The columns are the repository, its current branch, its status — `↑2` commits
 to push, `↓3` to pull, `~4` changed files, `∅` no upstream — and how long ago
 the last commit was (`5h`, `3d`, `4mo`, `2y`). `✦` marks repositories found
-since gitnest started, `●` uncommitted changes, `!` a conflict or an
-operation in progress. Folded directories of the tree stay folded the next
+since gitnest started, a yellow `●` uncommitted changes, a blue `●` a clean
+repository with commits to push or pull, `!` a conflict or an operation in
+progress. Folded directories of the tree stay folded the next
 time. Clones of the same project from
 different hosts are told apart by host (`org-core-dns · forgejo`).
 
