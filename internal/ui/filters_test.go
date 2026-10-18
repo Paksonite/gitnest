@@ -68,7 +68,7 @@ func TestFilters(t *testing.T) {
 		t.Fatalf("gitlab.com + stashed: %v", listed(a))
 	}
 	a.onKey(tea.KeyMsg{Type: tea.KeyEsc})
-	if a.menu != nil || !strings.Contains(a.View(), "[stashed] [gitlab.com]") {
+	if head := strings.SplitN(a.View(), "\n", 2)[0]; a.menu != nil || !strings.Contains(head, " stashed ") || !strings.Contains(head, " gitlab.com ") {
 		t.Errorf("header should name the filters: %q", strings.SplitN(a.View(), "\n", 2)[0])
 	}
 	// d toggles dirty on top of the host filter, and off again.

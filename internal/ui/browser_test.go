@@ -45,7 +45,7 @@ func TestBrowser(t *testing.T) {
 	if b.path != "main.go" || len(b.lines) != 6 || !strings.Contains(b.lines[0], "package main") {
 		t.Fatalf("main.go: %q %d lines", b.path, len(b.lines))
 	}
-	if v := a.View(); !strings.Contains(v, "main.go · 6 lines") || !strings.Contains(v, "1 package main") || !strings.Contains(v, "Files (5)") {
+	if v := a.View(); !strings.Contains(v, "main.go · 6 lines") || !strings.Contains(v, "1 package main") || !strings.Contains(v, "Files  5") {
 		t.Errorf("view:\n%s", v)
 	}
 	// enter on a file focuses it, j scrolls, esc goes back to the tree.

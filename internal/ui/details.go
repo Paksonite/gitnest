@@ -27,7 +27,7 @@ func detailsCard(r scan.Repo, label string, d *gitx.Details, w, h int, now time.
 		title += fg(cDim, " · "+label)
 	}
 	if r.Branch != "" {
-		title += "  " + fg(cCyan, branchGlyph(false)+r.Branch)
+		title += "  " + badge(branchGlyph(false)+r.Branch, cCyan)
 	}
 	if s := syncStyled(r.Info); s != "" {
 		title += "  " + s

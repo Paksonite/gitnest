@@ -819,14 +819,16 @@ func (a *App) viewRepos() string {
 		fg(cDim, fmt.Sprintf("  %d repos · %d dirty", len(rs.all), dirty))
 	head += a.copiedBadge() + a.updateBadge()
 	if rs.sortMode != sortRecent {
-		head += "  " + fg(cDim, "sort: "+sortNames[rs.sortMode])
+		head += "  " + badge("sort: "+sortNames[rs.sortMode], cDim)
 	}
-	tags := rs.filterTags()
+	if rs.status != stAll {
+		head += "  " + badge(statusFilterTags[rs.status], cYellow)
+	}
+	if rs.host != "" {
+		head += "  " + badge(rs.host, cCyan)
+	}
 	if rs.favOnly {
-		tags = strings.TrimSpace(tags + " [★ favorites]")
-	}
-	if tags != "" {
-		head += "  " + fg(cYellow, tags)
+		head += "  " + badge("★ favorites", cYellow)
 	}
 	if rs.filtering || rs.filter != "" {
 		cursor := ""
@@ -845,7 +847,7 @@ func (a *App) viewRepos() string {
 	if a.w >= 90 {
 		listW = a.w * 3 / 5
 	}
-	inner := listW - 2
+	inner := panelInner(listW)
 	nameW := clamp(inner-39, 10, 60)
 	now := time.Now()
 	lh := bodyH - 4 // borders, panel title and the column headers
@@ -876,12 +878,16 @@ func (a *App) viewRepos() string {
 		}
 		lines = []string{fg(cDim, msg)}
 	}
-	list := panel(fmt.Sprintf("Repositories (%d)", len(rs.view)), lines, listW, bodyH, true)
+	note := fmt.Sprintf("%d · %s", len(rs.view), a.listViewName())
+	if len(rs.view) != len(rs.all) {
+		note = fmt.Sprintf("%d of %d · %s", len(rs.view), len(rs.all), a.listViewName())
+	}
+	list := panel(subtitle("Repositories", note), lines, listW, bodyH, true)
 
 	body := list
 	if a.w >= 90 {
 		var pl []string
-		pw, ph := a.w-listW-2, bodyH-3
+		pw, ph := panelInner(a.w-listW), bodyH-3
 		title := "Details"
 		if p := a.selectedPath(); p != "" {
 			r := rs.all[rs.rows[rs.cur].repo]

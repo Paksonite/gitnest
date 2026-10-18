@@ -21,6 +21,10 @@ colors:
   accent: "#ff9e64"
 ```
 
+The `surface` role is the background of the panels (cards). The gitnest
+themes set it; leave it empty (`""`) to keep the terminal's own background
+inside panels.
+
 ```sh
 gitnest theme                                    # all themes, and which are in use
 gitnest theme export nord > ~/.config/gitnest/themes/my-nord.yaml   # a full template

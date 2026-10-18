@@ -323,11 +323,11 @@ func (a *App) viewBrowser() string {
 			icon, sicon := fileIconStyled(r.path, false, false)
 			items = append(items, rowItem{plain: indent + "  " + icon + r.name, styled: indent + "  " + sicon + r.name})
 		}
-		tree = renderRows(items, b.cur-b.off, 0, lh, treeW-2, !b.focusFile)
+		tree = renderRows(items, b.cur-b.off, 0, lh, panelInner(treeW), !b.focusFile)
 	}
 
 	var file []string
-	inner := fileW - 2
+	inner := panelInner(fileW)
 	switch {
 	case b.note != "":
 		file = []string{fg(cDim, b.note)}
@@ -344,7 +344,7 @@ func (a *App) viewBrowser() string {
 		fileTitle = fmt.Sprintf("%s · %d lines", path.Base(b.path), len(b.lines))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top,
-		panel(fmt.Sprintf("Files (%d)", len(b.files)), tree, treeW, bodyH, !b.focusFile),
+		panel(subtitle("Files", fmt.Sprintf("%d", len(b.files))), tree, treeW, bodyH, !b.focusFile),
 		panel(fileTitle, file, fileW, bodyH, b.focusFile))
 	return strings.Join([]string{fit(head, a.w), body, a.footer(hints(scBrowser))}, "\n")
 }

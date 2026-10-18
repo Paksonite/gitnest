@@ -41,6 +41,7 @@ type Palette struct {
 	Sel        string `yaml:"sel"`     // selected row in the focused panel (background)
 	SelDim     string `yaml:"sel_dim"` // selected row elsewhere (background)
 	Border     string `yaml:"border"`  // unfocused borders
+	Surface    string `yaml:"surface"` // panel background (cards); empty keeps the terminal's
 	// Diff colours are passed to git; empty keeps the user's git colours.
 	DiffAdd  string `yaml:"diff_add"`
 	DiffDel  string `yaml:"diff_del"`
@@ -62,7 +63,7 @@ func (p *Palette) roles() map[string]*string {
 	return map[string]*string{
 		"background": &p.Background, "text": &p.Text, "dim": &p.Dim, "accent": &p.Accent,
 		"added": &p.Added, "removed": &p.Removed, "warn": &p.Warn, "branch": &p.Branch,
-		"sel": &p.Sel, "sel_dim": &p.SelDim, "border": &p.Border,
+		"sel": &p.Sel, "sel_dim": &p.SelDim, "border": &p.Border, "surface": &p.Surface,
 		"diff_add": &p.DiffAdd, "diff_del": &p.DiffDel, "diff_hunk": &p.DiffHunk, "diff_meta": &p.DiffMeta,
 	}
 }
@@ -232,7 +233,7 @@ func (s *Set) resolve(name string, files map[string]file, seen map[string]bool) 
 // RoleNames lists the colour roles a theme file may set, in display order.
 func RoleNames() []string {
 	return []string{"background", "text", "dim", "accent", "added", "removed", "warn", "branch",
-		"sel", "sel_dim", "border", "diff_add", "diff_del", "diff_hunk", "diff_meta"}
+		"sel", "sel_dim", "border", "surface", "diff_add", "diff_del", "diff_hunk", "diff_meta"}
 }
 
 var hexRe = regexp.MustCompile(`^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
@@ -310,6 +311,8 @@ func Check(t Theme) []string {
 		{p.Warn, p.Background, "warn", "background", 3},
 		{p.Branch, p.Background, "branch", "background", 3},
 		{p.Dim, p.Background, "dim", "background", 2},
+		{p.Text, p.Surface, "text", "surface", 4.5},
+		{p.Dim, p.Surface, "dim", "surface", 2},
 	}
 	for _, c := range pairs {
 		r, ok := Contrast(c.fg, c.bg)

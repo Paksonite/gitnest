@@ -41,5 +41,5 @@ func (a *App) updateBadge() string {
 	if a.sh.update == "" {
 		return ""
 	}
-	return "  " + fg(cGreen, "⬆ "+a.sh.update+" · gitnest update")
+	return "  " + badge("⬆ "+a.sh.update+" · gitnest update", cGreen)
 }

@@ -23,10 +23,12 @@ var (
 	cYellow  lipgloss.TerminalColor = lipgloss.Color("#facc15")
 	cCyan    lipgloss.TerminalColor = lipgloss.Color("#5fb3ff")
 	cText    lipgloss.TerminalColor = lipgloss.Color("#d6e3e1")
-	cSel     lipgloss.TerminalColor = lipgloss.Color("#173a37")
-	cSelDim  lipgloss.TerminalColor = lipgloss.Color("#11272a")
-	cBorder  lipgloss.TerminalColor = lipgloss.Color("#2a4a4c")
+	cSel     lipgloss.TerminalColor = lipgloss.Color("#1d4a44")
+	cSelDim  lipgloss.TerminalColor = lipgloss.Color("#15302f")
+	cBorder  lipgloss.TerminalColor = lipgloss.Color("#2f5254")
+	cSurface lipgloss.TerminalColor = lipgloss.Color("#0f2024")
 	cAuthors []lipgloss.TerminalColor
+	palette  = theme.Palette{Background: "#0b1417"} // the active one, for tints
 )
 
 func color(c string) lipgloss.TerminalColor {
@@ -45,6 +47,7 @@ func usePalette(p theme.Palette, accent string, gitDiffs bool) {
 	cAccent, cDim, cText = color(p.Accent), color(p.Dim), color(p.Text)
 	cGreen, cRed, cYellow, cCyan = color(p.Added), color(p.Removed), color(p.Warn), color(p.Branch)
 	cSel, cSelDim, cBorder = color(p.Sel), color(p.SelDim), color(p.Border)
+	cSurface, palette = color(p.Surface), p
 	cAuthors = cAuthors[:0]
 	for _, c := range p.Authors {
 		cAuthors = append(cAuthors, color(c))
@@ -172,14 +175,19 @@ func expandTabs(s string) string {
 type rowItem struct{ plain, styled string }
 
 // renderRows draws list rows. Only the focused panel highlights its
-// selected row, so the highlight always shows where keys go.
+// selected row, so the highlight always shows where keys go; an accent bar
+// marks its left edge when the row starts with a space.
 func renderRows(items []rowItem, cur, off, h, w int, focused bool) []string {
 	var out []string
+	sel := lipgloss.NewStyle().Bold(true).Background(cSel).Foreground(cText)
 	for i := off; i < len(items) && i < off+h; i++ {
 		it := items[i]
 		switch {
+		case i == cur && focused && strings.HasPrefix(it.plain, " ") && w > 1:
+			bar := lipgloss.NewStyle().Foreground(cAccent).Background(cSel).Render("▌")
+			out = append(out, bar+sel.Render(fit(it.plain[1:], w-1)))
 		case i == cur && focused:
-			out = append(out, lipgloss.NewStyle().Bold(true).Background(cSel).Foreground(cText).Render(fit(it.plain, w)))
+			out = append(out, sel.Render(fit(it.plain, w)))
 		default:
 			out = append(out, fit(it.styled, w))
 		}
@@ -187,36 +195,109 @@ func renderRows(items []rowItem, cur, off, h, w int, focused bool) []string {
 	return out
 }
 
-// panel draws a rounded box of exactly w×h cells with the title as its first row.
+// panelPad is the space between a panel's border and its content.
+const panelPad = 1
+
+// panelInner is the width of a w-wide panel's content.
+func panelInner(w int) int { return max(1, w-2-2*panelPad) }
+
+// subtitle joins a panel title and a dimmed note shown after it
+// ("Repositories" · "55 · 4 dirty").
+func subtitle(title, note string) string {
+	if note == "" {
+		return title
+	}
+	return title + "\x1f" + note
+}
+
+// panel draws a rounded card of exactly w×h cells: the title (and its
+// subtitle) as the first row, the lines below, all on the theme's surface
+// colour when it has one.
 func panel(title string, lines []string, w, h int, focused bool) string {
-	if w < 4 {
-		w = 4
+	if w < 4+2*panelPad {
+		w = 4 + 2*panelPad
 	}
 	if h < 3 {
 		h = 3
 	}
-	inner, ih := w-2, h-2
+	inner, ih := panelInner(w), h-2
 	col := cBorder
-	ts := lipgloss.NewStyle().Foreground(cDim)
+	ts := lipgloss.NewStyle().Foreground(cText).Bold(true)
 	if focused {
 		col = cAccent
 		ts = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
 	}
-	rows := make([]string, 0, ih)
+	title, note, _ := strings.Cut(title, "\x1f")
 	if !strings.Contains(title, "\x1b") { // pre-styled titles (tabs) are kept as they are
 		title = ts.Render(title)
 	}
-	rows = append(rows, fit(title, inner))
+	if note != "" {
+		title += "  " + fg(cDim, note)
+	}
+	pad := strings.Repeat(" ", panelPad)
+	bg := bgSeq(cSurface)
+	row := func(s string) string { return paintBG(pad+fit(s, inner)+pad, bg) }
+	rows := make([]string, 0, ih)
+	rows = append(rows, row(title))
 	for _, l := range lines {
 		if len(rows) >= ih {
 			break
 		}
-		rows = append(rows, fit(l, inner))
+		rows = append(rows, row(l))
 	}
 	for len(rows) < ih {
-		rows = append(rows, strings.Repeat(" ", inner))
+		rows = append(rows, row(""))
 	}
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(col).Render(strings.Join(rows, "\n"))
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(col).
+		BorderBackground(cSurface).Render(strings.Join(rows, "\n"))
+}
+
+// bgSeq is the escape sequence that sets background c ("" when colours are
+// off or c is NoColor).
+func bgSeq(c lipgloss.TerminalColor) string {
+	if _, none := c.(lipgloss.NoColor); none {
+		return ""
+	}
+	s := lipgloss.NewStyle().Background(c).Render("x")
+	seq, _, _ := strings.Cut(s, "x")
+	return seq
+}
+
+// paintBG puts background seq under a whole styled line: after every reset
+// inside it (lipgloss's and git's), the background is set again.
+func paintBG(s, seq string) string {
+	if seq == "" {
+		return s
+	}
+	s = strings.ReplaceAll(s, "\x1b[0m", "\x1b[0m"+seq)
+	s = strings.ReplaceAll(s, "\x1b[m", "\x1b[m"+seq)
+	return seq + s + "\x1b[0m"
+}
+
+// badge is a small label on a tint of its colour: " dirty only ".
+func badge(s string, c lipgloss.TerminalColor) string {
+	return lipgloss.NewStyle().Foreground(c).Background(tint(c, 0.22)).Render(" " + s + " ")
+}
+
+// tint mixes colour c into the theme background (amount 0..1); colours
+// that aren't #rrggbb fall back to the dim selection colour.
+func tint(c lipgloss.TerminalColor, amount float64) lipgloss.TerminalColor {
+	hex, ok := c.(lipgloss.Color)
+	r1, g1, b1, ok1 := parseHex(string(hex))
+	r0, g0, b0, ok0 := parseHex(palette.Background)
+	if !ok || !ok1 || !ok0 {
+		return cSelDim
+	}
+	mix := func(a, b int) int { return int(float64(b) + (float64(a)-float64(b))*amount + 0.5) }
+	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", mix(r1, r0), mix(g1, g0), mix(b1, b0)))
+}
+
+func parseHex(s string) (r, g, b int, ok bool) {
+	if len(s) != 7 || s[0] != '#' {
+		return 0, 0, 0, false
+	}
+	_, err := fmt.Sscanf(s, "#%02x%02x%02x", &r, &g, &b)
+	return r, g, b, err == nil
 }
 
 // tabsTitle renders a panel title with tabs: "[3] Commits - Reflog"
@@ -243,7 +324,7 @@ func tabsTitle(num string, tabs []string, active int, focused bool) string {
 func brand() string {
 	b := lipgloss.NewStyle().Bold(true).Foreground(cAccent).Render("gitnest")
 	if strings.HasPrefix(Version, "dev-") {
-		b += " " + lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(cYellow).Render(" dev ")
+		b += " " + lipgloss.NewStyle().Bold(true).Foreground(cYellow).Background(tint(cYellow, 0.22)).Render(" dev ")
 	}
 	return b
 }

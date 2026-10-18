@@ -108,18 +108,3 @@ func (a *App) openFilters() {
 	}
 	a.openMenu(m)
 }
-
-// filterTags describes the active filters for the list header.
-func (rs *reposState) filterTags() string {
-	var out string
-	if rs.status != stAll {
-		out += "[" + statusFilterTags[rs.status] + "]"
-	}
-	if rs.host != "" {
-		if out != "" {
-			out += " "
-		}
-		out += "[" + rs.host + "]"
-	}
-	return out
-}

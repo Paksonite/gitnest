@@ -197,7 +197,7 @@ func (a *App) copiedBadge() string {
 	if a.sh.copied == nil {
 		return ""
 	}
-	return "  " + fg(cAccent, fmt.Sprintf("⎘ %d copied from %s · v pastes", len(a.sh.copied.commits), a.sh.copied.name))
+	return "  " + badge(fmt.Sprintf("⎘ %d copied from %s · v pastes", len(a.sh.copied.commits), a.sh.copied.name), cAccent)
 }
 
 // paste cherry-picks the copied commits, oldest first, onto the current

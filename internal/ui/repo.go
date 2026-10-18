@@ -847,7 +847,7 @@ func (a *App) viewRepo() string {
 		var lines []string
 		if lh > 0 {
 			rp.off[i] = scrollTo(rp.cur[i], rp.off[i], lh)
-			lines = renderRows(a.panelItems(i), rp.cur[i], rp.off[i], lh, leftW-2, i == rp.focus)
+			lines = renderRows(a.panelItems(i), rp.cur[i], rp.off[i], lh, panelInner(leftW), i == rp.focus)
 		}
 		if heights[i] > 0 {
 			panels[i] = panel(titles[i], lines, leftW, heights[i], i == rp.focus)
@@ -875,7 +875,7 @@ func (a *App) viewRepo() string {
 	}
 	mainLines = mainLines[rp.mainOff:]
 	if rp.staging != nil {
-		mainTitle, mainLines = a.stagingLines(mh-3, mainW-2)
+		mainTitle, mainLines = a.stagingLines(mh-3, panelInner(mainW))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, panel(mainTitle, mainLines, mainW, mh, rp.mainFocus || rp.staging != nil))
 

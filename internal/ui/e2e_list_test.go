@@ -36,7 +36,7 @@ func TestE2EListSearchFilterTree(t *testing.T) {
 
 	// d shows only repositories with changes, and again all of them.
 	press(t, a, "d")
-	if got := listed(a); len(got) != 1 || filepath.Base(got[0]) != "lib" || !strings.Contains(a.View(), "[dirty only]") {
+	if got := listed(a); len(got) != 1 || filepath.Base(got[0]) != "lib" || !strings.Contains(a.View(), " dirty only ") {
 		t.Fatalf("dirty only: %v", got)
 	}
 	press(t, a, "d")
