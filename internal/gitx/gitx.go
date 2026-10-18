@@ -1028,15 +1028,85 @@ func StashShow(ctx context.Context, dir, ref string) string {
 
 // ---------------------------------------------------------------- preview
 
-// Preview is the right-hand pane of the repository list.
-func Preview(ctx context.Context, dir string) string {
-	var b strings.Builder
-	o, _ := run(ctx, kRead, dir, nil, colored("status", "-sb")...)
-	b.WriteString(o)
-	b.WriteString("\n")
-	o, _ = run(ctx, kRead, dir, nil, colored("log", "--oneline", "--decorate", "-n", "15")...)
-	b.WriteString(o)
-	return b.String()
+// Details is what the repository list's preview card shows about the
+// selected repository, besides its status.
+type Details struct {
+	Upstream    string          // e.g. origin/main; empty without one
+	Tag         string          // the latest tag reachable from HEAD
+	Description string          // the first line of prose in the README
+	Changes     []string        // git status --short, at most maxChanges lines
+	More        int             // changes beyond those
+	Commits     []DetailsCommit // the latest commits, newest first
+}
+
+type DetailsCommit struct {
+	Short, Subject, Author, Refs string
+	Unix                         int64
+}
+
+const maxChanges = 8
+
+// RepoDetails collects Details with three git processes.
+func RepoDetails(ctx context.Context, dir string, commits int) Details {
+	var d Details
+	if o, err := run(ctx, kRead, dir, nil, "status", "--porcelain=v1", "--branch"); err == nil {
+		for _, l := range strings.Split(strings.TrimRight(o, "\n"), "\n") {
+			switch {
+			case strings.HasPrefix(l, "## "):
+				if _, up, ok := strings.Cut(strings.TrimPrefix(l, "## "), "..."); ok {
+					d.Upstream, _, _ = strings.Cut(up, " ")
+				}
+			case l == "":
+			case len(d.Changes) < maxChanges:
+				d.Changes = append(d.Changes, l)
+			default:
+				d.More++
+			}
+		}
+	}
+	if o, err := run(ctx, kRead, dir, nil, "log", "-n", strconv.Itoa(commits), "--format=%h%x1f%s%x1f%an%x1f%ct%x1f%D"); err == nil {
+		for _, l := range strings.Split(strings.TrimSpace(o), "\n") {
+			f := strings.Split(l, "\x1f")
+			if len(f) < 5 {
+				continue
+			}
+			unix, _ := strconv.ParseInt(f[3], 10, 64)
+			d.Commits = append(d.Commits, DetailsCommit{Short: f[0], Subject: f[1], Author: f[2], Unix: unix, Refs: f[4]})
+		}
+	}
+	if o, err := run(ctx, kRead, dir, nil, "describe", "--tags", "--abbrev=0"); err == nil {
+		d.Tag = strings.TrimSpace(o)
+	}
+	d.Description = readmeLine(dir)
+	return d
+}
+
+// readmeLine is the first line of prose in dir's README: not a heading,
+// badge, image, HTML, list or table.
+func readmeLine(dir string) string {
+	for _, name := range []string{"README.md", "README", "README.markdown", "README.rst", "README.txt", "readme.md"} {
+		b, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			continue
+		}
+		if len(b) > 64<<10 {
+			b = b[:64<<10]
+		}
+		inCode := false
+		for _, l := range strings.Split(string(b), "\n") {
+			l = strings.TrimSpace(l)
+			if strings.HasPrefix(l, "```") {
+				inCode = !inCode
+				continue
+			}
+			if inCode || l == "" || strings.ContainsAny(l[:1], "#![<|>-=*_:.`") || strings.HasPrefix(l, "+") {
+				continue
+			}
+			return l
+		}
+		return ""
+	}
+	return ""
 }
 
 // MinGitVersion is the oldest git gitnest is tested with (Debian 12 ships

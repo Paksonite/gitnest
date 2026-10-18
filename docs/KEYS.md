@@ -14,6 +14,8 @@ Press `?` in the app for the same list. Panes are described in
 | `d` | only repositories with uncommitted changes |
 | `F` | filters, with how many repositories each keeps: dirty, stashed changes, ahead of or behind the remote, no remote; and by remote host |
 | `space` | mark (on a folder: everything below); `f` fetch / `p` pull the marked ones |
+| `a` | actions on the marked repositories (or the selected one): fetch, pull, open each in a pane of its own, mark all / unmark all |
+| `A` / `U` | mark every repository shown / unmark everything |
 | `ctrl+p` | pull all: fetches every repository, lists every branch that is behind (also main when it isn't checked out); pick with `space` / `a`, `enter` updates them (fast-forward only) |
 | `R` / `r` | rescan the folders / refresh the status |
 | `q` | quit |

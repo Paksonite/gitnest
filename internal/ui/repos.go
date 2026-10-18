@@ -37,7 +37,7 @@ type reposState struct {
 	group       int             // groupFolders or groupRemote, when tree
 	rows        []listRow       // what is shown: repositories and, in tree mode, directories
 	collapsed   map[string]bool // collapsed directories in tree mode
-	preview     string
+	details     *gitx.Details   // of previewPath, nil while loading
 	previewPath string
 }
 
@@ -457,14 +457,15 @@ func (a *App) selectedDir() (int, bool) {
 func (a *App) previewCmd() tea.Cmd {
 	p := a.selectedPath()
 	if p == "" {
-		a.rs.preview, a.rs.previewPath = "", ""
+		a.rs.details, a.rs.previewPath = nil, ""
 		return nil
 	}
 	if p != a.rs.previewPath {
-		a.rs.preview = ""
+		a.rs.details = nil
 	}
 	a.rs.previewPath = p
-	return func() tea.Msg { return previewMsg{path: p, text: gitx.Preview(a.ctx, p)} }
+	ctx := a.ctx
+	return func() tea.Msg { return previewMsg{path: p, details: gitx.RepoDetails(ctx, p, 12)} }
 }
 
 func (a *App) openDir(path string) tea.Cmd {
@@ -506,15 +507,17 @@ func (a *App) targets(fallback func() []string) []string {
 }
 
 func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
-	rs := &a.rs
-	ctx := a.ctx
-	s := k.String()
-
-	if rs.filtering {
+	if a.rs.filtering {
 		return a.filterKey(k)
 	}
+	return a.listAction(lookup(scList, k.String()))
+}
 
-	switch lookup(scList, s) {
+// listAction runs one of the list's actions, from a key or a menu.
+func (a *App) listAction(act action) tea.Cmd {
+	rs := &a.rs
+	ctx := a.ctx
+	switch act {
 	case actUp:
 		return a.moveRepos(-1)
 	case actDown:
@@ -625,6 +628,14 @@ func (a *App) reposKey(k tea.KeyMsg) tea.Cmd {
 		return a.bulk("pull", "pulled", ps, func(p string) error { return gitx.Pull(ctx, p, false) })
 	case actPullAll:
 		return a.startPullAll()
+	case actActions:
+		a.openActions()
+	case actUnmarkAll:
+		rs.marked = map[string]bool{}
+	case actMarkAll:
+		for _, i := range rs.view {
+			rs.marked[rs.all[i].Path] = true
+		}
 	}
 	return nil
 }
@@ -852,15 +863,22 @@ func (a *App) viewRepos() string {
 	body := list
 	if a.w >= 90 {
 		var pl []string
-		if rs.preview != "" {
-			pl = strings.Split(strings.TrimRight(expandTabs(rs.preview), "\n"), "\n")
-		}
-		title := "Preview"
+		pw, ph := a.w-listW-2, bodyH-3
+		title := "Details"
 		if p := a.selectedPath(); p != "" {
-			title = "Preview · " + filepath.Base(p)
-			if l := rs.label[p]; l != "" {
-				title += " · " + l
+			r := rs.all[rs.rows[rs.cur].repo]
+			var d *gitx.Details
+			if p == rs.previewPath {
+				d = rs.details
 			}
+			pl = detailsCard(r, rs.label[p], d, pw, ph, now)
+		} else if i, ok := a.selectedDir(); ok {
+			repos := map[string]scan.Repo{}
+			for _, r := range rs.all {
+				repos[r.Path] = r
+			}
+			title = "Group"
+			pl = groupCard(rs.rows[i].name, a.reposUnder(i), repos, pw, ph)
 		}
 		body = lipgloss.JoinHorizontal(lipgloss.Top, list, panel(title, pl, a.w-listW, bodyH, false))
 	}

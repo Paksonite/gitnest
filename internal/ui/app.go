@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/Paksonite/gitnest/internal/config"
+	"github.com/Paksonite/gitnest/internal/gitx"
 	"github.com/Paksonite/gitnest/internal/scan"
 	"github.com/Paksonite/gitnest/internal/state"
 	"github.com/Paksonite/gitnest/internal/theme"
@@ -44,7 +45,10 @@ type reposMsg struct {
 	paths  []string // repository paths when the list came from a scan or its cache
 	cached bool     // paths came from the scan cache; a rescan should follow
 }
-type previewMsg struct{ path, text string }
+type previewMsg struct {
+	path    string
+	details gitx.Details
+}
 type repoDataMsg struct {
 	dir string
 	d   repoData
@@ -204,9 +208,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.onRescanTick()
 	case statusTickMsg:
 		return a, a.onStatusTick()
+	case openPanesMsg: // a lone App (no shell) opens the first one itself
+		if len(m.paths) > 0 {
+			return a, a.openDir(m.paths[0])
+		}
 	case previewMsg:
 		if m.path == a.rs.previewPath {
-			a.rs.preview = m.text
+			a.rs.details = &m.details
 		}
 	case repoDataMsg:
 		return a, a.onRepoData(m)

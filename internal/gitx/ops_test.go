@@ -3,6 +3,10 @@ package gitx
 // Integration tests for the everyday operations: files, branches, stash, remotes.
 
 import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -61,8 +65,29 @@ func TestBasicFileOps(t *testing.T) {
 	if s := Show(bg, dir, cs[0].Hash); !strings.Contains(s, "first") {
 		t.Errorf("Show: %q", s)
 	}
-	if p := Preview(bg, dir); !strings.Contains(p, "first") {
-		t.Errorf("Preview: %q", p)
+	if d := RepoDetails(bg, dir, 5); len(d.Commits) != 1 || d.Commits[0].Subject != "first" {
+		t.Errorf("RepoDetails: %+v", d)
+	}
+}
+
+func TestRepoDetails(t *testing.T) {
+	dir, _ := cloneRepo(t)
+	readme := "# Title\n\n[![badge](x)](y)\n\n```sh\nmake\n```\n\nInfrastructure and tooling for our platform.\n\nMore.\n"
+	commit(t, dir, "README.md", readme, "add readme")
+	git(t, dir, "tag", "v1.2.0")
+	commit(t, dir, "b.txt", "b\n", "second")
+	for i := 0; i < 10; i++ {
+		os.WriteFile(filepath.Join(dir, fmt.Sprintf("new%d.txt", i)), []byte("x"), 0o644)
+	}
+	d := RepoDetails(context.Background(), dir, 2)
+	if d.Upstream != "origin/main" || d.Tag != "v1.2.0" || d.Description != "Infrastructure and tooling for our platform." {
+		t.Errorf("details: upstream %q tag %q description %q", d.Upstream, d.Tag, d.Description)
+	}
+	if len(d.Commits) != 2 || d.Commits[0].Subject != "second" || d.Commits[0].Author == "" || d.Commits[0].Unix == 0 {
+		t.Errorf("commits: %+v", d.Commits)
+	}
+	if len(d.Changes) != maxChanges || d.More != 2 || !strings.HasPrefix(d.Changes[0], "?? ") {
+		t.Errorf("changes: %v +%d", d.Changes, d.More)
 	}
 }
 

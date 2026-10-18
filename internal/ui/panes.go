@@ -164,6 +164,9 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if _, ok := m.msg.(tea.QuitMsg); ok {
 			return s, s.quitFrom(p)
 		}
+		if o, ok := m.msg.(openPanesMsg); ok {
+			return s, s.openRepos(o.paths)
+		}
 		cmd := s.deliver(p, m.msg)
 		if broadcast(m.msg) {
 			for _, o := range s.panes {
@@ -257,6 +260,17 @@ func (s *Shell) open() tea.Cmd {
 	}
 	a.setToast(msg, false)
 	return wrap(p.id, tea.Batch(a.previewCmd(), repoTick()))
+}
+
+// openRepos opens each repository in a new pane next to the focused one.
+func (s *Shell) openRepos(paths []string) tea.Cmd {
+	var cmds []tea.Cmd
+	for _, path := range paths {
+		cmds = append(cmds, s.open())
+		p := s.focused()
+		cmds = append(cmds, wrap(p.id, p.app.openDir(path)))
+	}
+	return tea.Batch(cmds...)
 }
 
 func (s *Shell) close(p *pane) {

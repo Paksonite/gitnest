@@ -91,6 +91,9 @@ const (
 	actClearSearch
 	actDirtyOnly
 	actFilters
+	actActions
+	actMarkAll
+	actUnmarkAll
 	actSort
 	actMark
 	actRescan
@@ -256,6 +259,9 @@ var keymap = [scopes][]binding{
 		b(actDirtyOnly, "only repositories with changes", "dirty only", "d"),
 		b(actFilters, "filters: dirty, stashed, ahead, behind, no remote; by remote host", "filters", "F"),
 		b(actMark, "mark for fetch/pull (on a directory: everything below)", "mark", " "),
+		b(actActions, "actions on the marked repositories (or the selected one): fetch, pull, open in panes…", "actions", "a"),
+		b(actMarkAll, "mark every repository shown", "", "A"),
+		b(actUnmarkAll, "unmark everything", "", "U"),
 		b(actToggleTree, "list: flat, grouped by folder, grouped by remote host; enter folds a group", "tree", "`"),
 		b(actFetchMany, "fetch marked (or all) repositories", "fetch", "f"),
 		b(actPullMany, "pull --ff-only marked (or selected) repositories", "pull", "p"),
