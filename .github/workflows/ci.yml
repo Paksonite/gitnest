@@ -5,13 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+# A newer push to the same branch or pull request cancels the run in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+  # Everything on Ubuntu: formatting, vet, staticcheck, the tests with the
+  # race detector, the scripts, and the smoke test (the terminal UI driven
+  # through tmux, the one-line installer).
+  linux:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -23,52 +27,52 @@ jobs:
       - name: staticcheck
         run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
       - run: go test -race ./...
-      - run: make build && ./bin/gitnest version
       - name: shell scripts
-        if: runner.os == 'Linux'
         run: |
           shellcheck install.sh docs/demo-setup.sh scripts/linux-smoke.sh
-          ./bin/gitnest completion bash | bash -n
-          ./bin/gitnest shell bash | bash -n
-
-  # The tests again on Debian 12 (git 2.39, like the systems users run).
-  debian:
-    runs-on: ubuntu-latest
-    container: debian:12
-    steps:
-      - name: system packages
-        run: apt-get update && apt-get install -y --no-install-recommends git ca-certificates curl zsh tar
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version: "1.27.x"
-      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - run: go test ./...
-      - name: go install works and reports a version
-        run: |
-          go install ./cmd/gitnest
-          "$(go env GOPATH)/bin/gitnest" version
-
-  # The terminal UI (driven through tmux), the commands and the one-line
-  # installer on Ubuntu and on a clean Debian 12.
-  linux-smoke:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version: "1.27.x"
-      - run: CGO_ENABLED=0 go build -o /tmp/smoke/gitnest ./cmd/gitnest
-      - name: Ubuntu
+          go run ./cmd/gitnest completion bash | bash -n
+          go run ./cmd/gitnest shell bash | bash -n
+      - name: smoke test
         run: |
           sudo apt-get install -y -q tmux >/dev/null
+          CGO_ENABLED=0 go build -o /tmp/smoke/gitnest ./cmd/gitnest
           sh scripts/linux-smoke.sh /tmp/smoke/gitnest
-      - name: Debian 12
+
+  # The tests on macOS (no race detector: Linux runs it).
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27.x"
+      - run: go test ./...
+
+  # The tests and the smoke test on the oldest systems supported, with
+  # their own git: Debian 12 (git 2.39) and Ubuntu 22.04 (git 2.34). The
+  # runner's Go toolchain and module cache are lent to the containers.
+  distros:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["debian:12", "ubuntu:22.04"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27.x"
+      - run: go mod download && CGO_ENABLED=0 go build -o /tmp/smoke/gitnest ./cmd/gitnest
+      - name: tests and smoke test in ${{ matrix.image }}
         run: |
-          docker run --rm -v "$PWD:/src" -v /tmp/smoke:/smoke debian:12 sh -c "
-            apt-get update -q >/dev/null &&
-            apt-get install -y -q --no-install-recommends git tmux curl ca-certificates >/dev/null &&
-            sh /src/scripts/linux-smoke.sh /smoke/gitnest"
+          docker run --rm -e DEBIAN_FRONTEND=noninteractive -e CGO_ENABLED=0 -e GOFLAGS=-mod=mod \
+            -v "$PWD:/src" -v "$(go env GOROOT):/goroot:ro" -v "$(go env GOMODCACHE):/gomod" \
+            -v /tmp/smoke:/smoke ${{ matrix.image }} sh -c "
+              apt-get update -q >/dev/null &&
+              apt-get install -y -q --no-install-recommends git tmux curl ca-certificates >/dev/null &&
+              git config --global --add safe.directory /src && git --version &&
+              cd /src && GOMODCACHE=/gomod GOCACHE=/tmp/gocache /goroot/bin/go test ./... &&
+              sh scripts/linux-smoke.sh /smoke/gitnest"
 
   # Build the release packages and install the .deb on a clean Debian.
   package:

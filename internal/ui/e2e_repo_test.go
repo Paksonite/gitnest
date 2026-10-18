@@ -4,6 +4,7 @@ package ui
 // repositories (see e2e_test.go for drive and press).
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -527,7 +528,14 @@ func TestE2EStash(t *testing.T) {
 		t.Fatalf("pop: %q, %d stashes", got, len(a.rp.stashes))
 	}
 
-	// S stashes only the staged changes.
+	// S stashes only the staged changes (git 2.35 and newer; older ones say so).
+	if v, _ := gitx.GitVersion(context.Background()); !gitx.VersionAtLeast(v, gitx.MinGitVersion) {
+		press(t, a, "1", "S")
+		if !strings.Contains(a.toast, "needs git") {
+			t.Errorf("S on git %s: %q", v, a.toast)
+		}
+		return
+	}
 	sh(t, lib, "add", "new.txt")
 	press(t, a, "1", "S", "type:staged only", "enter")
 	if got := sh(t, lib, "status", "--porcelain"); got != "M lib.txt" {

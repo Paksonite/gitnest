@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"github.com/charmbracelet/bubbles/cursor"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
@@ -51,6 +52,10 @@ func joinMessage(subject, body string) string {
 
 func (ed *editor) message() string { return joinMessage(ed.subject.Value(), ed.body.Value()) }
 
+// cursorBlink makes the editor's cursor blink; tests turn it off, as each
+// blink is a timer the test harness would wait for.
+var cursorBlink = true
+
 func (a *App) openEditor(title, initial string, onSave func(msg string) tea.Cmd) tea.Cmd {
 	subj, body := splitMessage(initial)
 
@@ -72,6 +77,10 @@ func (a *App) openEditor(title, initial string, onSave func(msg string) tea.Cmd)
 	ta.SetValue(body)
 	ta.Blur()
 
+	if !cursorBlink {
+		ti.Cursor.SetMode(cursor.CursorStatic)
+		ta.Cursor.SetMode(cursor.CursorStatic)
+	}
 	a.ed = &editor{title: title, subject: ti, body: ta, onSave: onSave}
 	a.ed.initial = a.ed.message()
 	a.sizeEditor()

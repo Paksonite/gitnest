@@ -1,4 +1,5 @@
-# Preview builds of the ui-next branch as gitnest-dev, published to the
+# Preview builds of the ui-next branch as gitnest-dev (the ci workflow
+# tests the same commits through the ui-next pull request), published to the
 # rolling "dev" GitHub pre-release (replaced on every push). Being a
 # pre-release whose tag doesn't start with v, it never becomes "latest" and
 # never runs the release workflow: users of gitnest don't see it.
@@ -24,8 +25,6 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.27.x"
-      - name: Test
-        run: go test -short ./...
       - name: Build
         run: |
           set -euo pipefail

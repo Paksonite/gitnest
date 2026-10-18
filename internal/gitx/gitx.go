@@ -39,7 +39,7 @@ type Info struct {
 }
 
 func GetInfo(ctx context.Context, dir string) (Info, error) {
-	out, err := run(ctx, kRead, dir, nil, "status", "--porcelain=v2", "--branch", "--show-stash")
+	out, err := run(ctx, kRead, dir, nil, "status", "--porcelain=v2", "--branch")
 	if err != nil {
 		return Info{}, err
 	}
@@ -56,7 +56,11 @@ func GetInfo(ctx context.Context, dir string) (Info, error) {
 	if gitDir, common, ok := gitDirs(dir); ok {
 		in.State = stateIn(gitDir)
 		in.RemoteURL = remoteFromConfig(filepath.Join(common, "config"))
+		in.Stashes = fileLines(filepath.Join(common, "logs", "refs", "stash"))
 		return in, nil
+	}
+	if o, err := run(ctx, kRead, dir, nil, "stash", "list"); err == nil {
+		in.Stashes = countLines(o)
 	}
 	in.State, _ = GetState(ctx, dir)
 	if o, err := run(ctx, kRead, dir, nil, "config", "--get-regexp", `^remote\..*\.url$`); err == nil {
@@ -76,8 +80,6 @@ func parseStatusV2(out string) Info {
 		case strings.HasPrefix(l, "# branch.ab "):
 			in.Upstream = true
 			fmt.Sscanf(strings.TrimPrefix(l, "# branch.ab "), "+%d -%d", &in.Ahead, &in.Behind)
-		case strings.HasPrefix(l, "# stash "):
-			in.Stashes, _ = strconv.Atoi(strings.TrimPrefix(l, "# stash "))
 		case strings.HasPrefix(l, "#"):
 		default:
 			in.Changes++
@@ -1217,4 +1219,24 @@ func VersionAtLeast(have, want string) bool {
 		}
 	}
 	return true
+}
+
+// countLines counts the non-empty text's lines.
+func countLines(s string) int {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0
+	}
+	return strings.Count(s, "\n") + 1
+}
+
+// fileLines counts a file's lines (0 when it doesn't exist). The stash's
+// reflog has one per stash, on every git version (status --show-stash
+// only reports the count from git 2.35).
+func fileLines(path string) int {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	return countLines(string(b))
 }

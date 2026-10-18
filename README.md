@@ -24,16 +24,25 @@ only needs `git`.
 
 ## Install
 
+**macOS** (13+, Homebrew):
+
+```sh
+brew install --cask paksonite/tap/gitnest
+```
+
+**Linux** (Debian, Ubuntu, Fedora…; also works on macOS), one line without
+root — it checks the download, puts gitnest on your `PATH` and adds `gn` to
+your shell:
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Paksonite/gitnest/main/install.sh | sh
 ```
 
-On macOS and Linux (Debian, Ubuntu, Fedora…), without root. It checks the
-download, puts gitnest on your `PATH` and adds `gn` to your shell. Open a new
-terminal and run `gn`; `gitnest update` brings new versions.
-
-Homebrew, `.deb` and `.rpm` packages, other options and uninstalling:
-[docs/INSTALL.md](docs/INSTALL.md).
+Then run `gitnest`. For `gn` — gitnest that leaves you in the repository's
+folder — the one-line install sets it up; with Homebrew add
+`eval "$(gitnest shell zsh)"` to `~/.zshrc`. `gitnest update` brings new
+versions, whichever way you installed. Packages (`.deb`, `.rpm`), other
+options and uninstalling: [docs/INSTALL.md](docs/INSTALL.md).
 
 ## Quick start
 

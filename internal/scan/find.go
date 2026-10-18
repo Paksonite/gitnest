@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Paksonite/gitnest/internal/config"
 )
@@ -132,11 +133,22 @@ func (w *walker) visit(dir string, depth int) {
 	}
 }
 
+// racyWindow is how recent an mtime must be to be read again next time.
+const racyWindow = 2 * time.Second
+
 // read lists dir and decides whether it is a repository and which
 // subdirectories to descend into.
 func (w *walker) read(dir string, mod int64) *dirInfo {
 	w.stats.Read++
 	info := &dirInfo{Mod: mod}
+	// A directory changed just before this read may change again within
+	// the same tick of its file system's clock (coarse on some: network
+	// drives, containers) without its mtime moving. Don't trust such a
+	// recent mtime next time: read the directory again (as git does with
+	// "racily clean" files).
+	if time.Since(time.Unix(0, mod)) < racyWindow {
+		info.Mod = 0
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return info // unreadable: remember it so we retry only when it changes

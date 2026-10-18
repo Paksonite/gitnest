@@ -169,6 +169,10 @@ func e2eSetup(t *testing.T) (a *App, root, origin string) {
 		t.Fatal(err)
 	}
 	cfg, _, _ := config.Load()
+	// The background rescan and status timers fire after a minute and 15 s:
+	// the harness would wait for each (see drive). Tests trigger both
+	// themselves.
+	cfg.RescanInterval, cfg.StatusInterval = 0, 0
 	a = newApp(context.Background(), cfg, false, "", "")
 	a.w, a.h = 140, 40
 	drive(t, a, a.loadRepos())
@@ -323,5 +327,6 @@ func TestE2EList(t *testing.T) {
 func TestMain(m *testing.M) {
 	liveRefresh = time.Millisecond
 	previewDelay = time.Millisecond
+	cursorBlink = false
 	os.Exit(m.Run())
 }

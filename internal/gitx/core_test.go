@@ -142,6 +142,9 @@ func TestUpstreamAndFastForward(t *testing.T) {
 }
 
 func TestStashStagedAndBranch(t *testing.T) {
+	if v, _ := GitVersion(bg); !VersionAtLeast(v, MinGitVersion) {
+		t.Skipf("git stash push --staged needs git %s (this is %s); the app says so", MinGitVersion, v)
+	}
 	dir := newRepo(t)
 	commit(t, dir, "a.txt", "a\n", "first")
 	writeFile(t, dir, "a.txt", "staged\n")

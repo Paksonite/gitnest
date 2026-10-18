@@ -1,6 +1,6 @@
 # Install, update and uninstall
 
-- [Install](#install)
+- [Install](#install): [macOS (Homebrew)](#macos-homebrew), [Linux (one line)](#linux-one-line)
 - [Other ways to install](#other-ways-to-install)
 - [First start](#first-start)
 - [Shell integration: completion and `gn`](#shell-integration-completion-and-gn)
@@ -9,8 +9,23 @@
 
 ## Install
 
-On macOS 13+ (Apple Silicon or Intel) and Linux (amd64, arm64: Debian 12+,
-Ubuntu 22.04+, Fedora…), one line, without root:
+### macOS: Homebrew
+
+macOS 13 (Ventura) or newer, Apple Silicon or Intel:
+
+```sh
+brew install --cask paksonite/tap/gitnest
+```
+
+The cask installs zsh completion too; add the
+[shell integration](#shell-integration-completion-and-gn) for `gn`. git comes
+with the Command Line Tools, which macOS offers the first time you run `git`
+(or `brew install git`).
+
+### Linux: one line
+
+Debian 12+, Ubuntu 22.04+, Fedora and others (amd64, arm64), without root —
+and on macOS too, if you'd rather not use Homebrew:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Paksonite/gitnest/main/install.sh | sh
@@ -23,7 +38,7 @@ It:
 2. installs `gitnest` into `~/.local/bin` (`/usr/local/bin` when run as
    root);
 3. adds that folder to your `PATH` and the [shell integration](#shell-integration-completion-and-gn)
-   (`gn`, completion) to `~/.zshrc` or `~/.bashrc` (`~/.bash_profile` with
+   (`gn`, completion) to `~/.bashrc` or `~/.zshrc` (`~/.bash_profile` with
    bash on macOS) — each line once, marked "added by the gitnest installer".
 
 Open a new terminal (or `exec $SHELL`) and run `gn`. Running the line again
@@ -38,21 +53,13 @@ Options go after `sh -s --`:
 | `… \| sh -s -- --dev` | the `gitnest-dev` preview build, next to `gitnest` (see [preview builds](DEVELOPMENT.md#preview-builds-gitnest-dev)) |
 | `GITNEST_INSTALL_DIR=/opt/bin` | install somewhere else |
 
-gitnest needs **git** (2.35 or newer for everything; on Debian or Ubuntu:
-`sudo apt install git`, on macOS the Command Line Tools offer it the first
-time you run `git`).
+gitnest needs **git** 2.35 or newer for everything (`sudo apt install git`).
 
 > **Ubuntu 22.04** ships git 2.34. gitnest works with it, except "stash only
 > staged changes" (`S`), which needs git 2.35. For a newer git:
 > `sudo add-apt-repository ppa:git-core/ppa && sudo apt install git`.
 
 ## Other ways to install
-
-**Homebrew** (macOS):
-
-```sh
-brew install --cask paksonite/tap/gitnest
-```
 
 **Packages**: every release has `.deb` and `.rpm` packages for amd64 and
 arm64 on the [releases page](https://github.com/Paksonite/gitnest/releases):
@@ -125,8 +132,8 @@ gitnest update                     # install it (--check only looks)
 
 | Installed with | `gitnest update` runs |
 |---|---|
-| the install script, a release archive | downloads the release, checks it and replaces the binary in place |
 | Homebrew | `brew update && brew upgrade --cask gitnest` |
+| the install script, a release archive | downloads the release, checks it and replaces the binary in place |
 | `.deb` | downloads the new `.deb`, checks it, `sudo apt-get install` |
 | `.rpm` | the same with `sudo dnf install` (or `rpm -U`) |
 | `go install` | `go install …/cmd/gitnest@<new version>` |
@@ -139,8 +146,8 @@ release. `gitnest doctor` also says whether an update is waiting.
 
 | Installed with | Remove |
 |---|---|
-| the install script | `rm ~/.local/bin/gitnest`, and the lines marked "added by the gitnest installer" in `~/.zshrc` / `~/.bashrc` |
 | Homebrew | `brew uninstall --cask gitnest` |
+| the install script | `rm ~/.local/bin/gitnest`, and the lines marked "added by the gitnest installer" in `~/.zshrc` / `~/.bashrc` |
 | `.deb` / `.rpm` | `sudo apt remove gitnest` / `sudo dnf remove gitnest` |
 | `go install` | `rm "$(go env GOPATH)/bin/gitnest"` |
 

@@ -462,6 +462,10 @@ func (a *App) filesKey(s string) (tea.Cmd, bool) {
 		})
 		return nil, true
 	case actStashStaged:
+		if v, err := gitx.GitVersion(ctx); err == nil && !gitx.VersionAtLeast(v, gitx.MinGitVersion) {
+			a.setToast("stashing only the staged changes needs git "+gitx.MinGitVersion+" (you have "+v+"); s stashes everything", true)
+			return nil, true
+		}
 		a.ask("Stash staged changes — message", "", func(msg string) tea.Cmd {
 			return a.do("stash staged", func() error { return gitx.StashStaged(ctx, dir, msg) })
 		})
