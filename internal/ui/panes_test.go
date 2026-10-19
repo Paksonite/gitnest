@@ -2,6 +2,8 @@ package ui
 
 import (
 	"fmt"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -361,7 +363,11 @@ func TestCenterOff(t *testing.T) {
 
 // A window that changes size is cleared and drawn whole: terminals rewrap
 // the old frame, and redrawing only changed lines left pieces of it.
-func TestResizeClearsTheScreen(t *testing.T) {
+// A change of size never clears the screen (ESC[2J): iTerm2 moves what a
+// clear wipes into its scrollback, and the wheel then scrolls through old
+// frames. Bubble Tea redraws every line on a size message; once the size
+// settles, gitnest asks the terminal again and sends one more.
+func TestResizeRedrawsWithoutClearing(t *testing.T) {
 	s := shellOf(t, 120, 40, "/r/a")
 	real := [2]int{60, 30}
 	oldSize, oldDelay := termSize, settleDelay
@@ -369,42 +375,66 @@ func TestResizeClearsTheScreen(t *testing.T) {
 	settleDelay = 0
 	t.Cleanup(func() { termSize, settleDelay = oldSize, oldDelay })
 
-	// A change of size clears the screen and, once it has settled, looks
-	// again.
 	_, cmd := s.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
-	var kinds []string
-	var settled tea.Msg
-	for _, c := range cmd().(tea.BatchMsg) {
-		m := c()
-		kinds = append(kinds, fmt.Sprintf("%T", m))
-		if _, ok := m.(resizeSettledMsg); ok {
-			settled = m
-		}
+	if cmd == nil {
+		t.Fatal("a resize should schedule the settle")
 	}
-	if fmt.Sprint(kinds) != "[tea.clearScreenMsg ui.resizeSettledMsg]" {
-		t.Fatalf("resize: %v", kinds)
+	settled, ok := cmd().(resizeSettledMsg)
+	if !ok {
+		t.Fatalf("resize: %T, want only the settle (no clear)", cmd())
 	}
 	if _, cmd := s.Update(tea.WindowSizeMsg{Width: 60, Height: 30}); cmd != nil {
-		t.Error("the same size again needs no clearing")
+		t.Error("the same size again (the settle's redraw) must not start another settle")
 	}
 
-	// Settled at the size the terminal has: draw it all once more.
-	if _, cmd := s.Update(settled); cmd == nil || fmt.Sprintf("%T", cmd()) != "tea.clearScreenMsg" {
-		t.Errorf("settled: %v", cmd)
+	// Settled at the size the terminal has: the same size once more, which
+	// makes Bubble Tea redraw every line.
+	_, cmd = s.Update(settled)
+	if m, ok := cmd().(tea.WindowSizeMsg); !ok || m.Width != 60 || m.Height != 30 {
+		t.Errorf("settled: %#v", cmd())
 	}
-	// The terminal moved on without a word (a frame for a size already
-	// left, iTerm2 rewrapping after the last change): its real size wins.
+	// The terminal moved on without a word: its real size wins.
 	real = [2]int{52, 30}
 	_, cmd = s.Update(settled)
-	if cmd == nil {
-		t.Fatal("settled at a stale size should resize")
-	}
-	if m, ok := cmd().(tea.WindowSizeMsg); !ok || m.Width != 52 || m.Height != 30 {
-		t.Errorf("settled: %#v", cmd())
+	if m, ok := cmd().(tea.WindowSizeMsg); !ok || m.Width != 52 {
+		t.Errorf("settled at a stale size: %#v", cmd())
 	}
 	// A settle that another change overtook does nothing.
 	s.Update(tea.WindowSizeMsg{Width: 52, Height: 30})
 	if _, cmd := s.Update(settled); cmd != nil {
 		t.Error("an overtaken settle should do nothing")
+	}
+}
+
+// Nothing in gitnest clears the whole screen.
+func TestNoFullScreenClears(t *testing.T) {
+	files, _ := filepath.Glob("*.go")
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		b, _ := os.ReadFile(f)
+		if strings.Contains(string(b), "tea.ClearScreen") || strings.Contains(string(b), `\x1b[2J`) {
+			t.Errorf("%s clears the screen; iTerm2 keeps the cleared frame in its scrollback", f)
+		}
+	}
+}
+
+// The bottom-right cell is never written, but the renderer erases it (the
+// rest of a line shorter than the window) with the current background:
+// the last line must end on the theme's, or a square of the terminal's own
+// colour shows in the corner.
+func TestPaintScreenLeavesTheCornerOnTheThemeBackground(t *testing.T) {
+	old, oldProfile := cBack, lipgloss.ColorProfile()
+	cBack = lipgloss.Color("#0b1417")
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { cBack = old; lipgloss.SetColorProfile(oldProfile) })
+	lines := strings.Split(paintScreen("top\nfooter", 20, 3), "\n")
+	last := lines[len(lines)-1]
+	if w := ansi.StringWidth(last); w != 19 {
+		t.Errorf("last line is %d wide, want 19 (the corner stays unwritten)", w)
+	}
+	if !strings.HasSuffix(last, themeSeq(cBack)) {
+		t.Errorf("last line ends %q, want the theme background", last[max(0, len(last)-30):])
 	}
 }

@@ -176,13 +176,15 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.resize()
 		if resized {
 			// Terminals rewrap what was on screen when the window changes
-			// (iTerm2 splitting a pane, say); redrawing only the changed
-			// lines would leave pieces of the old frame behind, at the
-			// bottom right especially. Clear and draw it all — and once
-			// more when the resizing stops (see resizeSettledMsg).
+			// (iTerm2 splitting a pane, say). Bubble Tea redraws every line
+			// on a new size (each line covers the whole width), so nothing
+			// of the old frame stays; once more when the resizing stops
+			// (see resizeSettledMsg). The screen is never cleared (ESC[2J):
+			// iTerm2 moves what a clear wipes into its scrollback, and the
+			// wheel then scrolls through old frames of gitnest.
 			s.resizeSeq++
 			seq := s.resizeSeq
-			return s, tea.Batch(tea.ClearScreen, tea.Tick(settleDelay, func(time.Time) tea.Msg { return resizeSettledMsg{seq} }))
+			return s, tea.Tick(settleDelay, func(time.Time) tea.Msg { return resizeSettledMsg{seq} })
 		}
 		return s, nil
 	case resizeSettledMsg:
@@ -193,11 +195,14 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// terminal has already left, and terminals such as iTerm2 rewrap
 		// the screen after the last size change, so the last frame ends up
 		// wider than the window: every line spills onto the next. Ask the
-		// terminal for its size again and draw everything once more.
-		if w, h, ok := termSize(); ok && (w != s.w || h != s.h) {
-			return s, func() tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} }
+		// terminal for its size again and draw everything once more: a
+		// size message, even the same size, makes Bubble Tea redraw every
+		// line.
+		w, h, ok := termSize()
+		if !ok {
+			w, h = s.w, s.h
 		}
-		return s, tea.ClearScreen
+		return s, func() tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} }
 	case tea.KeyMsg:
 		return s, s.onKey(m)
 	case tea.MouseMsg:
