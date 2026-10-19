@@ -5,6 +5,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -71,6 +72,33 @@ func TestOnScanMarksNewAndDropsRemoved(t *testing.T) {
 	}
 	if a.onScan(scanMsg{paths: []string{"a", "c"}}) != nil {
 		t.Error("unchanged scan should do nothing")
+	}
+}
+
+// R (and the start from cache) refresh every status while the folders are
+// scanned again. When the scan wins, a repository moved elsewhere is found
+// at its new place first; the refresh of the old list, coming in after,
+// must neither drop it nor bring back the old place.
+func TestStaleRefreshAfterScanKeepsMovedRepositories(t *testing.T) {
+	a := testApp("/home/gitnest", "/home/repos/x")
+	stale := []scan.Repo{{Path: "/home/gitnest", Name: "gitnest"}, {Path: "/home/repos/x", Name: "x", Info: gitx.Info{Changes: 2}}}
+	moved := "/home/repos/github.com/gitnest"
+	a.onScan(scanMsg{paths: []string{moved, "/home/repos/x"}, full: true})
+	a.onStatus(statusMsg{repos: []scan.Repo{{Path: moved, Name: "gitnest"}}, asked: []string{moved}, added: true})
+	a.onRepos(reposMsg{repos: stale}) // the refresh R started with the old paths
+	got := listed(a)
+	sort.Strings(got)
+	if !reflect.DeepEqual(got, []string{moved, "/home/repos/x"}) {
+		t.Fatalf("list = %v", got)
+	}
+	for _, r := range a.rs.all {
+		if r.Path == "/home/repos/x" && r.Changes != 2 {
+			t.Error("the refresh's status is used for the repositories it read")
+		}
+	}
+	// And the next scan sees nothing new: the list and the scan agree.
+	if a.onScan(scanMsg{paths: []string{moved, "/home/repos/x"}}) != nil {
+		t.Error("a scan after the refresh should find no changes")
 	}
 }
 
