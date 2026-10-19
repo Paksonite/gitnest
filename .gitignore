@@ -2,4 +2,3 @@ bin/
 dist/
 .DS_Store
 completions/
-e2e/.work/

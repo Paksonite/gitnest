@@ -46,4 +46,4 @@ jobs:
           gh release delete dev --yes --cleanup-tag 2>/dev/null || true
           gh release create dev dist/* --prerelease --latest=false --target "$GITHUB_SHA" \
             --title "gitnest-dev (ui-next @ $SHA)" \
-            --notes "Preview build of the ui-next branch at $SHA — not a release. Install as gitnest-dev next to gitnest (see docs/DEVELOPMENT.md); gitnest-dev update fetches the newest one."
+            --notes "Preview build of the ui-next branch at $SHA — not a release. Install as gitnest-dev next to gitnest (see docs/INSTALL.md); gitnest-dev update fetches the newest one."

@@ -63,6 +63,5 @@ and `o` to quit into a repository's folder.
 - [Configuration](docs/CONFIG.md): `config.yaml` and environment variables
 - [Themes and icons](docs/THEMES.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
-- [Development](docs/DEVELOPMENT.md): building, tests, releases, preview builds
 
 License: [MIT](LICENSE).

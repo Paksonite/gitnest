@@ -1,9 +1,0 @@
-# A plain git server over SSH: bare repositories in /srv/git (the git
-# user's home), reachable as git@gitserver:<name>.git with the test key.
-FROM debian:12-slim
-RUN apt-get update -q && apt-get install -y -q --no-install-recommends openssh-server git >/dev/null \
- && useradd -m -d /srv/git -s /usr/bin/git-shell git && mkdir -p /run/sshd /srv/git/.ssh
-COPY e2e/key.pub /srv/git/.ssh/authorized_keys
-RUN chown -R git:git /srv/git && chmod 700 /srv/git/.ssh && chmod 600 /srv/git/.ssh/authorized_keys \
- && sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
-CMD ["/usr/sbin/sshd", "-D", "-e"]
