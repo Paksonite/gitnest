@@ -87,7 +87,7 @@ func TestFocusTowards(t *testing.T) {
 	steps := []struct {
 		key  string
 		want int
-	}{{"ctrl+right", 1}, {"ctrl+down", 3}, {"ctrl+left", 2}, {"ctrl+up", 0}, {"ctrl+up", 0}, {"alt+right", 1}}
+	}{{"alt+right", 1}, {"alt+down", 3}, {"alt+left", 2}, {"alt+up", 0}, {"alt+up", 0}, {"alt+f", 1}, {"alt+b", 0}, {"ctrl+right", 0}}
 	for _, st := range steps {
 		press(t, s, st.key)
 		if s.focus != st.want {
@@ -125,9 +125,9 @@ func TestPanesOpenFocusClose(t *testing.T) {
 	if s.focused().app.sh != s.panes[0].app.sh {
 		t.Error("panes must share the clipboard")
 	}
-	press(t, s, "ctrl+left")
+	press(t, s, "alt+left")
 	if s.focus != 0 {
-		t.Errorf("ctrl+left: focus %d", s.focus)
+		t.Errorf("alt+left: focus %d", s.focus)
 	}
 	// While typing a search, ctrl+n moves in the results instead.
 	press(t, s, "/", "ctrl+n")
@@ -231,7 +231,7 @@ func TestE2EPanes(t *testing.T) {
 	}
 
 	// Commit in app (pane 1).
-	press(t, s, "ctrl+left")
+	press(t, s, "alt+left")
 	os.WriteFile(filepath.Join(app, "feature.txt"), []byte("feature\n"), 0o644)
 	drive(t, s, wrap(s.panes[0].id, s.panes[0].app.onRepoTick()))
 	press(t, s, "a", "c", "type:Add feature", "enter")
@@ -239,7 +239,7 @@ func TestE2EPanes(t *testing.T) {
 		t.Fatalf("commit in app: %q", got)
 	}
 	// Copy it, paste into lib (pane 2).
-	press(t, s, "3", "c", "ctrl+right", "3", "v")
+	press(t, s, "3", "c", "alt+right", "3", "v")
 	if p := s.panes[1].app.p; p == nil || !strings.Contains(p.title, "as patches from app") {
 		t.Fatalf("paste prompt in pane 2: %+v", p)
 	}
@@ -312,7 +312,7 @@ func TestTabBar(t *testing.T) {
 			}
 		}
 	}
-	if bar := tabBar(titles[:3], 0, 200); !strings.Contains(bar, "ctrl+←/→") || strings.Contains(bar, "‹") || strings.Contains(bar, "›") {
+	if bar := tabBar(titles[:3], 0, 200); !strings.Contains(bar, "alt+←/→") || strings.Contains(bar, "‹") || strings.Contains(bar, "›") {
 		t.Errorf("all tabs fit: %q", bar)
 	}
 }

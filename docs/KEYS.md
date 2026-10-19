@@ -123,7 +123,7 @@ gitnests on screen at once in one terminal:
 | Key | |
 |---|---|
 | `ctrl+n` | open another pane next to the current one; pick its repository from the list |
-| `ctrl+←` `ctrl+→` `ctrl+↑` `ctrl+↓` | move to the pane in that direction (`alt+arrows` work too) |
+| `alt+←` `alt+→` `alt+↑` `alt+↓` | move to the pane in that direction |
 | `ctrl+g` | layout: grid (2×2 for four, 3×2 for six…), side by side, stacked |
 | `ctrl+w` | close the pane (the last one quits); `q` on a pane's list closes it too |
 
@@ -137,11 +137,10 @@ follows the active one and `‹ 3` / `4 ›` count the tabs hidden on each side.
 The layout is remembered. Commits copied with `c` in one pane can be pasted with `v` in
 another.
 
-> **macOS:** by default `ctrl+←/→/↑/↓` switch Spaces and open Mission
-> Control, so the terminal never sees them. Either turn those shortcuts off in
-> System Settings → Keyboard → Keyboard Shortcuts → Mission Control, or use
-> `alt+arrows` (in iTerm2 set Profiles → Keys → Left/Right Option key to
-> "Esc+").
+`ctrl+arrows` are left alone, for switching desktops (Spaces on macOS,
+workspaces on Linux). On a Mac `alt` is `option`; where the terminal
+turns `option+←/→` into word jumps (`esc b` / `esc f`) they switch panes too,
+and in iTerm2 you may need Profiles → Keys → Left/Right Option key → "Esc+".
 
 ---
 

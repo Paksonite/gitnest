@@ -351,10 +351,10 @@ var keymap = [scopes][]binding{
 	scPanes: {
 		b(actNewPane, "open another pane next to this one, starting on the list", "pane", "ctrl+n"),
 		b(actClosePane, "close this pane (the last one quits)", "", "ctrl+w"),
-		b(actPaneLeft, "move to the pane in that direction (alt+arrows work too)", "", "ctrl+left", "alt+left").labeled("ctrl+←→↑↓"),
-		b(actPaneRight, "focus the pane on the right", "", "ctrl+right", "alt+right").hidden(),
-		b(actPaneUp, "focus the pane above", "", "ctrl+up", "alt+up").hidden(),
-		b(actPaneDown, "focus the pane below", "", "ctrl+down", "alt+down").hidden(),
+		b(actPaneLeft, "move to the pane in that direction", "", "alt+left", "alt+b").labeled("alt+←→↑↓"),
+		b(actPaneRight, "focus the pane on the right", "", "alt+right", "alt+f").hidden(),
+		b(actPaneUp, "focus the pane above", "", "alt+up").hidden(),
+		b(actPaneDown, "focus the pane below", "", "alt+down").hidden(),
 		b(actPaneLayout, "pane layout: grid, side by side, stacked", "", "ctrl+g"),
 	},
 	scDash: {
