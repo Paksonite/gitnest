@@ -9,7 +9,7 @@ Built in: `gitnest-dark` and `gitnest-light` (the defaults: deep green-black
 or light with an emerald accent), `catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`,
 `gruvbox-light`, `nord`, `solarized-dark`, `solarized-light`, `tokyo-night`,
 `dracula`, and `terminal`, which uses your terminal's own 16 colours (best
-for terminals without true colour, such as macOS Terminal.app).
+for terminals without true colour, such as Terminal.app before macOS 26).
 
 Your own theme is a small file in `~/.config/gitnest/themes/` that extends
 another and changes a few colours:

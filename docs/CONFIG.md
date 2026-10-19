@@ -28,7 +28,10 @@ theme:
 ```
 
 `GITNEST_ICONS=nerd` overrides `icons` for one session;
-`GITNEST_NO_UPDATE_CHECK=1` turns the release check off.
+`GITNEST_NO_UPDATE_CHECK=1` turns the release check off;
+`GITNEST_COLOR=truecolor`, `256`, `16` or `none` sets the colours the terminal
+gets (by default true colour wherever `TERM` says 256 colours, so the themes
+look the same over SSH and in tmux as on the Mac; `gitnest doctor` says which).
 
 Themes and icons: [THEMES.md](THEMES.md). Shell integration: [INSTALL.md](INSTALL.md#shell-integration-completion-and-gn).
 

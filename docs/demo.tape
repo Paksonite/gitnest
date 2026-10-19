@@ -4,6 +4,7 @@
 #
 # Needs vhs (brew install vhs), go and git. docs/demo-setup.sh builds gitnest
 # and a throwaway home with fake repositories, so nothing of yours shows up.
+# The terminal around gitnest has the gitnest-dark background.
 
 Output docs/demo.gif
 
@@ -14,25 +15,31 @@ Set Height 660
 Set Padding 16
 Set Framerate 20
 Set TypingSpeed 70ms
-Set Theme "Catppuccin Mocha"
+Set Theme { "name": "gitnest-dark", "background": "#0b1417", "foreground": "#d6e3e1", "cursor": "#2fd896", "selection": "#1d4a44", "black": "#0b1417", "red": "#f87171", "green": "#4ade80", "yellow": "#facc15", "blue": "#5fb3ff", "magenta": "#f472b6", "cyan": "#2fd896", "white": "#d6e3e1", "brightBlack": "#6f8a89", "brightRed": "#f87171", "brightGreen": "#4ade80", "brightYellow": "#facc15", "brightBlue": "#5fb3ff", "brightMagenta": "#f472b6", "brightCyan": "#2fd896", "brightWhite": "#ffffff" }
 
 Hide
 Type 'eval "$(docs/demo-setup.sh)" && PS1="$ " && clear'
 Enter
-Sleep 12s
+Sleep 15s
 Show
 
-# The list: every repository, grouped by folder, with its status.
+# The dashboard: activity, what needs attention, the most active repositories.
 Type "gitnest"
 Sleep 300ms
 Enter
-Sleep 1.2s
-Type "`"
+Sleep 3.5s
+
+# The list: every repository, grouped by folder, with its status.
+Type "H"
 Sleep 1.5s
 Down@350ms 4
-Sleep 800ms
+Sleep 600ms
 
-# Only the dirty ones, then everything again.
+# View & filters, then only the dirty repositories and everything again.
+Type "v"
+Sleep 2s
+Escape
+Sleep 500ms
 Type "d"
 Sleep 1.5s
 Type "d"
@@ -48,7 +55,7 @@ Sleep 1.6s
 Type "/ap"
 Sleep 1s
 Enter
-Sleep 1.2s
+Sleep 1.5s
 Space
 Sleep 700ms
 Type "c"
@@ -60,9 +67,18 @@ Sleep 1.2s
 Type "2"
 Sleep 900ms
 Type "3"
-Sleep 1.2s
+Sleep 1.5s
 
-# Back to the list; up to four repositories side by side in panes.
+# Every file of the repository, with syntax colours.
+Type "B"
+Sleep 1s
+Down@400ms 3
+Sleep 1.5s
+Escape
+Sleep 600ms
+
+# Back to the list; repositories side by side in panes (alt+arrows move
+# between them; VHS can't send alt, so the demo only opens them).
 Escape
 Sleep 800ms
 Ctrl+n
@@ -82,10 +98,4 @@ Sleep 900ms
 Type "/docs"
 Sleep 700ms
 Enter
-Sleep 1.5s
-Ctrl+Left
-Sleep 900ms
-Ctrl+Up
-Sleep 900ms
-Ctrl+Right
-Sleep 2s
+Sleep 3s

@@ -16,7 +16,10 @@ demo=${demo%/}
 rm -rf "$demo"
 mkdir -p "$demo/bin" "$demo/remotes" "$demo/home/repos" "$demo/home/.config/gitnest"
 
-(cd "$root" && go build -o "$demo/bin/gitnest" ./cmd/gitnest) >&2
+# The version in the footer: the latest release tag rather than a
+# pseudo-version.
+version=$(git -C "$root" describe --tags --abbrev=0 --exclude dev --exclude 'pre-*' 2>/dev/null || echo dev)
+(cd "$root" && go build -ldflags "-X main.version=${version#v}" -o "$demo/bin/gitnest" ./cmd/gitnest) >&2
 
 export HOME="$demo/home" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 export GIT_AUTHOR_NAME="Ann Example" GIT_AUTHOR_EMAIL=ann@example.com
@@ -119,9 +122,23 @@ push
 upstream 90 "Release 2.4.0"
 upstream 60 "Update dependencies"
 
-# cli: clean, one commit behind.
+# cli: clean, one commit behind, with half a year of history from three
+# people so the dashboard's activity has something to show.
 repo github.example.com/ann/cli github.example.com/ann/cli
 commit 20000 main.go "Initial commit" "package main"
+RANDOM=7
+msgs=("Fix flag parsing" "Add --quiet" "Tidy help text" "Speed up startup" "Update dependencies" "Handle missing config" "Add tests" "Refactor output")
+people=("Ann Example:ann" "Bob Example:bob" "Cleo Example:cleo")
+for day in $(seq 182 -1 2); do
+	n=$((RANDOM % 5 - 1))
+	if (((now / 86400 - day + 4) % 7 >= 5)); then n=$((n / 2)); fi # quieter weekends
+	for ((i = 0; i < n; i++)); do
+		who=${people[RANDOM % 3]}
+		GIT_AUTHOR_NAME=${who%%:*} GIT_AUTHOR_EMAIL=${who##*:}@example.com
+		commit $((day * 1440 - i * 53)) "log/$((day % 9)).md" "${msgs[RANDOM % 8]}" "$day.$i"
+	done
+done
+export GIT_AUTHOR_NAME="Ann Example" GIT_AUTHOR_EMAIL=ann@example.com
 commit 15000 README.md "Add usage" "# cli"
 push
 upstream 240 "Add --json flag"
