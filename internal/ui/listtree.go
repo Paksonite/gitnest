@@ -188,9 +188,13 @@ func (a *App) buildRows() {
 
 // syncCount says how the repositories of a group stand against their
 // upstreams: how many have commits to push, to pull, and how many track one.
-type syncCount struct{ ahead, behind, tracked int }
+type syncCount struct{ ahead, behind, gone, tracked int }
 
 func (s syncCount) add(r scan.Repo) syncCount {
+	if r.UpstreamGone {
+		s.tracked++
+		s.gone++
+	}
 	if r.Upstream {
 		s.tracked++
 		if r.Ahead > 0 {
@@ -204,12 +208,13 @@ func (s syncCount) add(r scan.Repo) syncCount {
 }
 
 // styled is "✓" when every tracking repository is up to date, else how many
-// are ahead (↑) and behind (↓); nothing when none tracks an upstream.
+// are ahead (↑) and behind (↓) and whose upstream is gone (✗); nothing when
+// none tracks an upstream.
 func (s syncCount) styled() (plain, styled string) {
 	switch {
 	case s.tracked == 0:
 		return "", ""
-	case s.ahead == 0 && s.behind == 0:
+	case s.ahead == 0 && s.behind == 0 && s.gone == 0:
 		return "✓", fg(cGreen, "✓")
 	}
 	var ps, ss []string
@@ -218,6 +223,9 @@ func (s syncCount) styled() (plain, styled string) {
 	}
 	if s.behind > 0 {
 		ps, ss = append(ps, "↓"+strconv.Itoa(s.behind)), append(ss, fg(cRed, "↓"+strconv.Itoa(s.behind)))
+	}
+	if s.gone > 0 {
+		ps, ss = append(ps, "✗"+strconv.Itoa(s.gone)), append(ss, fg(cRed, "✗"+strconv.Itoa(s.gone)))
 	}
 	return strings.Join(ps, " "), strings.Join(ss, " ")
 }
