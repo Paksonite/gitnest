@@ -147,6 +147,9 @@ func broadcast(msg tea.Msg) bool {
 }
 
 func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if k, ok := metaArrow(msg); ok {
+		msg = k
+	}
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
 		resized := s.w != 0 && (s.w != m.Width || s.h != m.Height)

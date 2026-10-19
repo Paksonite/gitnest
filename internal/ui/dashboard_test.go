@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"testing"
 	"time"
@@ -93,6 +94,15 @@ func TestSparklineAndHeatmap(t *testing.T) {
 	rows := heatmap(map[time.Time]int{day(0): 4, day(1): 1}, now, 60, false)
 	if len(rows) != 9 || !strings.HasPrefix(rows[1], "Mon") || !strings.HasPrefix(rows[7], "Sun") || !strings.Contains(rows[8], "less") {
 		t.Errorf("heatmap rows:\n%s", strings.Join(rows, "\n"))
+	}
+	// Month names never run into each other ("ApMay"), whatever the day.
+	for d := 0; d < 400; d += 3 {
+		at := now.AddDate(0, 0, -d)
+		for _, w := range strings.Fields(ansi.Strip(heatmap(nil, at, 60, false)[0])) {
+			if _, err := time.Parse("Jan", w); err != nil {
+				t.Fatalf("%s: month row %q", at.Format("2006-01-02"), ansi.Strip(heatmap(nil, at, 60, false)[0]))
+			}
+		}
 	}
 	if weekStart(now).Weekday() != time.Monday {
 		t.Error("weeks start on Monday")

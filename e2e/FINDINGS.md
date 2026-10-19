@@ -1,8 +1,8 @@
 # E2E findings
 
-Run 2026-10-19 08:35 on arm64, gitnest from `72ed42c`; `python3 e2e/run.py` reproduces it.
+Run 2026-10-19 09:27 on arm64, gitnest from `647f7b3`; `python3 e2e/run.py` reproduces it.
 
-**235 of 235 checks pass.**
+**237 of 237 checks pass.**
 
 ## All checks
 
@@ -203,6 +203,8 @@ Run 2026-10-19 08:35 on arm64, gitnest from `72ed42c`; `python3 e2e/run.py` repr
 | panes | alt+← then alt+↓ go round the grid | ✓ |
 | panes | esc f (option+→ on a Mac) focuses the right pane | ✓ |
 | panes | esc b (option+←) focuses the left pane | ✓ |
+| panes | iTerm2's option+↑ (ESC[1;9A) focuses the pane above | ✓ |
+| panes | iTerm2's option+↓ (ESC[1;9B) comes back down | ✓ |
 | panes | ctrl+arrows are left to the desktop | ✓ |
 | panes | ctrl+g changes the layout | ✓ |
 | panes | seven panes become tabs | ✓ |
