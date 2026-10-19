@@ -112,9 +112,11 @@ func (a *App) onRepos(m reposMsg) tea.Cmd {
 	rs := &a.rs
 	rs.loading = m.cached // cached rows are shown while fresh status loads
 	keep := a.selectedKey()
-	rs.all = m.repos
 	if m.paths != nil {
 		rs.known = m.paths
+		rs.all = m.repos
+	} else {
+		rs.all = refreshed(rs.all, m.repos, rs.known)
 	}
 	a.rebuildView(keep)
 	var cmds []tea.Cmd
@@ -125,6 +127,36 @@ func (a *App) onRepos(m reposMsg) tea.Cmd {
 	}
 	cmds = append(cmds, a.previewCmd())
 	return tea.Batch(cmds...)
+}
+
+// refreshed merges a status refresh of the whole list into it. The refresh
+// read the paths listed when it started; a scan that finished meanwhile may
+// have found repositories since (rows the refresh doesn't have: kept) and
+// lost others (moved or deleted: not brought back). known is what the
+// latest scan found.
+func refreshed(rows, fresh []scan.Repo, known []string) []scan.Repo {
+	if known == nil { // no scan yet: the refresh is all there is
+		return fresh
+	}
+	in := make(map[string]bool, len(known))
+	for _, p := range known {
+		in[p] = true
+	}
+	out := make([]scan.Repo, 0, len(known))
+	got := map[string]bool{}
+	for _, r := range fresh {
+		if in[r.Path] {
+			out = append(out, r)
+			got[r.Path] = true
+		}
+	}
+	for _, r := range rows {
+		if in[r.Path] && !got[r.Path] {
+			out = append(out, r)
+			got[r.Path] = true
+		}
+	}
+	return out
 }
 
 func (a *App) onScan(m scanMsg) tea.Cmd {
