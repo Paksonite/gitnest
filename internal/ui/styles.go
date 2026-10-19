@@ -284,6 +284,12 @@ func paintScreen(view string, w, h int) string {
 		}
 		lines[i] = paintBG(fit(l, width), seq)
 	}
+	// The renderer clears what is left of a line shorter than the window
+	// (erase to the end of the line), and terminals clear with the current
+	// background: end the last line on the theme's, so the bottom-right
+	// cell gets it too instead of the terminal's own (a square of another
+	// colour in the corner).
+	lines[len(lines)-1] += seq
 	return strings.Join(lines, "\n")
 }
 
