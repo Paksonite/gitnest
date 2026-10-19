@@ -707,6 +707,10 @@ def panes(c):
     c.step("esc f (option+→ on a Mac) focuses the right pane", lambda: t.wait("● 4 ·"))
     client("tmux send-keys -t t -H 1b 62")  # esc b: option+←
     c.step("esc b (option+←) focuses the left pane", lambda: t.wait("● 3 ·"))
+    client("tmux send-keys -t t -H 1b 5b 31 3b 39 41")  # ESC[1;9A: iTerm2's option+↑
+    c.step("iTerm2's option+↑ (ESC[1;9A) focuses the pane above", lambda: t.wait("● 1 ·"))
+    client("tmux send-keys -t t -H 1b 5b 31 3b 39 42")  # ESC[1;9B: option+↓
+    c.step("iTerm2's option+↓ (ESC[1;9B) comes back down", lambda: t.wait("● 3 ·"))
     t.keys("C-Up", "C-Right")
     c.step("ctrl+arrows are left to the desktop", lambda: (time.sleep(0.5), t.wait("● 3 ·")))
     t.keys("C-g")

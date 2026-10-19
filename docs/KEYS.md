@@ -138,9 +138,9 @@ The layout is remembered. Commits copied with `c` in one pane can be pasted with
 another.
 
 `ctrl+arrows` are left alone, for switching desktops (Spaces on macOS,
-workspaces on Linux). On a Mac `alt` is `option`; where the terminal
-turns `option+←/→` into word jumps (`esc b` / `esc f`) they switch panes too,
-and in iTerm2 you may need Profiles → Keys → Left/Right Option key → "Esc+".
+workspaces on Linux). On a Mac `alt` is `option`: it works as it comes in
+iTerm2, Ghostty, kitty and WezTerm, and where the terminal turns
+`option+←/→` into word jumps (`esc b` / `esc f`, as Terminal.app does).
 
 ---
 

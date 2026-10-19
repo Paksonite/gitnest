@@ -179,10 +179,12 @@ func (a *App) viewDashboard() string {
 		body := lipgloss.Place(a.w, bodyH, lipgloss.Center, lipgloss.Center, fg(cDim, msg))
 		return strings.Join([]string{fit(head, a.w), body, a.footer(hints(scDash, scGlobal))}, "\n")
 	}
-	wide := a.w >= 110
-	heatW := min(a.w, 2*heatWeeks+10)
-	if wide {
-		heatW = 2*heatWeeks + 10
+	// Two columns once the Overview fits next to the full heatmap; below
+	// that the panels stack and the heatmap takes the whole width.
+	heatW := 2*heatWeeks + 10
+	wide := a.w >= heatW+28
+	if !wide {
+		heatW = a.w
 	}
 	heatH := 12
 	var top string
@@ -381,7 +383,7 @@ func overviewLines(o overview, byDay map[time.Time]int, now time.Time, w int) []
 		lines = append(lines, field("Busiest day", [...]string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}[busiest]))
 	}
 	if streak > 0 {
-		lines = append(lines, field("Streak", fmt.Sprintf("%d day(s) in a row", streak)))
+		lines = append(lines, field("Streak", fmt.Sprintf("%d %s in a row", streak, map[bool]string{true: "day", false: "days"}[streak == 1])))
 	}
 	return lines
 }
@@ -398,7 +400,9 @@ func heatmap(byDay map[time.Time]int, now time.Time, w int, loading bool) []stri
 	for _, n := range byDay {
 		top = max(top, n)
 	}
-	levels := []lipgloss.TerminalColor{tint(cAccent, 0.12), tint(cAccent, 0.35), tint(cAccent, 0.6), tint(cAccent, 0.8), cAccent}
+	// Days without commits get a grey tile, plain to see on the panel (a
+	// faint accent vanished there, and in GIFs).
+	levels := []lipgloss.TerminalColor{tint(cDim, 0.35), tint(cAccent, 0.35), tint(cAccent, 0.6), tint(cAccent, 0.8), cAccent}
 	level := func(n int) int {
 		if n == 0 || top == 0 {
 			return 0
@@ -407,13 +411,18 @@ func heatmap(byDay map[time.Time]int, now time.Time, w int, loading bool) []stri
 	}
 	// Month names above the week where a month starts.
 	months := []rune(strings.Repeat(" ", 4+2*weeks))
+	free := 0 // where the last name ends: names keep a space between them
 	for c := 0; c < weeks; c++ {
 		first := start.AddDate(0, 0, 7*c)
+		if c == 0 && first.AddDate(0, 0, 7).Month() != first.Month() {
+			continue // the next week's month needs the room more
+		}
 		if c == 0 || first.Month() != first.AddDate(0, 0, -7).Month() {
 			name := []rune(first.Format("Jan"))
 			at := 4 + 2*c
-			if at+len(name) <= len(months) {
+			if at+len(name) <= len(months) && at > free {
 				copy(months[at:], name)
+				free = at + len(name)
 			}
 		}
 	}
