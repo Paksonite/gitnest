@@ -363,10 +363,48 @@ func TestCenterOff(t *testing.T) {
 // the old frame, and redrawing only changed lines left pieces of it.
 func TestResizeClearsTheScreen(t *testing.T) {
 	s := shellOf(t, 120, 40, "/r/a")
-	if _, cmd := s.Update(tea.WindowSizeMsg{Width: 60, Height: 30}); cmd == nil || fmt.Sprintf("%T", cmd()) != "tea.clearScreenMsg" {
-		t.Fatalf("resize should clear the screen, got %v", cmd)
+	real := [2]int{60, 30}
+	oldSize, oldDelay := termSize, settleDelay
+	termSize = func() (int, int, bool) { return real[0], real[1], true }
+	settleDelay = 0
+	t.Cleanup(func() { termSize, settleDelay = oldSize, oldDelay })
+
+	// A change of size clears the screen and, once it has settled, looks
+	// again.
+	_, cmd := s.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
+	var kinds []string
+	var settled tea.Msg
+	for _, c := range cmd().(tea.BatchMsg) {
+		m := c()
+		kinds = append(kinds, fmt.Sprintf("%T", m))
+		if _, ok := m.(resizeSettledMsg); ok {
+			settled = m
+		}
+	}
+	if fmt.Sprint(kinds) != "[tea.clearScreenMsg ui.resizeSettledMsg]" {
+		t.Fatalf("resize: %v", kinds)
 	}
 	if _, cmd := s.Update(tea.WindowSizeMsg{Width: 60, Height: 30}); cmd != nil {
 		t.Error("the same size again needs no clearing")
+	}
+
+	// Settled at the size the terminal has: draw it all once more.
+	if _, cmd := s.Update(settled); cmd == nil || fmt.Sprintf("%T", cmd()) != "tea.clearScreenMsg" {
+		t.Errorf("settled: %v", cmd)
+	}
+	// The terminal moved on without a word (a frame for a size already
+	// left, iTerm2 rewrapping after the last change): its real size wins.
+	real = [2]int{52, 30}
+	_, cmd = s.Update(settled)
+	if cmd == nil {
+		t.Fatal("settled at a stale size should resize")
+	}
+	if m, ok := cmd().(tea.WindowSizeMsg); !ok || m.Width != 52 || m.Height != 30 {
+		t.Errorf("settled: %#v", cmd())
+	}
+	// A settle that another change overtook does nothing.
+	s.Update(tea.WindowSizeMsg{Width: 52, Height: 30})
+	if _, cmd := s.Update(settled); cmd != nil {
+		t.Error("an overtaken settle should do nothing")
 	}
 }
