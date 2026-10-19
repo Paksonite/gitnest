@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"go/ast"
 	"maps"
+	"os"
 	"reflect"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/term"
 )
 
 // Shell holds several independent gitnests ("panes") in one terminal. Every
@@ -23,6 +26,8 @@ type Shell struct {
 	nextID int
 	w, h   int
 	mode   int // paneGrid, paneColumns or paneRows
+
+	resizeSeq int // counts size changes, for resizeSettledMsg
 }
 
 // Pane arrangements, cycled with ctrl+g.
@@ -146,6 +151,20 @@ func broadcast(msg tea.Msg) bool {
 	return false
 }
 
+// resizeSettledMsg comes settleDelay after a change of the window's size;
+// seq tells whether another change came since.
+type resizeSettledMsg struct{ seq int }
+
+// settleDelay is how long the window's size must stay put to count as
+// settled.
+var settleDelay = 150 * time.Millisecond
+
+// termSize asks the terminal for its size (a variable for tests).
+var termSize = func() (w, h int, ok bool) {
+	w, h, err := term.GetSize(os.Stdout.Fd())
+	return w, h, err == nil && w > 0 && h > 0
+}
+
 func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if k, ok := metaArrow(msg); ok {
 		msg = k
@@ -159,10 +178,26 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Terminals rewrap what was on screen when the window changes
 			// (iTerm2 splitting a pane, say); redrawing only the changed
 			// lines would leave pieces of the old frame behind, at the
-			// bottom right especially. Clear and draw it all.
-			return s, tea.ClearScreen
+			// bottom right especially. Clear and draw it all — and once
+			// more when the resizing stops (see resizeSettledMsg).
+			s.resizeSeq++
+			seq := s.resizeSeq
+			return s, tea.Batch(tea.ClearScreen, tea.Tick(settleDelay, func(time.Time) tea.Msg { return resizeSettledMsg{seq} }))
 		}
 		return s, nil
+	case resizeSettledMsg:
+		if m.seq != s.resizeSeq {
+			return s, nil // still resizing: a later one settles
+		}
+		// While a window is dragged, a frame can be drawn for a size the
+		// terminal has already left, and terminals such as iTerm2 rewrap
+		// the screen after the last size change, so the last frame ends up
+		// wider than the window: every line spills onto the next. Ask the
+		// terminal for its size again and draw everything once more.
+		if w, h, ok := termSize(); ok && (w != s.w || h != s.h) {
+			return s, func() tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} }
+		}
+		return s, tea.ClearScreen
 	case tea.KeyMsg:
 		return s, s.onKey(m)
 	case tea.MouseMsg:
