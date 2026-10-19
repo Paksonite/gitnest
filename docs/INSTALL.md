@@ -50,7 +50,7 @@ Options go after `sh -s --`:
 |---|---|
 | `… \| sh -s -- v1.2.0` | that version instead of the latest |
 | `… \| sh -s -- --no-modify` | don't touch your shell's startup files (or `GITNEST_NO_MODIFY=1`) |
-| `… \| sh -s -- --dev` | the `gitnest-dev` preview build, next to `gitnest` (see [preview builds](DEVELOPMENT.md#preview-builds-gitnest-dev)) |
+| `… \| sh -s -- --dev` | the `gitnest-dev` preview build, next to `gitnest` (see [preview builds](#preview-builds-gitnest-dev)) |
 | `GITNEST_INSTALL_DIR=/opt/bin` | install somewhere else |
 
 gitnest needs **git** 2.35 or newer for everything (`sudo apt install git`).
@@ -141,6 +141,21 @@ gitnest update                     # install it (--check only looks)
 If the binary is in a folder you can't write to (e.g. `/usr/local/bin`), run
 `sudo gitnest update`. `gitnest update --force` reinstalls the latest
 release. `gitnest doctor` also says whether an update is waiting.
+
+### Preview builds: gitnest-dev
+
+Bigger changes are tried out on the `ui-next` branch first. Every push there
+builds **`gitnest-dev`** into the rolling `dev` pre-release (never "latest",
+so `gitnest update` and Homebrew never offer it). It installs next to
+`gitnest`, which stays untouched:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Paksonite/gitnest/main/install.sh | sh -s -- --dev
+```
+
+`gitnest-dev update` fetches the newest one. Both share gitnest's config and
+state; to keep them apart, run `XDG_CONFIG_HOME=~/.config/gitnest-dev
+gitnest-dev`. Remove it with `rm ~/.local/bin/gitnest-dev`.
 
 ## Uninstall
 
