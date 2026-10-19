@@ -131,13 +131,13 @@ func TestE2EPanesLayoutAndTabs(t *testing.T) {
 		t.Fatalf("back to the grid: %d", s.mode)
 	}
 
-	// ctrl+arrows move between grid cells.
+	// alt+arrows move between grid cells.
 	s.focus = 0
-	press(t, s, "ctrl+right")
+	press(t, s, "alt+right")
 	if s.focus != 1 {
 		t.Errorf("right: %d", s.focus)
 	}
-	press(t, s, "ctrl+down")
+	press(t, s, "alt+down")
 	if s.focus != 3 {
 		t.Errorf("down: %d", s.focus)
 	}

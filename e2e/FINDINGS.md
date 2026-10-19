@@ -1,8 +1,8 @@
 # E2E findings
 
-Run 2026-10-18 23:57 on arm64, gitnest from `3647e4f`; `python3 e2e/run.py` reproduces it.
+Run 2026-10-19 08:35 on arm64, gitnest from `72ed42c`; `python3 e2e/run.py` reproduces it.
 
-**230 of 230 checks pass.**
+**235 of 235 checks pass.**
 
 ## All checks
 
@@ -197,8 +197,13 @@ Run 2026-10-18 23:57 on arm64, gitnest from `3647e4f`; `python3 e2e/run.py` repr
 | file_browser | enter unfolds a folder | ✓ |
 | file_browser | esc goes back to the repository | ✓ |
 | panes | ctrl+n opens a second pane | ✓ |
-| panes | ctrl+← focuses the left pane | ✓ |
+| panes | alt+← focuses the left pane | ✓ |
 | panes | four panes: a 2×2 grid | ✓ |
+| panes | alt+↑ focuses the pane above | ✓ |
+| panes | alt+← then alt+↓ go round the grid | ✓ |
+| panes | esc f (option+→ on a Mac) focuses the right pane | ✓ |
+| panes | esc b (option+←) focuses the left pane | ✓ |
+| panes | ctrl+arrows are left to the desktop | ✓ |
 | panes | ctrl+g changes the layout | ✓ |
 | panes | seven panes become tabs | ✓ |
 | panes | ctrl+w closes them down to one | ✓ |

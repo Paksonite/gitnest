@@ -11,11 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/muesli/termenv"
+
 	"github.com/Paksonite/gitnest/v2/internal/config"
 	"github.com/Paksonite/gitnest/v2/internal/gitx"
 	"github.com/Paksonite/gitnest/v2/internal/scan"
 	"github.com/Paksonite/gitnest/v2/internal/state"
 	"github.com/Paksonite/gitnest/v2/internal/theme"
+	"github.com/Paksonite/gitnest/v2/internal/ui"
 	"github.com/Paksonite/gitnest/v2/internal/update"
 )
 
@@ -97,12 +100,11 @@ func doctorCmd(args []string) error {
 		ok("icons", "none (from "+src+"); icons: symbols shows icons with any font")
 	}
 
-	colorterm := os.Getenv("COLORTERM")
-	term := os.Getenv("TERM")
-	if colorterm == "truecolor" || colorterm == "24bit" {
-		ok("terminal", term+", true colour")
+	term := orDefault(os.Getenv("TERM"), "unknown")
+	if p, why := ui.ColorProfile(); p == termenv.TrueColor {
+		ok("terminal", term+", true colour ("+why+"); GITNEST_COLOR=256 if colours look wrong")
 	} else {
-		warn("terminal", orDefault(term, "unknown")+" without true colour: colours are approximated (the terminal theme suits it best)")
+		warn("terminal", term+", "+ui.ProfileName(p)+" ("+why+"): colours are approximated; GITNEST_COLOR=truecolor if the terminal has true colour")
 	}
 
 	shell := filepath.Base(os.Getenv("SHELL"))

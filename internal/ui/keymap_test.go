@@ -99,7 +99,7 @@ func readmeKeys(t *testing.T) map[string][]string {
 		}
 		for _, m := range tick.FindAllStringSubmatch(l, -1) {
 			k := m[1] + m[2]
-			if strings.ContainsAny(k, "@$ ") || strings.HasPrefix(k, "alt+arrows") || k == "gn" {
+			if strings.ContainsAny(k, "@$ ") || k == "gn" {
 				continue // @text, $EDITOR, the gn function, prose
 			}
 			if k == "space" {
@@ -178,7 +178,7 @@ func TestFooterSkipsShadowedKeys(t *testing.T) {
 // The help screen lists the main keys only; aliases still work.
 func TestHelpShowsMainKeys(t *testing.T) {
 	help := strings.Join(helpLines(), "\n")
-	for _, want := range []string{"tab", "ctrl+←→↑↓", "↑ ↓"} {
+	for _, want := range []string{"tab", "alt+←→↑↓", "↑ ↓"} {
 		if !strings.Contains(help, want) {
 			t.Errorf("help lacks %q", want)
 		}

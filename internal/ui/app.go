@@ -123,6 +123,8 @@ type App struct {
 // cdFile, when set, is where "o" writes the chosen repository for the gn
 // shell function to cd into.
 func Run(cfg config.Config, noConfig bool, startDir, cdFile string) error {
+	profile, _ := ColorProfile()
+	lipgloss.SetColorProfile(profile)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	a := newApp(ctx, cfg, noConfig, startDir, cdFile)

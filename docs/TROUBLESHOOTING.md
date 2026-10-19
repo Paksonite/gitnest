@@ -9,8 +9,11 @@ do.
   terminal font is not a Nerd Font: install one (see [Icons](THEMES.md#icons)) or press `T` then `i`
   to go back to `symbols`, which any font shows.
 - **Colours look off** — your terminal may not report its background: set
-  `theme.mode: dark` or `light`. Without true colour, try the `terminal`
-  theme.
+  `theme.mode: dark` or `light`. `gitnest doctor` shows the colours gitnest
+  draws with: odd colours or stray characters mean the terminal has no true
+  colour (macOS Terminal.app before macOS 26, old `screen`) — set
+  `GITNEST_COLOR=256` or use the `terminal` theme. Colours approximated where
+  the terminal has true colour: `GITNEST_COLOR=truecolor`.
 - **`gitnest: command not found` after the install script** — add
   `~/.local/bin` to your `PATH`.
 - **Push or fetch fails without asking for a password** — gitnest never

@@ -8,6 +8,7 @@ labs/unicode (odd names, a binary, a huge diff) and labs/scratch (no
 remote).
 """
 import re
+import time
 
 from harness import Term, client, git, scenario
 
@@ -692,12 +693,22 @@ def panes(c):
     open_list(t)
     t.keys("C-n")
     c.step("ctrl+n opens a second pane", lambda: t.wait("● 2 · repositories"))
-    t.keys("C-Left")
-    c.step("ctrl+← focuses the left pane", lambda: t.wait("● 1 ·"))
-    t.keys("C-Right")
+    t.keys("M-Left")
+    c.step("alt+← focuses the left pane", lambda: t.wait("● 1 ·"))
+    t.keys("M-Right")
     t.wait("● 2 ·")
     t.keys("C-n", "C-n")
     c.step("four panes: a 2×2 grid", lambda: t.wait("● 4 ·"))
+    t.keys("M-Up")
+    c.step("alt+↑ focuses the pane above", lambda: t.wait("● 2 ·"))
+    t.keys("M-Left", "M-Down")
+    c.step("alt+← then alt+↓ go round the grid", lambda: t.wait("● 3 ·"))
+    client("tmux send-keys -t t -H 1b 66")  # esc f: option+→ in macOS terminals
+    c.step("esc f (option+→ on a Mac) focuses the right pane", lambda: t.wait("● 4 ·"))
+    client("tmux send-keys -t t -H 1b 62")  # esc b: option+←
+    c.step("esc b (option+←) focuses the left pane", lambda: t.wait("● 3 ·"))
+    t.keys("C-Up", "C-Right")
+    c.step("ctrl+arrows are left to the desktop", lambda: (time.sleep(0.5), t.wait("● 3 ·")))
     t.keys("C-g")
     c.step("ctrl+g changes the layout", lambda: t.wait(re.compile(r"panes: (side by side|stacked|grid)")))
     for _ in range(3):

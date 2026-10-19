@@ -14,9 +14,9 @@ import (
 // Shell holds several independent gitnests ("panes") in one terminal. Every
 // pane is a full App with its own screen, selection, open repository,
 // prompts and editor; the config, themes, scanner and the commit clipboard
-// are shared. ctrl+n opens a pane, ctrl+w closes one, ctrl+arrows (or
-// alt+arrows) move the focus and ctrl+g changes the layout. Up to maxTiled
-// panes are tiled; more are shown as tabs.
+// are shared. ctrl+n opens a pane, ctrl+w closes one, alt+arrows move the
+// focus and ctrl+g changes the layout. Up to maxTiled panes are tiled; more
+// are shown as tabs.
 type Shell struct {
 	panes  []*pane
 	focus  int
@@ -277,9 +277,9 @@ func (s *Shell) open() tea.Cmd {
 	s.panes = append(s.panes[:s.focus+1], append([]*pane{p}, s.panes[s.focus+1:]...)...)
 	s.focus++
 	s.resize()
-	msg := "new pane: pick a repository (ctrl+arrows switch, ctrl+w closes, ctrl+g layout)"
+	msg := "new pane: pick a repository (alt+arrows switch, ctrl+w closes, ctrl+g layout)"
 	if len(s.panes) == maxTiled+1 {
-		msg = fmt.Sprintf("more than %d panes are shown as tabs (ctrl+←/→ switch, ctrl+w closes)", maxTiled)
+		msg = fmt.Sprintf("more than %d panes are shown as tabs (alt+←/→ switch, ctrl+w closes)", maxTiled)
 	}
 	a.setToast(msg, false)
 	return wrap(p.id, tea.Batch(a.previewCmd(), repoTick()))
@@ -596,7 +596,7 @@ func tabBar(titles []string, focus, w int) string {
 		labels[i] = " " + t + " "
 		widths[i] = lipgloss.Width(labels[i]) + 1 // and a separator
 	}
-	hint := "  ctrl+←/→ switch"
+	hint := "  alt+←/→ switch"
 	more := func(k int) int { // width of a "‹ k " / " k ›" marker
 		if k == 0 {
 			return 0
