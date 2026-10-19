@@ -24,18 +24,21 @@ func Toplevel(ctx context.Context, dir string) (string, error) {
 // ---------------------------------------------------------------- repo info
 
 type Info struct {
-	Branch    string
-	Detached  bool
-	Upstream  bool
-	Ahead     int
-	Behind    int
-	Changes   int
-	Conflicts bool
-	LastUnix  int64
-	LastRel   string
-	State     State
-	RemoteURL string // origin's URL, or the first remote's; empty without remotes
-	Stashes   int
+	Branch   string
+	Detached bool
+	Upstream bool
+	// UpstreamGone: the branch tracks an upstream that no longer exists
+	// (deleted on the remote and pruned); Upstream is false then.
+	UpstreamGone bool
+	Ahead        int
+	Behind       int
+	Changes      int
+	Conflicts    bool
+	LastUnix     int64
+	LastRel      string
+	State        State
+	RemoteURL    string // origin's URL, or the first remote's; empty without remotes
+	Stashes      int
 }
 
 func GetInfo(ctx context.Context, dir string) (Info, error) {
@@ -77,8 +80,10 @@ func parseStatusV2(out string) Info {
 		case strings.HasPrefix(l, "# branch.head "):
 			in.Branch = strings.TrimPrefix(l, "# branch.head ")
 			in.Detached = in.Branch == "(detached)"
+		case strings.HasPrefix(l, "# branch.upstream "):
+			in.UpstreamGone = true // until branch.ab shows it exists
 		case strings.HasPrefix(l, "# branch.ab "):
-			in.Upstream = true
+			in.Upstream, in.UpstreamGone = true, false
 			fmt.Sscanf(strings.TrimPrefix(l, "# branch.ab "), "+%d -%d", &in.Ahead, &in.Behind)
 		case strings.HasPrefix(l, "#"):
 		default:
@@ -270,6 +275,8 @@ func (i Info) Sync() string {
 		if i.Behind > 0 {
 			p = append(p, fmt.Sprintf("↓%d", i.Behind))
 		}
+	} else if i.UpstreamGone {
+		p = append(p, "✗ gone")
 	} else if !i.Detached {
 		p = append(p, "∅")
 	}

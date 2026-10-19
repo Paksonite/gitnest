@@ -59,6 +59,9 @@ func detailsCard(r scan.Repo, label string, d *gitx.Details, w, h int, now time.
 		if up == "" && !r.Detached {
 			up = fg(cDim, "none")
 		}
+		if r.UpstreamGone && up != "" {
+			up += "  " + fg(cRed, "✗ gone")
+		}
 		field("Upstream", up)
 	}
 	field("Status", repoStatusText(r))

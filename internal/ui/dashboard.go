@@ -333,7 +333,7 @@ func (o *overview) add(r scan.Repo) {
 		o.behind++
 	}
 	if !r.Upstream && !r.Detached {
-		o.noUpstream++
+		o.noUpstream++ // a deleted upstream counts too: there is nothing to push to
 	}
 	if r.Conflicts || r.State != gitx.StateNone {
 		o.trouble++
@@ -460,7 +460,7 @@ func needAttention(repos []scan.Repo) []scan.Repo {
 			return 1
 		case r.Upstream && r.Behind > 0:
 			return 2
-		case r.Upstream && r.Ahead > 0:
+		case r.Upstream && r.Ahead > 0, r.UpstreamGone:
 			return 3
 		}
 		return -1

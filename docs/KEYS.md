@@ -67,11 +67,12 @@ false` in the config leaves the mouse to the terminal.
 The columns are the repository, its current branch, its status and how long
 ago the last commit was (`5h`, `3d`, `4mo`, `2y`). The status column is the one
 place a repository's state is shown: `✓` clean and in sync with its upstream,
-`~4` changed files, `↑2` / `↓3` commits to push / pull, `∅` no upstream, `!`
+`~4` changed files, `↑2` / `↓3` commits to push / pull, `∅` no upstream, `✗ gone`
+an upstream deleted on the remote (as in the Branches panel), `!`
 a conflict or an operation in progress (`! rebasing`). A group of the tree
 shows how many repositories it holds after its name and, in the status
 column, how many are dirty and `✓` when all are up to date (or how many have
-commits to push `↑` and pull `↓`). `✓` in the first column marks a repository
+commits to push `↑` and pull `↓` and how many upstreams are gone `✗`). `✓` in the first column marks a repository
 (`space`); after the name, `★` is a favorite and `✦` a repository found since
 gitnest started. Folded directories of the tree stay folded the next time. Clones of the same project from
 different hosts are told apart by host (`org-core-dns · forgejo`).

@@ -369,3 +369,39 @@ func TestBranches(t *testing.T) {
 		t.Errorf("remote = %+v", remotes)
 	}
 }
+
+// A branch whose upstream was deleted on the remote (and pruned) shows as
+// gone, as in the Branches panel, not as one without an upstream.
+func TestGetInfoUpstreamGone(t *testing.T) {
+	remote := t.TempDir()
+	git(t, remote, "init", "-q", "--bare", "-b", "main")
+	dir := newRepo(t)
+	commit(t, dir, "a.txt", "a\n", "first")
+	git(t, dir, "remote", "add", "origin", remote)
+	git(t, dir, "push", "-q", "-u", "origin", "main")
+	git(t, dir, "checkout", "-q", "-b", "topic")
+	git(t, dir, "push", "-q", "-u", "origin", "topic")
+	if in, _ := GetInfo(bg, dir); !in.Upstream || in.UpstreamGone {
+		t.Fatalf("pushed: %+v", in)
+	}
+	git(t, remote, "branch", "-D", "topic")
+	git(t, dir, "fetch", "-q", "--prune")
+	in, err := GetInfo(bg, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if in.Upstream || !in.UpstreamGone || in.Sync() != "✗ gone" {
+		t.Fatalf("gone: %+v (%q)", in, in.Sync())
+	}
+	bs, _, err := Branches(bg, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range bs {
+		if b.Name == "topic" {
+			if _, _, gone := b.AheadBehind(); !gone {
+				t.Errorf("the Branches panel should agree: %+v", b)
+			}
+		}
+	}
+}

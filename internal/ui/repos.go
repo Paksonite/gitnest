@@ -768,6 +768,8 @@ func syncStyled(i gitx.Info) string {
 		if i.Behind > 0 {
 			parts = append(parts, fg(cRed, fmt.Sprintf("↓%d", i.Behind)))
 		}
+	} else if i.UpstreamGone {
+		parts = append(parts, fg(cRed, "✗ gone"))
 	} else if !i.Detached {
 		parts = append(parts, fg(cDim, "∅"))
 	}
@@ -846,7 +848,7 @@ const statusW = 12
 
 // statusCell is a repository's state in the list's status column, the
 // one place it is shown: an operation in progress or a conflict (!), else
-// changed files (~3), commits to push (↑1) and pull (↓2), no upstream (∅),
+// changed files (~3), commits to push (↑1) and pull (↓2), no upstream (∅), an upstream deleted on the remote (✗ gone),
 // or ✓ when clean and in sync.
 func statusCell(r scan.Repo) (plain, styled string) {
 	switch {

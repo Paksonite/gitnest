@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -314,5 +315,25 @@ func TestBranchColor(t *testing.T) {
 	rp = &repoState{local: []gitx.Branch{{Name: "master"}, {Name: "dev"}}}
 	if rp.branchColor(gitx.Branch{Name: "master"}) != cYellow || rp.branchColor(gitx.Branch{Name: "dev"}) != cCyan {
 		t.Error("master as the main branch")
+	}
+}
+
+// The list shows a repository's state as its own panels do: an upstream
+// deleted on the remote is "✗ gone" there, in the details and in groups.
+func TestStatusCellUpstreamGone(t *testing.T) {
+	gone := scan.Repo{Path: "/r/a", Name: "a", Info: gitx.Info{Branch: "topic", UpstreamGone: true, Changes: 1}}
+	if plain, _ := statusCell(gone); plain != "✗ gone ~1" {
+		t.Errorf("status cell: %q", plain)
+	}
+	if !strings.Contains(ansi.Strip(repoStatusText(gone)), "✗ gone") {
+		t.Errorf("details status: %q", ansi.Strip(repoStatusText(gone)))
+	}
+	var sc syncCount
+	sc = sc.add(gone).add(scan.Repo{Info: gitx.Info{Upstream: true}})
+	if plain, _ := sc.styled(); plain != "✗1" {
+		t.Errorf("group: %q", plain)
+	}
+	if got := needAttention([]scan.Repo{{Path: "/r/b", Info: gitx.Info{UpstreamGone: true}}}); len(got) != 1 {
+		t.Error("a gone upstream needs attention")
 	}
 }

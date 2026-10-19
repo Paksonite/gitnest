@@ -23,6 +23,12 @@ func TestParseStatusV2(t *testing.T) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
 
+	// An upstream without branch.ab: deleted on the remote.
+	got = parseStatusV2("# branch.oid 1234\n# branch.head topic\n# branch.upstream origin/topic\n")
+	if !got.UpstreamGone || got.Upstream || got.Sync() != "✗ gone" {
+		t.Fatalf("gone: got %+v (%q)", got, got.Sync())
+	}
+
 	got = parseStatusV2("# branch.oid 1234\n# branch.head (detached)\n")
 	if !got.Detached || got.Upstream || got.Changes != 0 {
 		t.Fatalf("detached: got %+v", got)
@@ -37,6 +43,7 @@ func TestInfoSync(t *testing.T) {
 		{Info{Upstream: true}, ""},
 		{Info{Upstream: true, Ahead: 1, Behind: 2, Changes: 3}, "↑1 ↓2 ~3"},
 		{Info{}, "∅"},
+		{Info{UpstreamGone: true, Changes: 2}, "✗ gone ~2"},
 		{Info{Detached: true, Changes: 1}, "~1"},
 	}
 	for _, c := range cases {
