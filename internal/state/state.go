@@ -51,17 +51,14 @@ type State struct {
 	ListGroup string   `json:"list_group"` // "folders" (default) or "remote"
 	Screen    string   `json:"screen"`     // "dashboard" or "list": where gitnest was last
 	Favorites []string `json:"favorites"`  // starred repositories (*)
-	ListView  ListView `json:"list_view"`  // sort order and filters of the list (v)
+	ListView  ListView `json:"list_view"`  // the list's sort order (v)
 }
 
-// ListView is how the repository list is sorted and filtered, as chosen in
-// the view menu. Empty fields are the defaults (recently used, every
-// repository, any status, any remote).
+// ListView is how the repository list is sorted, as chosen in the view
+// menu; empty is the default (recently used). gitnest 2.0.7 also saved the
+// filters here (status, host, favorites_only); later versions ignore them.
 type ListView struct {
-	Sort          string `json:"sort,omitempty"` // "name", "last commit", "status"
-	FavoritesOnly bool   `json:"favorites_only,omitempty"`
-	Status        string `json:"status,omitempty"` // "dirty only", "stashed", "ahead", "behind", "no remote"
-	Host          string `json:"host,omitempty"`   // a remote host, or "local"
+	Sort string `json:"sort,omitempty"` // "name", "last commit", "status"
 }
 
 func settingsPath() string {

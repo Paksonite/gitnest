@@ -605,6 +605,12 @@ func (a *App) listAction(act action) tea.Cmd {
 			a.rebuildView(a.selectedKey())
 			return a.previewCmd()
 		}
+		if rs.listFiltered() { // then the filters, one esc for all of them
+			rs.status, rs.host, rs.favOnly = stAll, "", false
+			a.rebuildView(a.selectedKey())
+			a.setToast("filters cleared", false)
+			return a.previewCmd()
+		}
 	case actSearch: // a new search; tab kept the old one on screen until now
 		rs.filtering = true
 		if rs.filter != "" {
@@ -930,14 +936,21 @@ func (a *App) viewRepos() string {
 	lines := append([]string{listHeader(nameW)}, renderRows(items, rs.cur-rs.off, 0, lh, inner, true)...)
 	if len(rs.view) == 0 {
 		msg := "No repositories match."
-		if rs.loading {
+		switch {
+		case len(rs.all) > 0 && rs.listFiltered() && rs.filter == "":
+			msg = fmt.Sprintf("The filters hide all %d repositories (%s) — esc clears them, v changes them.", len(rs.all), a.filterSummary())
+		case len(rs.all) > 0:
+		case rs.loading:
 			msg = "Scanning…"
-		} else if len(a.cfg.Roots) == 0 {
+		case len(a.cfg.Roots) == 0:
 			msg = "No directories to scan — run: gitnest roots add ~/repos"
-		} else if len(rs.all) == 0 {
+		default:
 			msg = "No repositories found under " + rootsList(a.cfg.Roots)
 		}
-		lines = []string{fg(cDim, msg)}
+		lines = nil
+		for _, l := range wrapWords(msg, inner) {
+			lines = append(lines, fg(cDim, l))
+		}
 	}
 	note := fmt.Sprintf("%d · %s", len(rs.view), a.listViewName())
 	if len(rs.view) != len(rs.all) {
