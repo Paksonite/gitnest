@@ -2,6 +2,7 @@ package ui
 
 import (
 	"sort"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -53,6 +54,22 @@ func repoHost(r scan.Repo) string {
 		return h
 	}
 	return "local"
+}
+
+// filterSummary names the active filters: "no remote · github.com".
+func (a *App) filterSummary() string {
+	rs := &a.rs
+	var parts []string
+	if rs.favOnly {
+		parts = append(parts, "favorites only")
+	}
+	if rs.status != stAll {
+		parts = append(parts, statusFilterTags[rs.status])
+	}
+	if rs.host != "" {
+		parts = append(parts, rs.host)
+	}
+	return strings.Join(parts, " · ")
 }
 
 // listFiltered reports whether a status or host filter hides repositories.

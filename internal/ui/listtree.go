@@ -50,37 +50,29 @@ func (a *App) setListView(tree bool, group int) {
 	a.rebuildView(a.selectedKey())
 }
 
-// saveListView remembers the sort order and the filters for the next
-// start (the layout is saved by setListView).
+// saveListView remembers the sort order for the next start (the layout is
+// saved by setListView). Filters are not remembered: one that hides every
+// repository would greet you with an empty list after a restart.
 func (a *App) saveListView() {
 	rs := &a.rs
-	v := state.ListView{FavoritesOnly: rs.favOnly, Host: rs.host}
+	var v state.ListView
 	if rs.sortMode != sortRecent {
 		v.Sort = sortNames[rs.sortMode]
 	}
-	if rs.status != stAll {
-		v.Status = statusFilterTags[rs.status]
-	}
-	if a.st != nil {
+	if a.st != nil && a.st.ListView != v {
 		a.st.SetListView(v)
 	}
 }
 
-// loadListView restores what saveListView saved; names it doesn't know
-// (from a newer gitnest, or edited by hand) keep the default.
+// loadListView restores the sort order saveListView saved; a name it
+// doesn't know (from a newer gitnest, or edited by hand) keeps the default.
+// Filters saved by 2.0.7 are ignored.
 func (a *App) loadListView(v state.ListView) {
-	rs := &a.rs
 	for i, n := range sortNames {
 		if n == v.Sort {
-			rs.sortMode = i
+			a.rs.sortMode = i
 		}
 	}
-	for i, n := range statusFilterTags {
-		if n != "" && n == v.Status {
-			rs.status = i
-		}
-	}
-	rs.favOnly, rs.host = v.FavoritesOnly, v.Host
 }
 
 func (a *App) listViewName() string {

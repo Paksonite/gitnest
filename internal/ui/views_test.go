@@ -2,6 +2,9 @@ package ui
 
 import (
 	"context"
+	"github.com/charmbracelet/x/ansi"
+	"os"
+	"path/filepath"
 
 	"github.com/Paksonite/gitnest/v2/internal/config"
 	"reflect"
@@ -57,49 +60,58 @@ func TestViewsAndFavorites(t *testing.T) {
 	}
 }
 
-// Sorting and filtering chosen in the view menu (and d) are there again on
-// the next start, as the list's layout is.
-func TestViewChoicesAreRemembered(t *testing.T) {
+// The sort order chosen in the view menu is there again on the next start,
+// as the list's layout is; the filters are not (one that hides every
+// repository would greet you with an empty list).
+func TestViewSortIsRememberedFiltersAreNot(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	a := filtersApp()
 	a.onKey(key("v"))
-	menuPick(t, a, "Name")
+	menuPick(t, a, "Last commit")
 	menuPick(t, a, "Favorites only")
-	menuPick(t, a, "Behind remote")
+	menuPick(t, a, "No remote")
 	menuPick(t, a, "github.com")
 	a.menu = nil
-
-	saved := state.Load().ListView
-	want := state.ListView{Sort: "name", FavoritesOnly: true, Status: "behind", Host: "github.com"}
-	if saved != want {
-		t.Fatalf("saved %+v, want %+v", saved, want)
+	if saved := state.Load().ListView; saved != (state.ListView{Sort: "last commit"}) {
+		t.Fatalf("saved %+v", saved)
 	}
 	b := newApp(context.Background(), config.Config{}, true, "", "") // the next start
-
-	if b.rs.sortMode != sortName || !b.rs.favOnly || b.rs.status != stBehind || b.rs.host != "github.com" {
-		t.Errorf("restored: sort %d fav %v status %d host %q", b.rs.sortMode, b.rs.favOnly, b.rs.status, b.rs.host)
+	if b.rs.sortMode != sortCommit || b.rs.listFiltered() {
+		t.Errorf("next start: sort %d, filtered %v", b.rs.sortMode, b.rs.listFiltered())
 	}
 
-	// d (dirty only) is remembered too, and back to the defaults saves
-	// nothing but the defaults.
-	a.onKey(key("v"))
-	menuPick(t, a, "Recently used")
-	menuPick(t, a, "Every repository")
-	menuPick(t, a, "Any remote")
-	a.menu = nil
-	a.onKey(key("d"))
-	if got := state.Load().ListView; got != (state.ListView{Status: "dirty only"}) {
-		t.Errorf("after d: %+v", got)
-	}
-	a.onKey(key("d"))
-	if got := state.Load().ListView; got != (state.ListView{}) {
-		t.Errorf("defaults: %+v", got)
+	// gitnest 2.0.7 saved the filters too: a list hidden by them ("no
+	// remote") must not come back.
+	dir := filepath.Join(os.Getenv("XDG_STATE_HOME"), "gitnest")
+	os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"list_view":{"sort":"name","status":"no remote","host":"x","favorites_only":true}}`), 0o644)
+	c := newApp(context.Background(), config.Config{}, true, "", "")
+	if c.rs.sortMode != sortName || c.rs.listFiltered() {
+		t.Errorf("2.0.7 settings: sort %d, filtered %v", c.rs.sortMode, c.rs.listFiltered())
 	}
 
-	// Names this version doesn't know keep the defaults.
-	c := testApp()
-	c.loadListView(state.ListView{Sort: "size", Status: "huge"})
-	if c.rs.sortMode != sortRecent || c.rs.status != stAll {
-		t.Errorf("unknown names: sort %d status %d", c.rs.sortMode, c.rs.status)
+	// Names this version doesn't know keep the default.
+	d := testApp()
+	d.loadListView(state.ListView{Sort: "size"})
+	if d.rs.sortMode != sortRecent {
+		t.Errorf("unknown sort: %d", d.rs.sortMode)
+	}
+}
+
+// When the filters hide every repository the list says so, and esc (with
+// no search to clear) clears them.
+func TestEscClearsFiltersThatHideEverything(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	a := filtersApp()
+	a.rs.status, a.rs.host = stNoRemote, "github.com"
+	a.rebuildView("")
+	if len(a.rs.view) != 0 {
+		t.Fatalf("expected an empty list, got %v", listed(a))
+	}
+	if v := strings.Join(strings.Fields(strings.ReplaceAll(ansi.Strip(a.viewRepos()), "│", " ")), " "); !strings.Contains(v, "The filters hide all 6 repositories (no remote · github.com) — esc clears them") {
+		t.Errorf("empty list should explain why:\n%s", v)
+	}
+	a.onKey(key("esc"))
+	if a.rs.listFiltered() || len(a.rs.view) != 6 {
+		t.Errorf("esc: filtered %v, %d shown", a.rs.listFiltered(), len(a.rs.view))
 	}
 }
