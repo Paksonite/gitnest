@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"context"
+
+	"github.com/Paksonite/gitnest/v2/internal/config"
 	"reflect"
 	"strings"
 	"testing"
@@ -51,5 +54,52 @@ func TestViewsAndFavorites(t *testing.T) {
 	a.onKey(key("*"))
 	if len(a.sh.fav) != 1 {
 		t.Fatalf("unstar: %v", a.sh.fav)
+	}
+}
+
+// Sorting and filtering chosen in the view menu (and d) are there again on
+// the next start, as the list's layout is.
+func TestViewChoicesAreRemembered(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	a := filtersApp()
+	a.onKey(key("v"))
+	menuPick(t, a, "Name")
+	menuPick(t, a, "Favorites only")
+	menuPick(t, a, "Behind remote")
+	menuPick(t, a, "github.com")
+	a.menu = nil
+
+	saved := state.Load().ListView
+	want := state.ListView{Sort: "name", FavoritesOnly: true, Status: "behind", Host: "github.com"}
+	if saved != want {
+		t.Fatalf("saved %+v, want %+v", saved, want)
+	}
+	b := newApp(context.Background(), config.Config{}, true, "", "") // the next start
+
+	if b.rs.sortMode != sortName || !b.rs.favOnly || b.rs.status != stBehind || b.rs.host != "github.com" {
+		t.Errorf("restored: sort %d fav %v status %d host %q", b.rs.sortMode, b.rs.favOnly, b.rs.status, b.rs.host)
+	}
+
+	// d (dirty only) is remembered too, and back to the defaults saves
+	// nothing but the defaults.
+	a.onKey(key("v"))
+	menuPick(t, a, "Recently used")
+	menuPick(t, a, "Every repository")
+	menuPick(t, a, "Any remote")
+	a.menu = nil
+	a.onKey(key("d"))
+	if got := state.Load().ListView; got != (state.ListView{Status: "dirty only"}) {
+		t.Errorf("after d: %+v", got)
+	}
+	a.onKey(key("d"))
+	if got := state.Load().ListView; got != (state.ListView{}) {
+		t.Errorf("defaults: %+v", got)
+	}
+
+	// Names this version doesn't know keep the defaults.
+	c := testApp()
+	c.loadListView(state.ListView{Sort: "size", Status: "huge"})
+	if c.rs.sortMode != sortRecent || c.rs.status != stAll {
+		t.Errorf("unknown names: sort %d status %d", c.rs.sortMode, c.rs.status)
 	}
 }

@@ -80,6 +80,7 @@ func (a *App) filterItems() []menuItem {
 	}
 	apply := func() tea.Cmd {
 		a.rebuildView(a.selectedKey())
+		a.saveListView()
 		return a.previewCmd()
 	}
 	m := &menu{}

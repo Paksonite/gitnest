@@ -645,6 +645,7 @@ func (a *App) listAction(act action) tea.Cmd {
 			rs.status = stDirty
 		}
 		a.rebuildView(a.selectedKey())
+		a.saveListView()
 		return a.previewCmd()
 	case actMark:
 		if i, ok := a.selectedDir(); ok { // a directory marks (or unmarks) everything below

@@ -6,6 +6,7 @@ package ui
 
 import (
 	"context"
+	"github.com/Paksonite/gitnest/v2/internal/scan"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -330,4 +331,35 @@ func TestMain(m *testing.M) {
 	previewDelay = time.Millisecond
 	cursorBlink = false
 	os.Exit(m.Run())
+}
+
+// After a commit or a push inside a repository, its row in the list is up
+// to date already: going back shows it right away, not once every other
+// repository was read again.
+func TestE2EListRowFollowsOperations(t *testing.T) {
+	if testing.Short() {
+		t.Skip("end-to-end")
+	}
+	a, root, _ := e2eSetup(t)
+	app := filepath.Join(root, "app")
+	press(t, a, "/", "type:app", "enter")
+	os.WriteFile(filepath.Join(app, "new.txt"), []byte("x\n"), 0o644)
+	drive(t, a, a.onRepoTick())
+	row := func() scan.Repo {
+		for _, r := range a.rs.all {
+			if r.Path == app {
+				return r
+			}
+		}
+		t.Fatal("app is not in the list")
+		return scan.Repo{}
+	}
+	press(t, a, "a", "c", "type:Add new", "enter")
+	if r := row(); a.scr != scrRepo || r.Changes != 0 || r.Ahead != 1 {
+		t.Fatalf("after the commit, still inside: %+v", r.Info)
+	}
+	press(t, a, "P")
+	if r := row(); r.Ahead != 0 || !r.Upstream {
+		t.Fatalf("after the push: %+v", r.Info)
+	}
 }

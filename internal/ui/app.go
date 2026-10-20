@@ -172,6 +172,7 @@ func newApp(ctx context.Context, cfg config.Config, noConfig bool, startDir, cdF
 	if a.st.ListGroup == groupNames[groupRemote] {
 		a.rs.group = groupRemote
 	}
+	a.loadListView(a.st.ListView)
 	return a
 }
 
@@ -494,7 +495,10 @@ func (a *App) onOp(m opMsg) tea.Cmd {
 func (a *App) reloadCurrent() tea.Cmd {
 	if a.scr == scrRepo {
 		a.rp.mainKey = ""
-		return loadRepoData(a.ctx, a.rp.dir)
+		// The repository's row in the list follows at once (one git
+		// status, ~20 ms), so the list is right when you go back to it
+		// instead of only after every repository was read again.
+		return tea.Batch(loadRepoData(a.ctx, a.rp.dir), a.statusCmd([]string{a.rp.dir}, false))
 	}
 	return a.gather(a.paths())
 }

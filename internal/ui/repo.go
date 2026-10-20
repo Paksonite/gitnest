@@ -314,12 +314,15 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 		rp.mainFocus = true
 		return nil
 	case actBack:
+		// The repository just left first (changes made in a terminal
+		// meanwhile, say), then every other one.
+		first := a.statusCmd([]string{rp.dir}, false)
 		if a.from == scrDash {
 			a.scr = scrDash
-			return a.gather(a.paths())
+			return tea.Batch(first, a.gather(a.paths()))
 		}
 		a.scr = scrRepos
-		return a.gather(a.paths())
+		return tea.Batch(first, a.gather(a.paths()))
 	case actNextPanel:
 		rp.focus = (rp.focus + 1) % 4
 		return a.mainCmd()
