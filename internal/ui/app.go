@@ -172,6 +172,7 @@ func newApp(ctx context.Context, cfg config.Config, noConfig bool, startDir, cdF
 	if a.st.ListGroup == groupNames[groupRemote] {
 		a.rs.group = groupRemote
 	}
+	a.loadListView(a.st.ListView)
 	return a
 }
 

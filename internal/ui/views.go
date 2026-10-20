@@ -14,6 +14,7 @@ func (a *App) openViews() {
 	rs := &a.rs
 	rebuild := func() tea.Cmd {
 		a.rebuildView(a.selectedKey())
+		a.saveListView()
 		return a.previewCmd()
 	}
 	m := &menu{title: "View & filters", note: "choices apply at once; filters combine"}

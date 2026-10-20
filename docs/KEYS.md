@@ -50,7 +50,7 @@ false` in the config leaves the mouse to the terminal.
 | `enter` | open the repository |
 | `` ` `` | list view: flat, grouped by folder, grouped by remote host and owner (github.com/ann/; local/ without a remote); `enter` folds a group |
 | `H` | the dashboard: activity, what needs attention, the most active repositories |
-| `v` | view & filters: the sort order (recently used, name, last commit, needs attention), a flat or grouped list (by folder or remote), every repository or favorites only, and filters with how many repositories each keeps — dirty, stashed changes, ahead of or behind the remote, no remote, by remote host |
+| `v` | view & filters: the sort order (recently used, name, last commit, needs attention), a flat or grouped list (by folder or remote), every repository or favorites only, and filters with how many repositories each keeps — dirty, stashed changes, ahead of or behind the remote, no remote, by remote host; remembered for the next start |
 | `B` | open the repository and browse its files (tree and syntax-coloured view) |
 | `*` | star the repository (or the marked ones) as a favorite, shown with a star; again to unstar |
 | `d` | only repositories with uncommitted changes |

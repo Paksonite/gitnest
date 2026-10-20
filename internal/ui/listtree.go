@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/Paksonite/gitnest/v2/internal/state"
 	"github.com/charmbracelet/lipgloss"
 
 	"path/filepath"
@@ -47,6 +48,39 @@ func (a *App) setListView(tree bool, group int) {
 	a.st.SetListTree(tree)
 	a.st.SetListGroup(groupNames[group])
 	a.rebuildView(a.selectedKey())
+}
+
+// saveListView remembers the sort order and the filters for the next
+// start (the layout is saved by setListView).
+func (a *App) saveListView() {
+	rs := &a.rs
+	v := state.ListView{FavoritesOnly: rs.favOnly, Host: rs.host}
+	if rs.sortMode != sortRecent {
+		v.Sort = sortNames[rs.sortMode]
+	}
+	if rs.status != stAll {
+		v.Status = statusFilterTags[rs.status]
+	}
+	if a.st != nil {
+		a.st.SetListView(v)
+	}
+}
+
+// loadListView restores what saveListView saved; names it doesn't know
+// (from a newer gitnest, or edited by hand) keep the default.
+func (a *App) loadListView(v state.ListView) {
+	rs := &a.rs
+	for i, n := range sortNames {
+		if n == v.Sort {
+			rs.sortMode = i
+		}
+	}
+	for i, n := range statusFilterTags {
+		if n != "" && n == v.Status {
+			rs.status = i
+		}
+	}
+	rs.favOnly, rs.host = v.FavoritesOnly, v.Host
 }
 
 func (a *App) listViewName() string {
