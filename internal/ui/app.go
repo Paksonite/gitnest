@@ -3,6 +3,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,8 +25,11 @@ import (
 // paste in another).
 type shared struct {
 	copied *clipboard
-	update string          // newer gitnest release, shown in the header
-	fav    map[string]bool // starred repositories (*)
+	update string // newer gitnest release, shown in the header
+	// updateNow: the user said yes to installing it; Run returns
+	// ErrUpdateRequested once gitnest has quit.
+	updateNow bool
+	fav       map[string]bool // starred repositories (*)
 }
 
 // Smallest window the layout supports; below it a notice is shown instead.
@@ -149,6 +153,9 @@ func Run(cfg config.Config, noConfig bool, startDir, cdFile string) error {
 		defer fmt.Fprint(os.Stdout, "\x1b]22;text\x1b\\")
 	}
 	_, err := tea.NewProgram(newShell(a), opts...).Run()
+	if err == nil && a.sh.updateNow {
+		return ErrUpdateRequested
+	}
 	return err
 }
 
@@ -410,6 +417,10 @@ func (a *App) promptKey(k tea.KeyMsg) tea.Cmd {
 func (a *App) ask(title, initial string, ok func(string) tea.Cmd) {
 	a.p = &prompt{title: title, input: []rune(initial), onOK: ok}
 }
+
+// ErrUpdateRequested is what Run returns when gitnest quit to update itself
+// (yes to the new release's question): the caller runs the update.
+var ErrUpdateRequested = errors.New("update requested")
 
 func (a *App) confirm(text string, ok func() tea.Cmd) {
 	a.p = &prompt{title: text, confirm: true, onOK: func(string) tea.Cmd { return ok() }}

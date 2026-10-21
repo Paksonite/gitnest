@@ -373,6 +373,7 @@ var keymap = [scopes][]binding{
 		b(actDown, "move down (or scroll the file)", "", "down"),
 		b(actOpen, "fold / unfold a folder; on a file, scroll it", "open", "enter"),
 		b(actEdit, "edit the file in your editor", "edit", "e"),
+		b(actCdQuit, "quit and cd into the selected folder, or the selected file's folder (needs the shell integration)", "cd here", "o"),
 		b(actBack, "back (from the file to the tree, then to the repository)", "back", "esc", "q"),
 	},
 	scMenu: {

@@ -405,3 +405,37 @@ func TestGetInfoUpstreamGone(t *testing.T) {
 		}
 	}
 }
+
+// Fetching (what gitnest does on its own) only updates the remote-tracking
+// branches: the local branch, the index and the files stay as they are,
+// and the commits to pull show as "behind".
+func TestFetchLeavesLocalBranchesAlone(t *testing.T) {
+	remote := t.TempDir()
+	git(t, remote, "init", "-q", "--bare", "-b", "main")
+	dir := newRepo(t)
+	commit(t, dir, "a.txt", "a\n", "first")
+	git(t, dir, "remote", "add", "origin", remote)
+	git(t, dir, "push", "-q", "-u", "origin", "main")
+	other := filepath.Join(t.TempDir(), "other")
+	git(t, filepath.Dir(other), "clone", "-q", remote, other)
+	commit(t, other, "b.txt", "b\n", "theirs")
+	git(t, other, "push", "-q", "origin", "main")
+	writeFile(t, dir, "a.txt", "local edit\n")
+
+	head := git(t, dir, "rev-parse", "HEAD")
+	if err := Fetch(bg, dir); err != nil {
+		t.Fatal(err)
+	}
+	if got := git(t, dir, "rev-parse", "HEAD"); got != head {
+		t.Errorf("fetch moved HEAD: %s → %s", head, got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "b.txt")); err == nil {
+		t.Error("fetch brought their file into the working tree")
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "a.txt")); string(b) != "local edit\n" {
+		t.Errorf("fetch touched a local edit: %q", b)
+	}
+	if in, _ := GetInfo(bg, dir); in.Behind != 1 || in.Ahead != 0 {
+		t.Errorf("after fetch: %+v", in)
+	}
+}

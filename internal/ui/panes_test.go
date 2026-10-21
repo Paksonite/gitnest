@@ -260,12 +260,12 @@ func lipglossWidth(s string) int { return lipgloss.Width(s) }
 func TestUpdateBadge(t *testing.T) {
 	s := shellOf(t, 220, 50, "/r/app", "/r/lib")
 	press(t, s, "ctrl+n")
-	if strings.Contains(s.View(), "⬆") {
+	if strings.Contains(s.View(), " available · ") {
 		t.Fatal("badge without a newer release")
 	}
 	s.Update(updateMsg{"9.9.9"})
 	for i, p := range s.panes {
-		if !strings.Contains(p.app.viewRepos(), "⬆ 9.9.9") {
+		if !strings.Contains(p.app.viewRepos(), "gitnest 9.9.9 available") {
 			t.Errorf("pane %d: no update badge", i)
 		}
 	}
@@ -468,5 +468,59 @@ func TestUpdateCheckRepeatsWhileRunning(t *testing.T) {
 	s.Update(updateMsg{"2.0.10"})
 	if s.focused().app.toast != "" {
 		t.Errorf("the same version again should not toast: %q", s.focused().app.toast)
+	}
+}
+
+// A newly found release asks whether to update now: y quits gitnest (and
+// Run then reports ErrUpdateRequested), n leaves the banner in the header.
+// While you type (a search, a commit) it doesn't ask, only the banner.
+func TestNewReleaseAsksToUpdate(t *testing.T) {
+	s := shellOf(t, 120, 40, "/r/a")
+	a := s.focused().app
+	s.Update(updateMsg{"9.9.9"})
+	if a.p == nil || !strings.Contains(a.p.title, "gitnest 9.9.9 is out") || !strings.Contains(a.p.title, "update now?") {
+		t.Fatalf("expected the question, got %+v", a.p)
+	}
+	// n: no, the banner stays
+	press(t, s, "n")
+	if a.p != nil || a.sh.updateNow || !strings.Contains(s.View(), "gitnest 9.9.9 available") {
+		t.Fatalf("after n: prompt %+v, updateNow %v", a.p, a.sh.updateNow)
+	}
+
+	// y: quit to update
+	s2 := shellOf(t, 120, 40, "/r/a")
+	b := s2.focused().app
+	s2.Update(updateMsg{"9.9.9"})
+	_, cmd := s2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	quit := false
+	var walk func(tea.Cmd)
+	walk = func(c tea.Cmd) {
+		if c == nil {
+			return
+		}
+		switch m := c().(type) {
+		case tea.QuitMsg:
+			quit = true
+		case tea.BatchMsg:
+			for _, x := range m {
+				walk(x)
+			}
+		case paneMsg:
+			_, next := s2.Update(m)
+			walk(next)
+		}
+	}
+	walk(cmd)
+	if !b.sh.updateNow || !quit {
+		t.Fatalf("after y: updateNow %v, quit %v", b.sh.updateNow, quit)
+	}
+
+	// Typing: no question, only the banner.
+	s3 := shellOf(t, 120, 40, "/r/a")
+	c := s3.focused().app
+	press(t, s3, "/")
+	s3.Update(updateMsg{"9.9.9"})
+	if c.p != nil || c.sh.update != "9.9.9" {
+		t.Errorf("while searching: prompt %+v, banner %q", c.p, c.sh.update)
 	}
 }

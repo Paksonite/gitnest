@@ -254,7 +254,16 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, nil // said already; the header still says it
 		}
 		s.panes[0].app.sh.update = m.version // every pane shares sh
-		s.focused().app.setToast("gitnest "+m.version+" is out — quit and run: "+updateCommand(m.version), false)
+		f := s.focused().app
+		f.setToast("gitnest "+m.version+" is out — quit and run: "+updateCommand(m.version), false)
+		// Ask, unless that would cut into something: typing (a commit, a
+		// search), another question, a menu. The header keeps saying it.
+		if f.p == nil && !f.capturesKeys() && f.menu == nil && f.pull == nil && f.report == nil {
+			f.confirm(fmt.Sprintf("gitnest %s is out (you have %s). Quit and update now?", m.version, Version), func() tea.Cmd {
+				f.sh.updateNow, f.quitAll = true, true
+				return tea.Quit
+			})
+		}
 		return s, nil
 	case shellRescanTickMsg:
 		a := s.panes[0].app

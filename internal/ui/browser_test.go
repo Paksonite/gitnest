@@ -95,3 +95,38 @@ func TestColorize(t *testing.T) {
 		t.Error("plain text keeps the terminal colour")
 	}
 }
+
+// o in the file browser leaves for the selected folder, or the selected
+// file's folder, like o does for the repository.
+func TestBrowserCdIntoSelection(t *testing.T) {
+	dir := t.TempDir()
+	sh(t, dir, "init", "-q")
+	os.MkdirAll(filepath.Join(dir, "docs", "deep"), 0o755)
+	os.WriteFile(filepath.Join(dir, "docs", "deep", "b.txt"), []byte("b\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644)
+	a := testApp()
+	a.ctx = context.Background()
+	a.w, a.h = 120, 30
+	a.cdFile = filepath.Join(t.TempDir(), "cd")
+	a.Update(a.openBrowser(dir)())
+	pick := func(name string) {
+		for i, r := range a.browse.rows {
+			if r.name == name {
+				a.browse.cur = i
+				return
+			}
+		}
+		t.Fatalf("no row %q in %+v", name, a.browse.rows)
+	}
+	for _, c := range []struct{ row, want string }{
+		{"docs", filepath.Join(dir, "docs")}, // a folder: into it
+		{"main.go", dir},                     // a file: its folder
+	} {
+		pick(c.row)
+		a.onKey(key("o"))
+		got, _ := os.ReadFile(a.cdFile)
+		if strings.TrimSpace(string(got)) != c.want {
+			t.Errorf("o on %s: %q, want %q", c.row, got, c.want)
+		}
+	}
+}
