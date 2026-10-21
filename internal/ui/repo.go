@@ -41,6 +41,7 @@ type repoState struct {
 	dir, name     string
 	mainBranch    string // the main branch, see repoData
 	refsSeen      string // refs fingerprint at the last live refresh
+	fetching      bool   // the fetch started on opening is running
 	focus         int
 	info          gitx.Info
 	files         []gitx.File
@@ -858,6 +859,9 @@ func (a *App) viewRepo() string {
 		bold(rp.name) + "  " + fg(cCyan, rp.info.Branch) + " " + syncStyled(rp.info)
 	if st := rp.info.State; st != gitx.StateNone {
 		head += "  " + lipgloss.NewStyle().Bold(true).Foreground(cYellow).Render(st.String()+" — "+stateKeys(st))
+	}
+	if rp.fetching {
+		head += fg(cDim, "  ⟳ fetching")
 	}
 	head += a.copiedBadge() + a.updateBadge()
 

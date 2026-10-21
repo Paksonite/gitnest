@@ -28,6 +28,7 @@ type Config struct {
 	FollowSymlinks bool     `yaml:"follow_symlinks"`
 	RescanInterval int      `yaml:"rescan_interval"` // seconds, 0 disables
 	StatusInterval int      `yaml:"status_interval"` // seconds, 0 disables
+	FetchInterval  int      `yaml:"fetch_interval"`  // seconds, 0 disables
 	Jobs           int      `yaml:"jobs"`
 	Editor         string   `yaml:"editor"`
 	Icons          string   `yaml:"icons"` // "symbols", "nerd" (needs a Nerd Font) or "plain"
@@ -55,6 +56,9 @@ follow_symlinks: false
 rescan_interval: 60
 # Seconds between status refreshes of the repositories on screen (0 = off).
 status_interval: 15
+# Seconds between background fetches of every repository, so commits to
+# pull show up (↓) without pressing f (0 = off; the first runs soon after start).
+fetch_interval: 300
 # Parallel git processes used for scanning, fetch and pull.
 jobs: 8
 # Editor used by "e" (empty = $VISUAL, then $EDITOR, then vi).
@@ -139,6 +143,7 @@ func Default() Config {
 		SkipHidden:     true,
 		RescanInterval: 60,
 		StatusInterval: 15,
+		FetchInterval:  300,
 		Jobs:           8,
 		Theme:          Theme{Mode: "auto", Dark: "gitnest-dark", Light: "gitnest-light", Diff: "theme"},
 	}
@@ -185,6 +190,9 @@ func Load() (Config, bool, error) {
 	}
 	if cfg.RescanInterval < 0 {
 		cfg.RescanInterval = 0
+	}
+	if cfg.FetchInterval < 0 {
+		cfg.FetchInterval = 0
 	}
 	if cfg.StatusInterval < 0 {
 		cfg.StatusInterval = 0

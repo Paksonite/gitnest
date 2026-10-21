@@ -303,6 +303,18 @@ func (a *App) statusTick() tea.Cmd {
 	return tea.Tick(time.Duration(a.cfg.StatusInterval)*time.Second, func(time.Time) tea.Msg { return statusTickMsg{} })
 }
 
+// backgroundFetch fetches every repository in paths (quietly: a remote that
+// can't be reached is tried again next time), then reads their status, so
+// commits to pull show in the list without pressing f.
+func (a *App) backgroundFetch(paths []string) tea.Cmd {
+	ctx, jobs := a.ctx, a.cfg.Jobs
+	status := a.statusCmd(paths, false)
+	return func() tea.Msg {
+		scan.ForEach(len(paths), jobs, func(i int) { _ = gitx.Fetch(ctx, paths[i]) })
+		return bgFetchedMsg{status: status().(statusMsg)}
+	}
+}
+
 func (a *App) onRescanTick() tea.Cmd {
 	return tea.Batch(a.scanCmd(false), a.rescanTick())
 }
@@ -561,7 +573,35 @@ func (a *App) openDir(path string) tea.Cmd {
 	}
 	a.scr = scrRepo
 	a.rp = repoState{dir: path, name: filepath.Base(path)}
-	return loadRepoData(a.ctx, path)
+	return tea.Batch(loadRepoData(a.ctx, path), a.fetchOnOpen(path))
+}
+
+// openFetchedMsg says the fetch started on opening dir has finished.
+type openFetchedMsg struct{ dir string }
+
+// fetchOnOpen fetches the repository just opened in the background (when
+// background fetches are on), so commits to pull show without pressing f;
+// the panels are usable meanwhile and read again when it is done.
+func (a *App) fetchOnOpen(dir string) tea.Cmd {
+	if a.cfg.FetchInterval <= 0 {
+		return nil
+	}
+	a.rp.fetching = true
+	ctx := a.ctx
+	return func() tea.Msg {
+		_ = gitx.Fetch(ctx, dir) // unreachable: f says why
+		return openFetchedMsg{dir}
+	}
+}
+
+func (a *App) onOpenFetched(m openFetchedMsg) tea.Cmd {
+	row := a.statusCmd([]string{m.dir}, false) // the list row too
+	if a.scr != scrRepo || a.rp.dir != m.dir {
+		return row
+	}
+	a.rp.fetching = false
+	a.rp.mainKey = ""
+	return tea.Batch(loadRepoData(a.ctx, m.dir), row)
 }
 
 // saveCollapsed remembers the folded directories for the next start.
