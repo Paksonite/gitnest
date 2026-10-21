@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -289,5 +290,30 @@ func TestCheckDev(t *testing.T) {
 	}
 	if _, _, err := CheckDev(context.Background(), "a61760d", cache, 0); err != nil || calls.Load() != 2 {
 		t.Errorf("expired cache: calls %d, err %v", calls.Load(), err)
+	}
+}
+
+// A release check from hours ago must not hide a release made since: on
+// Debian, 2.0.8 knew "2.0.8 is the latest" from a check the same morning
+// and never offered 2.0.10. Answers older than CheckEvery are asked again.
+func TestCheckAsksAgainAfterCheckEvery(t *testing.T) {
+	gh := &fakeGitHub{tag: "v2.0.10"}
+	gh.start(t)
+	cache := filepath.Join(t.TempDir(), "update.json")
+	write := func(age time.Duration) {
+		b, _ := json.Marshal(cacheFile{Checked: time.Now().Add(-age), Latest: Release{Version: "2.0.8"}})
+		os.WriteFile(cache, b, 0o644)
+	}
+	write(CheckEvery + time.Minute)
+	rel, newer, err := Check(context.Background(), "2.0.8", cache, CheckEvery)
+	if err != nil || !newer || rel.Version != "2.0.10" || gh.calls.Load() != 1 {
+		t.Fatalf("old answer: %+v newer=%v err=%v calls=%d", rel, newer, err, gh.calls.Load())
+	}
+	write(time.Hour)
+	if rel, newer, _ := Check(context.Background(), "2.0.8", cache, CheckEvery); newer || rel.Version != "2.0.8" || gh.calls.Load() != 1 {
+		t.Errorf("a recent answer is used without asking: %+v newer=%v calls=%d", rel, newer, gh.calls.Load())
+	}
+	if CheckEvery > 6*time.Hour {
+		t.Errorf("CheckEvery = %v: a release could stay hidden for most of a day", CheckEvery)
 	}
 }

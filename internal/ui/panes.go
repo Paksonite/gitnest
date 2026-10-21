@@ -12,6 +12,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/term"
+
+	"github.com/Paksonite/gitnest/v2/internal/update"
 )
 
 // Shell holds several independent gitnests ("panes") in one terminal. Every
@@ -56,7 +58,13 @@ type paneMsg struct {
 type (
 	shellRescanTickMsg struct{}
 	shellStatusTickMsg struct{}
+	updateTickMsg      struct{} // look for a new release again (a gitnest left open)
 )
+
+// updateTick asks for the release check to run again in update.CheckEvery.
+func updateTick() tea.Cmd {
+	return tea.Tick(update.CheckEvery, func(time.Time) tea.Msg { return updateTickMsg{} })
+}
 
 func newShell(first *App) *Shell {
 	mode := paneGrid
@@ -138,7 +146,7 @@ func mapCmd(cmd tea.Cmd, f func(tea.Msg) tea.Msg) tea.Cmd {
 
 func (s *Shell) Init() tea.Cmd {
 	a := s.panes[0].app
-	return tea.Batch(wrap(s.panes[0].id, a.startCmds()), shellRescanTick(a), shellStatusTick(a), a.updateCheck())
+	return tea.Batch(wrap(s.panes[0].id, a.startCmds()), shellRescanTick(a), shellStatusTick(a), a.updateCheck(), updateTick())
 }
 
 // broadcast lists the messages about the shared repository list: every
@@ -209,7 +217,12 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, s.onMouse(m)
 	case tea.FocusMsg, tea.BlurMsg:
 		return s, s.deliver(s.focused(), msg)
+	case updateTickMsg:
+		return s, tea.Batch(s.panes[0].app.updateCheck(), updateTick())
 	case updateMsg:
+		if s.panes[0].app.sh.update == m.version {
+			return s, nil // said already; the header still says it
+		}
 		s.panes[0].app.sh.update = m.version // every pane shares sh
 		s.focused().app.setToast("gitnest "+m.version+" is out — quit and run: "+updateCommand(m.version), false)
 		return s, nil

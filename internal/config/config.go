@@ -63,7 +63,7 @@ editor: ""
 # symbols every font has, "nerd" Nerd Font glyphs (needs a Nerd Font in the
 # terminal, e.g. MesloLGS NF), "plain" none. T then i in the app switches.
 icons: symbols
-# Check GitHub once a day for a new gitnest release and say so in the
+# Check GitHub every 6 hours for a new gitnest release and say so in the
 # header ("gitnest update" installs it). GITNEST_NO_UPDATE_CHECK=1 also turns it off.
 update_check: true
 # What gitnest opens with: "last" (whichever was shown when it last quit),
