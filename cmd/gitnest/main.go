@@ -93,7 +93,12 @@ func run(args []string) error {
 		}
 	}
 	ui.Version, _, _ = buildVersion()
-	return ui.Run(cfg, !existed, startDir, cdFile)
+	err = ui.Run(cfg, !existed, startDir, cdFile)
+	if errors.Is(err, ui.ErrUpdateRequested) { // yes to "update now?"
+		fmt.Println("updating gitnest…")
+		return updateCmd(nil)
+	}
+	return err
 }
 
 // cutCdFile removes "--cd-file <path>" (used by the gn shell function) from args.

@@ -195,6 +195,10 @@ func TestE2EUpdateNotice(t *testing.T) {
 	s := newShell(a)
 	s.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	drive(t, s, s.Init())
+	if p := s.focused().app.p; p == nil || !strings.Contains(p.title, "gitnest 9.9.9 is out") {
+		t.Fatalf("a new release should ask whether to update now: %+v", p)
+	}
+	press(t, s, "n") // not now: the banner stays
 	if v := s.View(); !strings.Contains(v, "gitnest 9.9.9 available · gitnest update") {
 		t.Fatalf("no update badge:\n%s", v)
 	}

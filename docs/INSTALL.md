@@ -121,7 +121,9 @@ same — `gn` is just shorter. (Completion alone: `gitnest completion zsh` or
 
 gitnest looks for a new release on GitHub at most every 6 hours, also while
 it keeps running (one small request, nothing else is sent) and shows `gitnest 1.2.0 available · gitnest update` in the
-header when there is one. Turn this off with `update_check: false` or
+header when there is one. The first time it finds one it also asks
+whether to update now: `y` quits gitnest and runs `gitnest update`, `n`
+leaves just the note in the header (it doesn't ask while you type). Turn this off with `update_check: false` or
 `GITNEST_NO_UPDATE_CHECK=1`.
 
 ```sh
