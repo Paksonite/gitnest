@@ -19,7 +19,7 @@ var Version = "dev"
 // updateMsg reports a release newer than the running gitnest.
 type updateMsg struct{ version string }
 
-// updateCheck asks GitHub (at most once a day, see update.Check) whether a
+// updateCheck asks GitHub (at most every update.CheckEvery) whether a
 // newer release exists; preview builds (dev-<commit>) ask hourly for a newer
 // dev build. Failures are quiet: being offline is not news.
 func (a *App) updateCheck() tea.Cmd {
@@ -44,7 +44,7 @@ func (a *App) updateCheck() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		rel, newer, err := update.Check(ctx, Version, state.UpdateCachePath(), 24*time.Hour)
+		rel, newer, err := update.Check(ctx, Version, state.UpdateCachePath(), update.CheckEvery)
 		if err != nil || !newer {
 			return nil
 		}

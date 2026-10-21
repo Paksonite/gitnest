@@ -118,6 +118,11 @@ func parse(v string) ([3]int, bool) {
 
 // ------------------------------------------------------------- the check
 
+// CheckEvery is how often gitnest asks GitHub for the latest release: at
+// start when the last answer is older, and again while it keeps running.
+// Releases can come more than once a day; a day-old answer hid them.
+const CheckEvery = 6 * time.Hour
+
 type cacheFile struct {
 	Checked time.Time `json:"checked"`
 	Latest  Release   `json:"latest"`

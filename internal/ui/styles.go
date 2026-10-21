@@ -271,7 +271,16 @@ func themeSeq(bg lipgloss.TerminalColor) string {
 func paintScreen(view string, w, h int) string {
 	seq := themeSeq(cBack)
 	if seq == "" {
-		return view
+		// Every line starts from the terminal's own colours: the frame
+		// before may have left a theme's background set (a dark theme's
+		// last line ends on it, see below), and the renderer's erase to
+		// the end of a line would paint it again (switching from a dark
+		// theme to a light one left rows of the dark background).
+		lines := strings.Split(view, "\n")
+		for i, l := range lines {
+			lines[i] = "\x1b[0m" + l
+		}
+		return strings.Join(lines, "\n")
 	}
 	lines := strings.Split(view, "\n")
 	for len(lines) < h {

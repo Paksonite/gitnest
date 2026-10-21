@@ -128,7 +128,7 @@ func doctorCmd(args []string) error {
 		exe, _ := update.Executable()
 		how := update.Detect(exe, update.PackageOwner, update.GopathBin())
 		uctx, ucancel := context.WithTimeout(ctx, 5*time.Second)
-		rel, newer, err := update.Check(uctx, v, state.UpdateCachePath(), 24*time.Hour)
+		rel, newer, err := update.Check(uctx, v, state.UpdateCachePath(), update.CheckEvery)
 		ucancel()
 		switch {
 		case err != nil:

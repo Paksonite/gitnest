@@ -438,3 +438,35 @@ func TestPaintScreenLeavesTheCornerOnTheThemeBackground(t *testing.T) {
 		t.Errorf("last line ends %q, want the theme background", last[max(0, len(last)-30):])
 	}
 }
+
+// Themes without a background (light ones) start every line from the
+// terminal's own colours: a dark theme's frame before leaves its
+// background set, and erasing to the end of a line would paint it again.
+func TestPaintScreenWithoutBackgroundResetsEveryLine(t *testing.T) {
+	old := cBack
+	cBack = lipgloss.NoColor{}
+	t.Cleanup(func() { cBack = old })
+	for i, l := range strings.Split(paintScreen("top\n\nfooter", 20, 3), "\n") {
+		if !strings.HasPrefix(l, "\x1b[0m") {
+			t.Errorf("line %d %q doesn't start with a reset", i, l)
+		}
+	}
+}
+
+// A gitnest left open looks for a new release again every CheckEvery, and
+// says so once per new version.
+func TestUpdateCheckRepeatsWhileRunning(t *testing.T) {
+	s := shellOf(t, 120, 40, "/r/a")
+	if _, cmd := s.Update(updateTickMsg{}); cmd == nil {
+		t.Fatal("the tick should check again and set the next tick")
+	}
+	s.Update(updateMsg{"2.0.10"})
+	if !strings.Contains(s.focused().app.toast, "2.0.10 is out") {
+		t.Fatalf("first notice: %q", s.focused().app.toast)
+	}
+	s.focused().app.toast = ""
+	s.Update(updateMsg{"2.0.10"})
+	if s.focused().app.toast != "" {
+		t.Errorf("the same version again should not toast: %q", s.focused().app.toast)
+	}
+}

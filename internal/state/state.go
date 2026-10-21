@@ -24,7 +24,7 @@ func statePath() string { return filepath.Join(dir("XDG_STATE_HOME", ".local/sta
 func StatusCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "status.json") }
 
 // UpdateCachePath remembers the last release check, so GitHub is asked at
-// most once a day.
+// most every update.CheckEvery.
 func UpdateCachePath() string { return filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "update.json") }
 
 // DevUpdateCachePath remembers the last check for gitnest-dev builds.

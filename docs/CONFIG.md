@@ -16,7 +16,7 @@ status_interval: 15    # seconds between status refreshes of visible rows (0 = o
 jobs: 8                # parallel git processes
 editor: ""             # for e; empty = $VISUAL, then $EDITOR, then vi
 icons: symbols         # nerd (needs a Nerd Font) or plain
-update_check: true     # look for a new release once a day (false = never)
+update_check: true     # look for a new release every 6 hours (false = never)
 start: last            # or dashboard, list: what gitnest opens with (last = as you left it)
 mouse: true            # click and scroll; false leaves the mouse to the terminal
 theme:
