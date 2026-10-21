@@ -2,6 +2,7 @@ package scan
 
 import (
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -103,6 +104,16 @@ func (w *walker) visit(dir string, depth int) {
 		return
 	}
 	st, err := os.Stat(dir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		// There, but not readable just now: keep what the last scan found
+		// (and look again next time) instead of forgetting it.
+		if old := w.s.dirs[dir]; old != nil {
+			kept := *old
+			kept.Mod = 0
+			w.keep(dir, &kept, depth)
+		}
+		return
+	}
 	if err != nil || !st.IsDir() {
 		return
 	}
@@ -121,6 +132,11 @@ func (w *walker) visit(dir string, depth int) {
 	} else if info.Repo && !hasGit(dir) {
 		info = w.read(dir, mod) // .git removed without touching the dir's mtime (unlikely)
 	}
+	w.keep(dir, info, depth)
+}
+
+// keep records what is known about dir and goes on below it.
+func (w *walker) keep(dir string, info *dirInfo, depth int) {
 	w.seen[dir] = info
 	if info.Repo {
 		w.repos = append(w.repos, dir)
@@ -151,7 +167,17 @@ func (w *walker) read(dir string, mod int64) *dirInfo {
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return info // unreadable: remember it so we retry only when it changes
+		// Unreadable just now (too many open files, a busy disk, a
+		// permission being changed): keep what the last scan found below
+		// it, rather than dropping a whole subtree until the directory
+		// changes, and read it again next time.
+		if old := w.s.dirs[dir]; old != nil {
+			kept := *old
+			kept.Mod = 0
+			return &kept
+		}
+		info.Mod = 0
+		return info
 	}
 	for _, e := range entries {
 		if e.Name() == ".git" {
@@ -180,6 +206,9 @@ func (w *walker) read(dir string, mod int64) *dirInfo {
 	}
 	return info
 }
+
+// IsRepo reports whether dir still holds a repository (a .git entry).
+func IsRepo(dir string) bool { return hasGit(dir) }
 
 func hasGit(dir string) bool {
 	_, err := os.Lstat(filepath.Join(dir, ".git"))

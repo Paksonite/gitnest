@@ -237,3 +237,33 @@ func TestStatusCache(t *testing.T) {
 		t.Fatalf("cached = %+v", got)
 	}
 }
+
+// A directory that changed but can't be read just now keeps what was found
+// below it, and is read again on the next scan, instead of losing its
+// whole subtree until it changes once more.
+func TestUnreadableDirectoryKeepsItsRepositories(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads every directory")
+	}
+	root := t.TempDir()
+	mkrepo(t, root, "github.com/a")
+	mkrepo(t, root, "github.com/b")
+	s := NewScanner(opts(root))
+	time.Sleep(racyWindow + 100*time.Millisecond) // not "racily" recent
+	if got, _ := s.Scan(false); len(got) != 2 {
+		t.Fatalf("first scan: %v", rel(root, got))
+	}
+	gh := filepath.Join(root, "github.com")
+	mkfile(t, filepath.Join(gh, "notes.txt"), "x") // the directory changes…
+	os.Chmod(gh, 0o000)                            // …and can't be read for a moment
+	t.Cleanup(func() { os.Chmod(gh, 0o755) })
+	if got, _ := s.Scan(false); !reflect.DeepEqual(rel(root, got), []string{"github.com/a", "github.com/b"}) {
+		t.Fatalf("while unreadable: %v", rel(root, got))
+	}
+	os.Chmod(gh, 0o755)
+	mkrepo(t, root, "github.com/c")
+	os.Chtimes(gh, time.Now().Add(-time.Hour), time.Now().Add(-time.Hour)) // as if read back later, unchanged
+	if got, _ := s.Scan(false); len(got) != 3 {
+		t.Fatalf("readable again: %v (it should be read again)", rel(root, got))
+	}
+}

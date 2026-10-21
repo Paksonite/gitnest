@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -42,7 +43,8 @@ func TestOnStatusKeepsOrderAndCursor(t *testing.T) {
 	a.rs.cur = 2 // on "b"
 	a.onStatus(statusMsg{
 		repos: []scan.Repo{{Path: "a", Name: "a", Info: gitx.Info{Changes: 3}}},
-		asked: []string{"a", "c"}, // c is gone
+		asked: []string{"a", "c"},
+		gone:  []string{"c"}, // c is no longer a repository
 	})
 	if got := listed(a); !reflect.DeepEqual(got, []string{"a", "b"}) {
 		t.Fatalf("list = %v", got)
@@ -335,5 +337,39 @@ func TestStatusCellUpstreamGone(t *testing.T) {
 	}
 	if got := needAttention([]scan.Repo{{Path: "/r/b", Info: gitx.Info{UpstreamGone: true}}}); len(got) != 1 {
 		t.Error("a gone upstream needs attention")
+	}
+}
+
+// A git status that fails for a moment (git busy, no processes left) must
+// not drop repositories from a list left open: only one whose .git is gone
+// leaves it, and the scan alone decides what exists.
+func TestFailedStatusKeepsTheRows(t *testing.T) {
+	a := testApp("a", "b", "c")
+	a.onStatus(statusMsg{
+		repos: []scan.Repo{{Path: "a", Name: "a", Info: gitx.Info{Changes: 1}}},
+		asked: []string{"a", "b", "c"}, // b and c failed, but are still repositories
+	})
+	if got := listed(a); len(got) != 3 {
+		t.Fatalf("a failed status dropped rows: %v", got)
+	}
+	// A new repository whose first status fails is listed by name.
+	a.rs.known = append(a.rs.known, "d")
+	a.onStatus(statusMsg{asked: []string{"d"}, added: true})
+	if got := listed(a); len(got) != 4 {
+		t.Fatalf("new repository with a failed status: %v", got)
+	}
+	// A refresh of the whole list that misses some keeps them too, and
+	// lists what the scan found even without any status.
+	a.rs.known = []string{"a", "b", "c", "d", "e"}
+	a.onRepos(reposMsg{repos: []scan.Repo{{Path: "a", Name: "a"}}})
+	if got := listed(a); len(got) != 5 {
+		t.Fatalf("refresh: %v", got)
+	}
+	// statusCmd itself: a path that still has .git is not reported gone.
+	dir := t.TempDir()
+	os.Mkdir(filepath.Join(dir, ".git"), 0o755) // not a valid repository: git fails
+	msg := a.statusCmd([]string{dir, filepath.Join(dir, "missing")}, false)().(statusMsg)
+	if len(msg.repos) != 0 || len(msg.gone) != 1 || msg.gone[0] != filepath.Join(dir, "missing") {
+		t.Errorf("status of a broken and a missing repository: repos %d gone %v", len(msg.repos), msg.gone)
 	}
 }
