@@ -55,6 +55,7 @@ type (
 	statusMsg struct {
 		repos []scan.Repo
 		asked []string
+		gone  []string // asked, and no longer repositories (no .git)
 		added bool
 	}
 	rescanTickMsg struct{}
@@ -104,7 +105,21 @@ func (a *App) statusCmd(paths []string, added bool) tea.Cmd {
 	}
 	ctx, jobs, recent := a.ctx, a.cfg.Jobs, a.st.Snapshot()
 	return func() tea.Msg {
-		return statusMsg{repos: scan.Status(ctx, paths, jobs, recent), asked: paths, added: added}
+		repos := scan.Status(ctx, paths, jobs, recent)
+		got := make(map[string]bool, len(repos))
+		for _, r := range repos {
+			got[r.Path] = true
+		}
+		// A path whose status failed is gone only when its .git is; git
+		// failing for a moment (busy, out of processes) is not a reason
+		// to drop it from the list.
+		var gone []string
+		for _, p := range paths {
+			if !got[p] && !scan.IsRepo(p) {
+				gone = append(gone, p)
+			}
+		}
+		return statusMsg{repos: repos, asked: paths, gone: gone, added: added}
 	}
 }
 
@@ -114,7 +129,7 @@ func (a *App) onRepos(m reposMsg) tea.Cmd {
 	keep := a.selectedKey()
 	if m.paths != nil {
 		rs.known = m.paths
-		rs.all = m.repos
+		rs.all = refreshed(nil, m.repos, m.paths)
 	} else {
 		rs.all = refreshed(rs.all, m.repos, rs.known)
 	}
@@ -133,7 +148,8 @@ func (a *App) onRepos(m reposMsg) tea.Cmd {
 // read the paths listed when it started; a scan that finished meanwhile may
 // have found repositories since (rows the refresh doesn't have: kept) and
 // lost others (moved or deleted: not brought back). known is what the
-// latest scan found.
+// latest scan found, and the list is exactly that: the scan alone decides
+// which repositories exist.
 func refreshed(rows, fresh []scan.Repo, known []string) []scan.Repo {
 	if known == nil { // no scan yet: the refresh is all there is
 		return fresh
@@ -154,6 +170,14 @@ func refreshed(rows, fresh []scan.Repo, known []string) []scan.Repo {
 		if in[r.Path] && !got[r.Path] {
 			out = append(out, r)
 			got[r.Path] = true
+		}
+	}
+	// Whatever the scan found is listed, even when git failed for it just
+	// now: a name without a status, filled in by the next refresh.
+	for _, p := range known {
+		if !got[p] {
+			out = append(out, scan.Repo{Path: p, Name: filepath.Base(p)})
+			got[p] = true
 		}
 	}
 	return out
@@ -221,23 +245,27 @@ func (a *App) onStatus(m statusMsg) tea.Cmd {
 	for _, r := range m.repos {
 		got[r.Path] = r
 	}
-	asked := map[string]bool{}
-	for _, p := range m.asked {
-		asked[p] = true
+	gone := map[string]bool{}
+	for _, p := range m.gone {
+		gone[p] = true
 	}
 	before := len(rs.all)
+	listed := make(map[string]bool, len(rs.all))
 	out := rs.all[:0]
 	for _, r := range rs.all {
+		listed[r.Path] = true
 		if nr, ok := got[r.Path]; ok {
 			out = append(out, nr)
 			delete(got, r.Path)
-		} else if !asked[r.Path] {
+		} else if !gone[r.Path] { // a failed status keeps the last one
 			out = append(out, r)
 		}
 	}
 	for _, p := range m.asked { // newly found repositories, in scan order
 		if r, ok := got[p]; ok {
 			out = append(out, r)
+		} else if m.added && !gone[p] && !listed[p] {
+			out = append(out, scan.Repo{Path: p, Name: filepath.Base(p)}) // status next time
 		}
 	}
 	rs.all = out
