@@ -58,7 +58,7 @@ false` in the config leaves the mouse to the terminal.
 | `a` | actions on the marked repositories (or the selected one): fetch, pull, open each in a pane of its own |
 | `A` / `U` | mark every repository shown / unmark everything |
 | `ctrl+p` | pull all: fetches every repository, lists every branch that is behind (also main when it isn't checked out); pick with `space` / `a`, `enter` updates them (fast-forward only) |
-| `R` | rescan the folders and refresh every status now (both also happen on their own, every minute and every 15 seconds by default) |
+| `R` | rescan the folders and refresh every status now (both also happen on their own, every minute and every 15 seconds by default; every repository is also fetched in the background every 5 minutes, see fetch_interval) |
 | `q` | quit |
 | `o` | quit and go to the repository (needs the [shell integration](INSTALL.md#shell-integration-completion-and-gn)) |
 | `T` | theme and icons |
@@ -79,6 +79,8 @@ different hosts are told apart by host (`org-core-dns · forgejo`).
 
 ## Inside a repository
 
+Opening a repository fetches it in the background (`⟳ fetching` in the header;
+the panels work meanwhile), so commits to pull show without `f`.
 Four panels on the left — **Files**, **Branches** (`Local - Remote - Tags`),
 **Commits** (`Commits - Reflog`), **Stash** — and the diff on the right.
 `1`–`4` or `tab` switch panels, `enter` on the diff scrolls it; only the

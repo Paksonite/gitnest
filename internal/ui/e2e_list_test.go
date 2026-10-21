@@ -277,7 +277,7 @@ func TestE2EPullAll(t *testing.T) {
 	if r := got["release"]; !r.ok || !r.on || r.branch.Current {
 		t.Errorf("release: %+v", r)
 	}
-	if r := got["topic"]; r.ok || r.on || !strings.Contains(r.note, "diverged") {
+	if r := got["topic"]; r.ok || r.on || !strings.Contains(r.note, "diverged: 1 local commit not pushed") || strings.Contains(r.note, "↑") {
 		t.Errorf("topic: %+v", r)
 	}
 	v := a.View()

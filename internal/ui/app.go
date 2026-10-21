@@ -265,6 +265,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case repoDataMsg:
 		return a, a.onRepoData(m)
+	case openFetchedMsg:
+		return a, a.onOpenFetched(m)
 	case mainMsg:
 		if m.key == a.rp.mainKey {
 			a.rp.main = m.text

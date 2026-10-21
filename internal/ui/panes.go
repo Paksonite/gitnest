@@ -29,7 +29,8 @@ type Shell struct {
 	w, h   int
 	mode   int // paneGrid, paneColumns or paneRows
 
-	resizeSeq int // counts size changes, for resizeSettledMsg
+	resizeSeq int  // counts size changes, for resizeSettledMsg
+	fetching  bool // a background fetch is running
 }
 
 // Pane arrangements, cycled with ctrl+g.
@@ -59,7 +60,24 @@ type (
 	shellRescanTickMsg struct{}
 	shellStatusTickMsg struct{}
 	updateTickMsg      struct{} // look for a new release again (a gitnest left open)
+	shellFetchTickMsg  struct{} // fetch every repository in the background
+	bgFetchedMsg       struct{ status statusMsg }
 )
+
+// firstFetch is how soon after start the first background fetch runs.
+var firstFetch = 5 * time.Second
+
+// shellFetchTick schedules the next background fetch in d (fetch_interval
+// when d is 0); nothing when it is turned off.
+func shellFetchTick(a *App, d time.Duration) tea.Cmd {
+	if a.cfg.FetchInterval <= 0 {
+		return nil
+	}
+	if d == 0 {
+		d = time.Duration(a.cfg.FetchInterval) * time.Second
+	}
+	return tea.Tick(d, func(time.Time) tea.Msg { return shellFetchTickMsg{} })
+}
 
 // updateTick asks for the release check to run again in update.CheckEvery.
 func updateTick() tea.Cmd {
@@ -146,7 +164,7 @@ func mapCmd(cmd tea.Cmd, f func(tea.Msg) tea.Msg) tea.Cmd {
 
 func (s *Shell) Init() tea.Cmd {
 	a := s.panes[0].app
-	return tea.Batch(wrap(s.panes[0].id, a.startCmds()), shellRescanTick(a), shellStatusTick(a), a.updateCheck(), updateTick())
+	return tea.Batch(wrap(s.panes[0].id, a.startCmds()), shellRescanTick(a), shellStatusTick(a), a.updateCheck(), updateTick(), shellFetchTick(a, firstFetch))
 }
 
 // broadcast lists the messages about the shared repository list: every
@@ -217,6 +235,18 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, s.onMouse(m)
 	case tea.FocusMsg, tea.BlurMsg:
 		return s, s.deliver(s.focused(), msg)
+	case shellFetchTickMsg:
+		a := s.panes[0].app
+		next := shellFetchTick(a, 0)
+		if s.fetching || len(a.rs.known) == 0 {
+			return s, next
+		}
+		s.fetching = true
+		return s, tea.Batch(a.backgroundFetch(append([]string(nil), a.rs.known...)), next)
+	case bgFetchedMsg:
+		s.fetching = false
+		id := s.panes[0].id // every pane gets the statuses (broadcast)
+		return s, func() tea.Msg { return paneMsg{id: id, msg: m.status} }
 	case updateTickMsg:
 		return s, tea.Batch(s.panes[0].app.updateCheck(), updateTick())
 	case updateMsg:

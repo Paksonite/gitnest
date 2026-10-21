@@ -13,6 +13,7 @@ nested: false          # also find repositories inside repositories (not submodu
 follow_symlinks: false
 rescan_interval: 60    # seconds between background scans for new clones (0 = off)
 status_interval: 15    # seconds between status refreshes of visible rows (0 = off)
+fetch_interval: 300    # seconds between background fetches of every repository (0 = off)
 jobs: 8                # parallel git processes
 editor: ""             # for e; empty = $VISUAL, then $EDITOR, then vi
 icons: symbols         # nerd (needs a Nerd Font) or plain

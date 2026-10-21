@@ -363,3 +363,54 @@ func TestE2EListRowFollowsOperations(t *testing.T) {
 		t.Fatalf("after the push: %+v", r.Info)
 	}
 }
+
+// Commits someone else pushed show up without pressing f: on opening the
+// repository (it is fetched in the background), and in the list from the
+// background fetch of every repository (fetch_interval).
+func TestE2EFetchesOnItsOwn(t *testing.T) {
+	if testing.Short() {
+		t.Skip("end-to-end")
+	}
+	a, root, origin := e2eSetup(t)
+	a.cfg.FetchInterval = 300
+	app := filepath.Join(root, "app")
+	push := func(msg string) { // another developer pushes to origin
+		other := filepath.Join(t.TempDir(), "other")
+		sh(t, filepath.Dir(other), "clone", "-q", origin, other)
+		os.WriteFile(filepath.Join(other, msg+".txt"), []byte(msg+"\n"), 0o644)
+		sh(t, other, "add", ".")
+		sh(t, other, "commit", "-q", "-m", msg)
+		sh(t, other, "push", "-q", "origin", "HEAD:main")
+	}
+	row := func() scan.Repo {
+		for _, r := range a.rs.all {
+			if r.Path == app {
+				return r
+			}
+		}
+		return scan.Repo{}
+	}
+
+	// Opening the repository fetches it.
+	push("first")
+	press(t, a, "/", "type:app", "enter")
+	if a.rp.info.Behind != 1 || a.rp.fetching {
+		t.Fatalf("after opening: behind %d, fetching %v", a.rp.info.Behind, a.rp.fetching)
+	}
+	if row().Behind != 1 {
+		t.Errorf("the list row after opening: %+v", row().Info)
+	}
+	press(t, a, "esc")
+
+	// The background fetch catches the next one, for the list.
+	push("second")
+	s := newShell(a)
+	_, cmd := s.Update(shellFetchTickMsg{})
+	drive(t, s, cmd)
+	if row().Behind != 2 {
+		t.Errorf("after the background fetch: %+v", row().Info)
+	}
+	if s.fetching {
+		t.Error("the background fetch should be done")
+	}
+}

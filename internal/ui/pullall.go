@@ -117,7 +117,13 @@ func behindRows(ctx context.Context, dir, label string) []pullRow {
 		r := pullRow{repo: dir, name: name, branch: b, behind: behind, ok: true}
 		switch {
 		case ahead > 0:
-			r.ok, r.note = false, fmt.Sprintf("diverged (↑%d): pull it inside the repository", ahead)
+			// No arrow here: on a screen about pulling, "↑1" read as a
+			// direction to pull in. Say what it is.
+			commits := "commit"
+			if ahead > 1 {
+				commits = "commits"
+			}
+			r.ok, r.note = false, fmt.Sprintf("diverged: %d local %s not pushed — pull it inside the repository", ahead, commits)
 		case b.Current && info.State != gitx.StateNone:
 			r.ok, r.note = false, strings.ToLower(info.State.String())+" in progress"
 		case b.Current && info.Changes > 0:
