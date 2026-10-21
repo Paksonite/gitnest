@@ -413,8 +413,9 @@ func (a *App) rebuildView(keep string) {
 	}
 }
 
-// matchRepo scores r against the filter terms; every term must match. A term
-// matches the name (highlighted), or else the clone label, remote host and
+// matchRepo scores r against the filter terms; every term must match, as a
+// phrase (one piece, not letters spread over the name). A term matches the
+// name (highlighted), or else the clone label, remote host and
 // parent directories at a lower score; "@term" matches the current branch.
 func (a *App) matchRepo(r scan.Repo, terms []string) (int, bool) {
 	total := 0
@@ -424,32 +425,26 @@ func (a *App) matchRepo(r scan.Repo, terms []string) (int, bool) {
 			if t == "@" {
 				continue
 			}
-			sc, _, ok := fuzzyMatch(r.Branch, t[1:])
+			sc, _, ok := phraseMatch(r.Branch, t[1:])
 			if !ok {
 				return 0, false
 			}
 			total += sc / 2
 			continue
 		}
-		if sc, pos, ok := fuzzyMatch(r.Name, t); ok {
+		if sc, pos, ok := phraseMatch(r.Name, t); ok {
 			total += sc
 			namePos = append(namePos, pos...)
 			continue
 		}
-		// Elsewhere a term must match within one part of the clone label,
-		// remote host or parent path ("grp" finds the folder "group"):
-		// letters scattered over a whole host or path match almost anything.
+		// Elsewhere: the clone label, the remote host or the parent path
+		// ("waveops" finds every repository on forgejo.int.waveops.pl).
 		where := a.rs.label[r.Path] + " " + gitx.RemoteHost(r.RemoteURL) + " " + config.Abbrev(filepath.Dir(r.Path))
-		best, found := 0, false
-		for _, part := range strings.FieldsFunc(where, func(c rune) bool { return c == ' ' || c == '/' || c == '.' }) {
-			if sc, _, ok := fuzzyMatch(part, t); ok && (!found || sc > best) {
-				best, found = sc, true
-			}
-		}
-		if !found {
+		sc, _, ok := phraseMatch(where, t)
+		if !ok {
 			return 0, false
 		}
-		total += best / 3
+		total += sc / 3
 	}
 	if len(namePos) > 0 {
 		a.rs.hl[r.Path] = namePos

@@ -46,7 +46,7 @@ false` in the config leaves the mouse to the terminal.
 
 | Key | |
 |---|---|
-| `/` | search by name (also git host and folder; `@text` searches branches); `enter` opens, `tab` keeps the filter, `esc` clears |
+| `/` | search by name: each word as a whole phrase ("gco-cot" finds gco-cot-service; "cot iam" needs both), also in the git host and folder; `@text` searches branches; `enter` opens, `tab` keeps the filter, `esc` clears |
 | `enter` | open the repository |
 | `` ` `` | list view: flat, grouped by folder, grouped by remote host and owner (github.com/ann/; local/ without a remote); `enter` folds a group |
 | `H` | the dashboard: activity, what needs attention, the most active repositories |

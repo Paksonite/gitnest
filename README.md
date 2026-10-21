@@ -12,7 +12,7 @@ only needs `git`.
 - **A dashboard to start the day.** Commit activity across every repository,
   what needs attention, the most active repositories, the latest commits.
 - **Every repository at a glance.** Branch, ahead/behind, uncommitted changes,
-  fuzzy search, filters, grouping by folder or remote host, favorites.
+  search by name, filters, grouping by folder or remote host, favorites.
 - **A full git client per repository.** Line-by-line staging, branches and
   tags, a coloured commit graph, the reflog, stashes, a file browser.
 - **History editing you can undo.** Squash, fixup, reword, drop, reorder or an

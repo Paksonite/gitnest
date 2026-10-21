@@ -55,8 +55,8 @@ func TestE2EListSearchFilterTree(t *testing.T) {
 		t.Fatalf("esc clears: %q %v", a.rs.filter, listed(a))
 	}
 	// While searching, j, q and ? are text; backspace and ctrl+w edit it.
-	press(t, a, "/", "type:q?j", "backspace", "backspace", "backspace", "type:grp one")
-	if a.rs.filter != "grp one" || len(listed(a)) != 1 || a.report != nil {
+	press(t, a, "/", "type:q?j", "backspace", "backspace", "backspace", "type:group one")
+	if a.rs.filter != "group one" || len(listed(a)) != 1 || a.report != nil {
 		t.Fatalf("query editing: %q %v", a.rs.filter, listed(a))
 	}
 	press(t, a, "esc")
