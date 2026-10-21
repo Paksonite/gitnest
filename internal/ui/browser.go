@@ -263,6 +263,8 @@ func (a *App) browserKey(k tea.KeyMsg) tea.Cmd {
 		c := exec.Command("sh", "-c", a.editor()+` "$@"`, "sh", filepath.FromSlash(b.path))
 		c.Dir = b.dir
 		return a.execCmd(c)
+	case actCdQuit:
+		return a.cdQuit(b.cdTarget())
 	case actBack:
 		if b.focusFile {
 			b.focusFile = false
@@ -271,6 +273,20 @@ func (a *App) browserKey(k tea.KeyMsg) tea.Cmd {
 		a.browse = nil
 	}
 	return nil
+}
+
+// cdTarget is where o leaves you: the selected folder, or the folder of the
+// selected file (the repository's root when nothing is selected).
+func (b *browser) cdTarget() string {
+	if b.cur >= len(b.rows) {
+		return b.dir
+	}
+	r := b.rows[b.cur]
+	rel := filepath.FromSlash(r.path)
+	if !r.dir {
+		rel = filepath.Dir(rel)
+	}
+	return filepath.Join(b.dir, rel)
 }
 
 func (a *App) viewBrowser() string {

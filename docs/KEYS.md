@@ -102,7 +102,7 @@ branch; `u` sets one).
 | Interactive rebase | `p` pick, `r` reword, `e` edit, `s` squash, `f` fixup, `d` drop, `ctrl+j`/`ctrl+k` move, `enter` run, `esc` cancel |
 | Reflog | `space` check out an entry, `g` reset the branch to it, `[` back to the commits |
 | Stash | `space` apply, `g` pop, `b` branch from it, `d` drop |
-| Files browser | `B`: every file of the repository in a tree, the selected one with line numbers and syntax colours; `enter` folds a folder or moves into the file to scroll it, `e` edit, `esc` back (from the file to the tree, then to the repository) |
+| Files browser | `B`: every file of the repository in a tree, the selected one with line numbers and syntax colours; `enter` folds a folder or moves into the file to scroll it, `e` edit, `o` quit into the selected folder (or the selected file's folder), `esc` back (from the file to the tree, then to the repository) |
 | Anywhere | `B` browse the files, `p` pull, `ctrl+p` pull --rebase, `P` push (when the remote refuses or the branches diverged, it offers a force push with a warning), `f` fetch, `z` undo the last history change, `o` quit and cd here, `enter` scroll the diff, `esc` back to the list, `!` full error, `?` help |
 
 The commit message editor has a **Subject** and an optional **Body**: type the

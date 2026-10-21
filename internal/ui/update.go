@@ -57,7 +57,7 @@ func (a *App) updateBadge() string {
 	if a.sh.update == "" {
 		return ""
 	}
-	return "  " + badge("⬆ "+a.sh.update+" · "+updateCommand(a.sh.update), cGreen)
+	return "  " + badge("gitnest "+a.sh.update+" available · "+updateCommand(a.sh.update), cGreen) // no ⬆: next to ↑/↓ it read as git
 }
 
 // updateCommand is what installs version v: dev builds update gitnest-dev.

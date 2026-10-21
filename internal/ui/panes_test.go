@@ -260,12 +260,12 @@ func lipglossWidth(s string) int { return lipgloss.Width(s) }
 func TestUpdateBadge(t *testing.T) {
 	s := shellOf(t, 220, 50, "/r/app", "/r/lib")
 	press(t, s, "ctrl+n")
-	if strings.Contains(s.View(), "⬆") {
+	if strings.Contains(s.View(), " available · ") {
 		t.Fatal("badge without a newer release")
 	}
 	s.Update(updateMsg{"9.9.9"})
 	for i, p := range s.panes {
-		if !strings.Contains(p.app.viewRepos(), "⬆ 9.9.9") {
+		if !strings.Contains(p.app.viewRepos(), "gitnest 9.9.9 available") {
 			t.Errorf("pane %d: no update badge", i)
 		}
 	}
