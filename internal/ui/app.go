@@ -2,8 +2,8 @@
 package ui
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,11 +25,11 @@ import (
 // paste in another).
 type shared struct {
 	copied *clipboard
-	update string          // newer gitnest release, shown in the header
+	update string // newer gitnest release, shown in the header
 	// updateNow: the user said yes to installing it; Run returns
 	// ErrUpdateRequested once gitnest has quit.
 	updateNow bool
-	fav    map[string]bool // starred repositories (*)
+	fav       map[string]bool // starred repositories (*)
 }
 
 // Smallest window the layout supports; below it a notice is shown instead.
