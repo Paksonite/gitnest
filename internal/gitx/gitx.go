@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -928,15 +929,96 @@ func Fetch(ctx context.Context, dir string) error {
 	return err
 }
 
+// Pull pulls the current branch: rebasing, or only fast-forwarding.
 func Pull(ctx context.Context, dir string, rebase bool) error {
-	args := []string{"pull", "-q"}
 	if rebase {
+		return PullWith(ctx, dir, PullRebase)
+	}
+	return PullWith(ctx, dir, PullFFOnly)
+}
+
+// How a pull brings in commits when the branch has diverged from its
+// upstream (both sides have commits of their own).
+const (
+	PullUnset  = ""        // nothing configured: gitnest asks
+	PullRebase = "rebase"  // put the local commits on top of the upstream's
+	PullMerge  = "merge"   // a merge commit
+	PullFFOnly = "ff-only" // refuse; only fast-forwards
+)
+
+// PullSetting reads how git is configured to pull the current branch, as
+// git itself decides: branch.<name>.rebase, then pull.rebase, then pull.ff.
+func PullSetting(ctx context.Context, dir string) string {
+	get := func(key string) string {
+		out, err := run(ctx, kRead, dir, nil, "config", "--get", key)
+		if err != nil {
+			return ""
+		}
+		return strings.ToLower(strings.TrimSpace(out))
+	}
+	rebase := ""
+	if b, err := run(ctx, kRead, dir, nil, "symbolic-ref", "-q", "--short", "HEAD"); err == nil {
+		rebase = get("branch." + strings.TrimSpace(b) + ".rebase")
+	}
+	if rebase == "" {
+		rebase = get("pull.rebase")
+	}
+	switch rebase {
+	case "true", "merges", "interactive", "i", "m", "yes", "on", "1":
+		return PullRebase
+	case "false", "no", "off", "0":
+		return PullMerge
+	}
+	switch get("pull.ff") {
+	case "only":
+		return PullFFOnly
+	case "true", "false":
+		return PullMerge
+	}
+	return PullUnset
+}
+
+// PullWith pulls the current branch: rebasing (uncommitted changes are put
+// aside and back), merging, or only fast-forwarding (PullFFOnly or
+// PullUnset).
+func PullWith(ctx context.Context, dir, mode string) error {
+	args := []string{"pull", "-q"}
+	switch mode {
+	case PullRebase:
 		args = append(args, "--rebase", "--autostash")
-	} else {
+	case PullMerge:
+		args = append(args, "--no-rebase", "--no-edit", "--autostash")
+	default:
 		args = append(args, "--ff-only")
 	}
 	_, err := run(ctx, kNet, dir, nil, args...)
 	return err
+}
+
+// UpstreamConflicts says which files would conflict when the current
+// branch and its upstream are brought together, without touching anything
+// (git merge-tree, git 2.38+). checked is false when git can't tell.
+func UpstreamConflicts(ctx context.Context, dir string) (files []string, checked bool) {
+	out, err := run(ctx, kRead, dir, nil, "merge-tree", "--write-tree", "--name-only", "--no-messages", "HEAD", "@{upstream}")
+	if err == nil {
+		return nil, true
+	}
+	var ge *Error
+	if !errors.As(err, &ge) {
+		return nil, false
+	}
+	var ee *exec.ExitError
+	if !errors.As(ge.Err, &ee) || ee.ExitCode() != 1 {
+		return nil, false // older git, no upstream…
+	}
+	// Exit 1: conflicts. The tree's id, then the conflicted files.
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	for _, l := range lines[1:] {
+		if l = strings.TrimSpace(l); l != "" {
+			files = append(files, l)
+		}
+	}
+	return files, true
 }
 
 // Push pushes the current branch; without an upstream it pushes to origin

@@ -439,3 +439,86 @@ func TestFetchLeavesLocalBranchesAlone(t *testing.T) {
 		t.Errorf("after fetch: %+v", in)
 	}
 }
+
+// divergedRepo returns a clone whose main has one commit of its own and
+// one new commit on origin (fetched), each in file ours/theirs.
+func divergedRepo(t *testing.T, ours, theirs string) string {
+	t.Helper()
+	remote := t.TempDir()
+	git(t, remote, "init", "-q", "--bare", "-b", "main")
+	dir := newRepo(t)
+	commit(t, dir, "base.txt", "base\n", "base")
+	git(t, dir, "remote", "add", "origin", remote)
+	git(t, dir, "push", "-q", "-u", "origin", "main")
+	other := filepath.Join(t.TempDir(), "other")
+	git(t, filepath.Dir(other), "clone", "-q", remote, other)
+	commit(t, other, theirs, "theirs\n", "theirs")
+	git(t, other, "push", "-q", "origin", "main")
+	commit(t, dir, ours, "ours\n", "ours")
+	git(t, dir, "fetch", "-q")
+	return dir
+}
+
+func TestPullSetting(t *testing.T) {
+	dir := divergedRepo(t, "a.txt", "b.txt")
+	for _, c := range []struct {
+		config [][2]string
+		want   string
+	}{
+		{nil, PullUnset},
+		{[][2]string{{"pull.rebase", "true"}}, PullRebase},
+		{[][2]string{{"pull.rebase", "merges"}}, PullRebase},
+		{[][2]string{{"pull.rebase", "false"}}, PullMerge},
+		{[][2]string{{"pull.ff", "only"}}, PullFFOnly},
+		{[][2]string{{"pull.ff", "true"}}, PullMerge},
+		{[][2]string{{"pull.rebase", "true"}, {"branch.main.rebase", "false"}}, PullMerge}, // the branch wins
+	} {
+		for _, k := range []string{"pull.rebase", "pull.ff", "branch.main.rebase"} {
+			exec.Command("git", "-C", dir, "config", "--unset", k).Run()
+		}
+		for _, kv := range c.config {
+			git(t, dir, "config", kv[0], kv[1])
+		}
+		if got := PullSetting(bg, dir); got != c.want {
+			t.Errorf("%v: %q, want %q", c.config, got, c.want)
+		}
+	}
+}
+
+func TestUpstreamConflicts(t *testing.T) {
+	clean := divergedRepo(t, "a.txt", "b.txt")
+	if files, checked := UpstreamConflicts(bg, clean); !checked || len(files) != 0 {
+		t.Errorf("different files: %v checked=%v", files, checked)
+	}
+	clash := divergedRepo(t, "same.txt", "same.txt")
+	if files, checked := UpstreamConflicts(bg, clash); !checked || len(files) != 1 || files[0] != "same.txt" {
+		t.Errorf("same file: %v checked=%v", files, checked)
+	}
+	// Nothing was touched by the check.
+	if out := git(t, clash, "status", "--porcelain"); out != "" {
+		t.Errorf("the check changed the working tree: %q", out)
+	}
+}
+
+// A rebasing pull of a diverged branch puts the local commit on top and
+// keeps uncommitted changes.
+func TestPullWithRebaseKeepsLocalChanges(t *testing.T) {
+	dir := divergedRepo(t, "a.txt", "b.txt")
+	writeFile(t, dir, "base.txt", "edited, not committed\n")
+	if err := PullWith(bg, dir, PullFFOnly); err == nil {
+		t.Fatal("a fast-forward-only pull of a diverged branch should fail")
+	}
+	if err := PullWith(bg, dir, PullRebase); err != nil {
+		t.Fatal(err)
+	}
+	in, _ := GetInfo(bg, dir)
+	if in.Ahead != 1 || in.Behind != 0 {
+		t.Errorf("after the rebase: %+v", in)
+	}
+	if got := git(t, dir, "log", "--format=%s", "-3"); got != "ours\ntheirs\nbase" {
+		t.Errorf("history: %q", got)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "base.txt")); string(b) != "edited, not committed\n" {
+		t.Errorf("uncommitted change lost: %q", b)
+	}
+}

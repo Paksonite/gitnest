@@ -391,7 +391,7 @@ func (a *App) repoKey(k tea.KeyMsg) tea.Cmd {
 		if act == actPullRebase {
 			return a.do("pull --rebase", func() error { return gitx.Pull(ctx, dir, true) })
 		}
-		return a.do("pull", func() error { return gitx.Pull(ctx, dir, false) })
+		return a.pullCurrent()
 	case actPush:
 		return a.push()
 	case actUndo:
@@ -1114,6 +1114,65 @@ func (a *App) onRepoRefresh(m repoRefreshMsg) tea.Cmd {
 // force push is never asked for up front: it is offered, with a warning,
 // only when a plain push can't go through — the branches diverged, or the
 // remote refused because it has commits not fetched here.
+// pullCurrent brings in the upstream's commits. A branch that is only behind is
+// fast-forwarded. One that has diverged (commits on both sides) is pulled
+// the way git is configured to (branch.<name>.rebase, pull.rebase,
+// pull.ff), as plain git and lazygit do; with nothing configured gitnest
+// asks, saying whether the two sides will conflict.
+func (a *App) pullCurrent() tea.Cmd {
+	rp := &a.rp
+	dir, ctx, info := rp.dir, a.ctx, rp.info
+	if info.Ahead == 0 || info.Behind == 0 {
+		return a.do("pull", func() error { return gitx.PullWith(ctx, dir, gitx.PullFFOnly) })
+	}
+	var mode string
+	var conflicts []string
+	var checked bool
+	return a.after(func() (bool, error) {
+		mode = gitx.PullSetting(ctx, dir)
+		conflicts, checked = gitx.UpstreamConflicts(ctx, dir)
+		return true, nil
+	}, func(bool) tea.Cmd {
+		switch mode {
+		case gitx.PullRebase:
+			return a.do("pull --rebase (pull.rebase)", func() error { return gitx.PullWith(ctx, dir, gitx.PullRebase) })
+		case gitx.PullMerge:
+			return a.do("pull with a merge (git config)", func() error { return gitx.PullWith(ctx, dir, gitx.PullMerge) })
+		}
+		a.confirm(divergedQuestion(info, conflicts, checked), func() tea.Cmd {
+			return a.do("pull --rebase", func() error { return gitx.PullWith(ctx, dir, gitx.PullRebase) })
+		})
+		return nil
+	})
+}
+
+// divergedQuestion asks whether to rebase a diverged branch on its
+// upstream: how many commits each side has, and what the conflict check
+// found.
+func divergedQuestion(info gitx.Info, conflicts []string, checked bool) string {
+	plural := func(n int, one string) string {
+		if n == 1 {
+			return "1 " + one
+		}
+		return fmt.Sprintf("%d %ss", n, one)
+	}
+	q := fmt.Sprintf("%s has diverged from its upstream: %s of yours not pushed, %s on the remote that you don't have. ",
+		info.Branch, plural(info.Ahead, "commit"), plural(info.Behind, "new commit"))
+	switch {
+	case checked && len(conflicts) == 0:
+		q += "No conflicts (checked). "
+	case checked:
+		shown := conflicts
+		if len(shown) > 3 {
+			shown = append(append([]string{}, shown[:3]...), fmt.Sprintf("and %d more", len(conflicts)-3))
+		}
+		q += "⚠ They conflict in " + strings.Join(shown, ", ") + ": you'd resolve that (C continues, X aborts). "
+	default:
+		q += "Couldn't check for conflicts (git 2.38+ can). "
+	}
+	return q + "Put your commits on top of theirs (pull --rebase; z undoes it)?"
+}
+
 func (a *App) push() tea.Cmd {
 	rp := &a.rp
 	dir, ctx := rp.dir, a.ctx

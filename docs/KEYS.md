@@ -103,7 +103,7 @@ branch; `u` sets one).
 | Reflog | `space` check out an entry, `g` reset the branch to it, `[` back to the commits |
 | Stash | `space` apply, `g` pop, `b` branch from it, `d` drop |
 | Files browser | `B`: every file of the repository in a tree, the selected one with line numbers and syntax colours; `enter` folds a folder or moves into the file to scroll it, `e` edit, `o` quit into the selected folder (or the selected file's folder), `esc` back (from the file to the tree, then to the repository) |
-| Anywhere | `B` browse the files, `p` pull, `ctrl+p` pull --rebase, `P` push (when the remote refuses or the branches diverged, it offers a force push with a warning), `f` fetch, `z` undo the last history change, `o` quit and cd here, `enter` scroll the diff, `esc` back to the list, `!` full error, `?` help |
+| Anywhere | `B` browse the files, `p` pull (a diverged branch: the way git is configured, pull.rebase or pull.ff; with nothing set gitnest says how many commits each side has, whether they conflict, and asks to rebase yours on top), `ctrl+p` pull --rebase, `P` push (when the remote refuses or the branches diverged, it offers a force push with a warning), `f` fetch, `z` undo the last history change, `o` quit and cd here, `enter` scroll the diff, `esc` back to the list, `!` full error, `?` help |
 
 The commit message editor has a **Subject** and an optional **Body**: type the
 subject and press `enter` to commit, or `tab` to write a body, then `ctrl+s`.

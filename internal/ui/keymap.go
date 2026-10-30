@@ -294,7 +294,7 @@ var keymap = [scopes][]binding{
 		b(actScrollUp, "scroll the diff up", "", "ctrl+u", "K").show(1),
 		b(actScrollDown, "scroll the diff down", "", "ctrl+d", "J").show(1),
 		b(actFetch, "fetch all remotes", "fetch", "f"),
-		b(actPull, "pull --ff-only", "pull", "p"),
+		b(actPull, "pull: fast-forward; a diverged branch the way git is configured (pull.rebase), else it asks to rebase", "pull", "p"),
 		b(actPullRebase, "pull --rebase", "", "ctrl+p"),
 		b(actPush, "push (sets the upstream if missing; offers a force push when the remote refuses)", "push", "P"),
 		b(actUndo, "undo the last history change (again to redo)", "undo", "z"),
