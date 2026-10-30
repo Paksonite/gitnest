@@ -6,6 +6,8 @@ package ui
 
 import (
 	"context"
+	"fmt"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
 	"github.com/Paksonite/gitnest/v2/internal/scan"
 	"os"
 	"os/exec"
@@ -412,5 +414,61 @@ func TestE2EFetchesOnItsOwn(t *testing.T) {
 	}
 	if s.fetching {
 		t.Error("the background fetch should be done")
+	}
+}
+
+// p on a diverged branch: with nothing configured it asks (with how many
+// commits each side has and the conflict check) and rebases on y; with
+// pull.rebase set it rebases straight away, as git and lazygit do.
+func TestE2EPullDiverged(t *testing.T) {
+	if testing.Short() {
+		t.Skip("end-to-end")
+	}
+	a, root, origin := e2eSetup(t)
+	a.cfg.FetchInterval = 0
+	app := filepath.Join(root, "app")
+	diverge := func(n int) {
+		other := filepath.Join(t.TempDir(), "other")
+		sh(t, filepath.Dir(other), "clone", "-q", origin, other)
+		os.WriteFile(filepath.Join(other, fmt.Sprintf("theirs%d.txt", n)), []byte("t\n"), 0o644)
+		sh(t, other, "add", ".")
+		sh(t, other, "commit", "-q", "-m", "theirs")
+		sh(t, other, "push", "-q", "origin", "HEAD:main")
+		os.WriteFile(filepath.Join(app, fmt.Sprintf("ours%d.txt", n)), []byte("o\n"), 0o644)
+		sh(t, app, "add", ".")
+		sh(t, app, "commit", "-q", "-m", "ours")
+		sh(t, app, "fetch", "-q")
+	}
+
+	diverge(1)
+	press(t, a, "/", "type:app", "enter")
+	if a.rp.info.Ahead != 1 || a.rp.info.Behind != 1 {
+		t.Fatalf("not diverged: %+v", a.rp.info)
+	}
+	press(t, a, "p")
+	checkNote := "No conflicts (checked)"
+	if v, _ := gitx.GitVersion(a.ctx); !gitx.VersionAtLeast(v, "2.38") {
+		checkNote = "Couldn't check for conflicts" // git 2.34 on Ubuntu 22.04
+	}
+	if a.p == nil || !strings.Contains(a.p.title, "1 commit of yours not pushed, 1 new commit on the remote") ||
+		!strings.Contains(a.p.title, checkNote) {
+		t.Fatalf("expected the question, got %+v (toast %q)", a.p, a.toast)
+	}
+	press(t, a, "y")
+	if a.rp.info.Ahead != 1 || a.rp.info.Behind != 0 {
+		t.Fatalf("after y: %+v (toast %q)", a.rp.info, a.toast)
+	}
+
+	// pull.rebase = true: no question.
+	sh(t, app, "push", "-q")
+	diverge(2)
+	sh(t, app, "config", "pull.rebase", "true")
+	drive(t, a, loadRepoData(a.ctx, app)) // read the repository again
+	press(t, a, "p")
+	if a.p != nil {
+		t.Fatalf("with pull.rebase set it should not ask: %+v", a.p)
+	}
+	if a.rp.info.Ahead != 1 || a.rp.info.Behind != 0 {
+		t.Errorf("pull.rebase: %+v (toast %q)", a.rp.info, a.toast)
 	}
 }
