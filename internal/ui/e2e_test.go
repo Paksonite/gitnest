@@ -7,6 +7,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"github.com/Paksonite/gitnest/v2/internal/gitx"
 	"github.com/Paksonite/gitnest/v2/internal/scan"
 	"os"
 	"os/exec"
@@ -445,8 +446,12 @@ func TestE2EPullDiverged(t *testing.T) {
 		t.Fatalf("not diverged: %+v", a.rp.info)
 	}
 	press(t, a, "p")
+	checkNote := "No conflicts (checked)"
+	if v, _ := gitx.GitVersion(a.ctx); !gitx.VersionAtLeast(v, "2.38") {
+		checkNote = "Couldn't check for conflicts" // git 2.34 on Ubuntu 22.04
+	}
 	if a.p == nil || !strings.Contains(a.p.title, "1 commit of yours not pushed, 1 new commit on the remote") ||
-		!strings.Contains(a.p.title, "No conflicts (checked)") {
+		!strings.Contains(a.p.title, checkNote) {
 		t.Fatalf("expected the question, got %+v (toast %q)", a.p, a.toast)
 	}
 	press(t, a, "y")

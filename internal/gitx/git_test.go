@@ -486,6 +486,13 @@ func TestPullSetting(t *testing.T) {
 }
 
 func TestUpstreamConflicts(t *testing.T) {
+	if v, _ := GitVersion(bg); !VersionAtLeast(v, "2.38") {
+		// Too old for merge-tree --write-tree: it says it couldn't check.
+		if files, checked := UpstreamConflicts(bg, divergedRepo(t, "a.txt", "b.txt")); checked || files != nil {
+			t.Errorf("git %s: %v checked=%v", v, files, checked)
+		}
+		return
+	}
 	clean := divergedRepo(t, "a.txt", "b.txt")
 	if files, checked := UpstreamConflicts(bg, clean); !checked || len(files) != 0 {
 		t.Errorf("different files: %v checked=%v", files, checked)
