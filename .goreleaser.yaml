@@ -128,10 +128,10 @@ homebrew_casks:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     # The binary is not notarized: drop the quarantine flag so Gatekeeper
-    # doesn't report it as damaged.
+    # doesn't report it as damaged. install_steps (GoReleaser 2.19+) writes
+    # postflight_steps: Homebrew 7 deprecates a Ruby postflight block. A
+    # failing xattr must not fail the install.
     hooks:
       post:
-        install: |
-          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/gitnest"]
-          end
+        install_steps: |
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/gitnest"], must_succeed: false
