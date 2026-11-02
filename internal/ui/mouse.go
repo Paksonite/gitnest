@@ -163,8 +163,7 @@ func (a *App) clickBrowser(x, y int) tea.Cmd {
 		return nil
 	}
 	if b.rows[i].dir && i == b.cur {
-		b.collapsed[b.rows[i].path] = !b.collapsed[b.rows[i].path]
-		b.build()
+		a.toggleBrowseDir(b.rows[i].path)
 		return nil
 	}
 	b.cur = i

@@ -25,7 +25,7 @@ type browser struct {
 	files     []string // slash paths, from git ls-files
 	err       string
 	rows      []browseRow
-	collapsed map[string]bool
+	open      map[string]bool // unfolded folders; the rest are folded
 	cur, off  int
 	focusFile bool // keys scroll the file instead of moving in the tree
 
@@ -56,7 +56,10 @@ const (
 )
 
 func (a *App) openBrowser(dir string) tea.Cmd {
-	a.browse = &browser{dir: dir, collapsed: map[string]bool{}}
+	a.browse = &browser{dir: dir, open: map[string]bool{}}
+	for _, d := range a.st.BrowseOpen[dir] {
+		a.browse.open[d] = true
+	}
 	ctx := a.ctx
 	return func() tea.Msg {
 		files, err := gitx.ListFiles(ctx, dir)
@@ -74,12 +77,23 @@ func (a *App) onBrowseFiles(m browseFilesMsg) {
 		return
 	}
 	b.files = m.files
-	// Start with only the top level open, like a file manager.
+	// Every folder starts folded; the ones unfolded last time open again,
+	// unless they are gone.
+	dirs := map[string]bool{}
 	for _, f := range b.files {
-		if d := path.Dir(f); d != "." {
-			top, _, _ := strings.Cut(d, "/")
-			b.collapsed[top] = true
+		for d := path.Dir(f); d != "."; d = path.Dir(d) {
+			dirs[d] = true
 		}
+	}
+	stale := false
+	for d := range b.open {
+		if !dirs[d] {
+			delete(b.open, d)
+			stale = true
+		}
+	}
+	if stale {
+		a.saveBrowseOpen()
 	}
 	b.build()
 	b.show()
@@ -117,7 +131,7 @@ func (b *browser) build() {
 		for _, d := range names {
 			p := prefix + d
 			b.rows = append(b.rows, browseRow{path: p, name: d, dir: true, depth: depth})
-			if !b.collapsed[p] {
+			if b.open[p] {
 				walk(n.dirs[d], p+"/", depth+1)
 			}
 		}
@@ -128,6 +142,26 @@ func (b *browser) build() {
 	}
 	walk(root, "", 0)
 	b.cur = clamp(b.cur, 0, len(b.rows)-1)
+}
+
+// toggleBrowseDir folds or unfolds a folder and remembers it.
+func (a *App) toggleBrowseDir(p string) {
+	b := a.browse
+	if b.open[p] {
+		delete(b.open, p)
+	} else {
+		b.open[p] = true
+	}
+	b.build()
+	a.saveBrowseOpen()
+}
+
+func (a *App) saveBrowseOpen() {
+	dirs := make([]string, 0, len(a.browse.open))
+	for d := range a.browse.open {
+		dirs = append(dirs, d)
+	}
+	a.st.SetBrowseOpen(a.browse.dir, dirs)
 }
 
 // show loads the file under the cursor into the right pane.
@@ -250,9 +284,7 @@ func (a *App) browserKey(k tea.KeyMsg) tea.Cmd {
 		move(1)
 	case actOpen:
 		if b.cur < len(b.rows) && b.rows[b.cur].dir {
-			p := b.rows[b.cur].path
-			b.collapsed[p] = !b.collapsed[p]
-			b.build()
+			a.toggleBrowseDir(b.rows[b.cur].path)
 		} else if b.path != "" {
 			b.focusFile = true
 		}
@@ -318,10 +350,10 @@ func (a *App) viewBrowser() string {
 			indent := strings.Repeat("  ", r.depth)
 			if r.dir {
 				arrow := "▾"
-				if b.collapsed[r.path] {
+				if !b.open[r.path] {
 					arrow = "▸"
 				}
-				icon, sicon := fileIconStyled(r.path, true, b.collapsed[r.path])
+				icon, sicon := fileIconStyled(r.path, true, !b.open[r.path])
 				items = append(items, rowItem{plain: indent + arrow + " " + icon + r.name + "/",
 					styled: indent + fg(cDim, arrow) + " " + sicon + fg(cCyan, r.name+"/")})
 				continue

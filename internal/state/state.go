@@ -52,6 +52,8 @@ type State struct {
 	Screen    string   `json:"screen"`     // "dashboard" or "list": where gitnest was last
 	Favorites []string `json:"favorites"`  // starred repositories (*)
 	ListView  ListView `json:"list_view"`  // the list's sort order (v)
+	// Unfolded folders of the file browser (B), by repository.
+	BrowseOpen map[string][]string `json:"browse_open"`
 }
 
 // ListView is how the repository list is sorted, as chosen in the view
@@ -88,6 +90,21 @@ func (s *State) SetFavorites(paths []string) {
 	sort.Strings(paths)
 	s.Favorites = paths
 	_ = setKey(settingsPath(), "favorites", paths)
+}
+
+// SetBrowseOpen remembers which folders of the file browser are unfolded
+// in a repository; none forgets the repository.
+func (s *State) SetBrowseOpen(repo string, dirs []string) {
+	if s.BrowseOpen == nil {
+		s.BrowseOpen = map[string][]string{}
+	}
+	if len(dirs) == 0 {
+		delete(s.BrowseOpen, repo)
+	} else {
+		sort.Strings(dirs)
+		s.BrowseOpen[repo] = dirs
+	}
+	_ = setKey(settingsPath(), "browse_open", s.BrowseOpen)
 }
 
 // SetCollapsed remembers which directories of the list tree are folded.
