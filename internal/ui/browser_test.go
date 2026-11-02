@@ -9,9 +9,12 @@ import (
 
 	"github.com/alecthomas/chroma/v2"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/Paksonite/gitnest/v2/internal/state"
 )
 
 func TestBrowser(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	dir := t.TempDir()
 	sh(t, dir, "init", "-q")
 	src := "package main\n\n// hello\nfunc main() {\n\tprintln(\"hi\", 42)\n}\n"
@@ -57,7 +60,7 @@ func TestBrowser(t *testing.T) {
 	if b.focusFile || a.browse == nil {
 		t.Fatal("esc should go back to the tree")
 	}
-	// enter on a folder unfolds it.
+	// enter on a folder unfolds it; the folders inside stay folded.
 	for i := 0; i < 4; i++ {
 		a.onKey(tea.KeyMsg{Type: tea.KeyUp})
 	}
@@ -66,7 +69,7 @@ func TestBrowser(t *testing.T) {
 	for _, r := range b.rows {
 		names = append(names, r.name)
 	}
-	if strings.Join(names, " ") != "docs deep b.txt a.md .gitignore bin.dat main.go" {
+	if strings.Join(names, " ") != "docs deep a.md .gitignore bin.dat main.go" {
 		t.Fatalf("unfolded: %v", names)
 	}
 	a.onKey(tea.KeyMsg{Type: tea.KeyEsc})
@@ -99,6 +102,7 @@ func TestColorize(t *testing.T) {
 // o in the file browser leaves for the selected folder, or the selected
 // file's folder, like o does for the repository.
 func TestBrowserCdIntoSelection(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	dir := t.TempDir()
 	sh(t, dir, "init", "-q")
 	os.MkdirAll(filepath.Join(dir, "docs", "deep"), 0o755)
@@ -128,5 +132,60 @@ func TestBrowserCdIntoSelection(t *testing.T) {
 		if strings.TrimSpace(string(got)) != c.want {
 			t.Errorf("o on %s: %q, want %q", c.row, got, c.want)
 		}
+	}
+}
+
+// Folders start folded and the ones unfolded open again next time, in
+// that repository only; folders that are gone are forgotten.
+func TestBrowserRemembersFolds(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	dir, other := t.TempDir(), t.TempDir()
+	for _, d := range []string{dir, other} {
+		sh(t, d, "init", "-q")
+		os.MkdirAll(filepath.Join(d, "docs", "deep"), 0o755)
+		os.MkdirAll(filepath.Join(d, "src"), 0o755)
+		os.WriteFile(filepath.Join(d, "docs", "deep", "b.txt"), []byte("b\n"), 0o644)
+		os.WriteFile(filepath.Join(d, "src", "c.go"), []byte("package c\n"), 0o644)
+	}
+	rows := func(a *App) string {
+		var names []string
+		for _, r := range a.browse.rows {
+			names = append(names, r.name)
+		}
+		return strings.Join(names, " ")
+	}
+	a := testApp()
+	a.w, a.h = 120, 30
+	a.Update(a.openBrowser(dir)())
+	if got := rows(a); got != "docs src" {
+		t.Fatalf("first open: %q", got)
+	}
+	a.onKey(tea.KeyMsg{Type: tea.KeyEnter}) // docs
+	a.onKey(tea.KeyMsg{Type: tea.KeyDown})
+	a.onKey(tea.KeyMsg{Type: tea.KeyEnter}) // docs/deep
+	if got := rows(a); got != "docs deep b.txt src" {
+		t.Fatalf("unfolded: %q", got)
+	}
+
+	b := testApp()
+	b.st = state.Load()
+	b.w, b.h = 120, 30
+	b.Update(b.openBrowser(dir)())
+	if got := rows(b); got != "docs deep b.txt src" {
+		t.Errorf("reopened: %q", got)
+	}
+	b.Update(b.openBrowser(other)())
+	if got := rows(b); got != "docs src" {
+		t.Errorf("another repository: %q", got)
+	}
+
+	os.RemoveAll(filepath.Join(dir, "docs", "deep"))
+	os.WriteFile(filepath.Join(dir, "docs", "a.md"), []byte("a\n"), 0o644)
+	sh(t, dir, "add", "-A")
+	c := testApp()
+	c.st = state.Load()
+	c.Update(c.openBrowser(dir)())
+	if got := c.st.BrowseOpen[dir]; strings.Join(got, " ") != "docs" {
+		t.Errorf("after docs/deep went away: %v", got)
 	}
 }
