@@ -14,7 +14,7 @@ import (
 )
 
 // Selecting text with the mouse in the right-hand panel (the details card in
-// the list, the diff in a repository): drag to select, release to copy.
+// the list, the diff in a repository, the file in the files browser): drag to select, release to copy.
 // While the mouse is on, the terminal's own selection needs shift (option
 // on macOS) held down; this one works without.
 type textSel struct {
@@ -27,8 +27,16 @@ type textSel struct {
 func (a *App) selArea() (x0, y0, x1, y1 int, ok bool) {
 	var left int
 	switch {
-	case a.browse != nil || a.overlayOpen():
+	case a.overlayOpen():
 		return 0, 0, 0, 0, false
+	case a.browse != nil:
+		b := a.browse
+		if b.path == "" || b.note != "" {
+			return 0, 0, 0, 0, false
+		}
+		// the file's text, after the line numbers; the browser's panels
+		// end one row lower than the others
+		return a.browseTreeW() + 1 + panelPad + b.numW() + 1, 3, a.w - 2 - panelPad, a.h - 4, true
 	case a.scr == scrRepos && a.w >= 90:
 		left = a.rs.listW
 	case a.scr == scrRepo && a.rp.leftW > 0:

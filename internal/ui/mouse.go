@@ -149,10 +149,7 @@ func (a *App) clickRepo(x, y int) tea.Cmd {
 
 func (a *App) clickBrowser(x, y int) tea.Cmd {
 	b := a.browse
-	treeW := clamp(a.w*2/5, 24, 48)
-	if a.w < 70 {
-		treeW = a.w / 2
-	}
+	treeW := a.browseTreeW()
 	if x >= treeW {
 		b.focusFile = b.path != ""
 		return nil

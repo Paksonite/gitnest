@@ -34,7 +34,7 @@ The wheel scrolls what is under the pointer (the diff, a file, a list); a
 click selects a row and a click on the selected row opens it (or folds a
 group); in a repository a click focuses the panel, and with panes a click
 focuses the pane. Dragging in the right-hand panel (the details card, the
-diff) selects text and copies it when you let go. A click on **Link** in the
+diff, the file in the files browser, without its line numbers) selects text and copies it when you let go. A click on **Link** in the
 details card opens the repository's page in the browser (over SSH, where
 there is no browser, cmd/ctrl+click the link: terminals that know OSC 8 links
 open it). Elsewhere, select text in the terminal with `shift` (`option` in
