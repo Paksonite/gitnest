@@ -57,6 +57,24 @@ func TestOnStatusKeepsOrderAndCursor(t *testing.T) {
 	}
 }
 
+// A scan that removes repositories above the cursor keeps the cursor on
+// its repository; it used to look the selection up in the shortened list
+// and crash when the cursor was past its end.
+func TestOnScanRemovedKeepsSelection(t *testing.T) {
+	a := testApp("a", "b", "c", "d", "e")
+	a.rs.cur = len(a.rs.rows) - 1
+	if a.selectedPath() != "e" {
+		t.Fatalf("selected %q", a.selectedPath())
+	}
+	a.onScan(scanMsg{paths: []string{"c", "e"}})
+	if got := listed(a); !reflect.DeepEqual(got, []string{"c", "e"}) {
+		t.Fatalf("list = %v", got)
+	}
+	if a.selectedPath() != "e" {
+		t.Errorf("cursor moved to %q", a.selectedPath())
+	}
+}
+
 func TestOnScanMarksNewAndDropsRemoved(t *testing.T) {
 	a := testApp("a", "b")
 	a.rs.marked["b"] = true

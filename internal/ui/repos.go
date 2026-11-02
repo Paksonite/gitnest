@@ -195,20 +195,21 @@ func (a *App) onScan(m scanMsg) tea.Cmd {
 		return nil
 	}
 	if len(removed) > 0 {
+		keep := a.selectedKey() // before rs.all shrinks: rows index the old one
 		gone := map[string]bool{}
 		for _, p := range removed {
 			gone[p] = true
 			delete(rs.marked, p)
 			delete(rs.isNew, p)
 		}
-		keep := rs.all[:0]
+		left := rs.all[:0]
 		for _, r := range rs.all {
 			if !gone[r.Path] {
-				keep = append(keep, r)
+				left = append(left, r)
 			}
 		}
-		rs.all = keep
-		a.rebuildView(a.selectedKey())
+		rs.all = left
+		a.rebuildView(keep)
 	}
 	for _, p := range added {
 		rs.isNew[p] = true
