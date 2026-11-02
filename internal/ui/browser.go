@@ -321,6 +321,17 @@ func (b *browser) cdTarget() string {
 	return filepath.Join(b.dir, rel)
 }
 
+// browseTreeW is the width of the tree panel; the file takes the rest.
+func (a *App) browseTreeW() int {
+	if a.w < 70 {
+		return a.w / 2
+	}
+	return clamp(a.w*2/5, 24, 48)
+}
+
+// numW is the width of the line numbers, without the space after them.
+func (b *browser) numW() int { return len(fmt.Sprint(len(b.lines))) }
+
 func (a *App) viewBrowser() string {
 	b := a.browse
 	bodyH := a.h - 3
@@ -328,12 +339,9 @@ func (a *App) viewBrowser() string {
 	if b.path != "" {
 		head += fg(cDim, " › ") + b.path
 	}
-	treeW := clamp(a.w*2/5, 24, 48)
-	if a.w < 70 {
-		treeW = a.w / 2
-	}
+	treeW := a.browseTreeW()
 	fileW := a.w - treeW
-	lh := bodyH - 2
+	lh := bodyH - 3 // borders and the title
 
 	var tree []string
 	switch {
@@ -372,7 +380,7 @@ func (a *App) viewBrowser() string {
 	case b.path == "":
 		file = []string{fg(cDim, "choose a file on the left")}
 	default:
-		numW := len(fmt.Sprint(len(b.lines)))
+		numW := b.numW()
 		for i := b.scroll; i < len(b.lines) && i < b.scroll+lh; i++ {
 			file = append(file, fit(fg(cDim, fmt.Sprintf("%*d ", numW, i+1))+b.lines[i], inner))
 		}

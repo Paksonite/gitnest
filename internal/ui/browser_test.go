@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/alecthomas/chroma/v2"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/Paksonite/gitnest/v2/internal/state"
 )
@@ -187,5 +189,83 @@ func TestBrowserRemembersFolds(t *testing.T) {
 	c.Update(c.openBrowser(dir)())
 	if got := c.st.BrowseOpen[dir]; strings.Join(got, " ") != "docs" {
 		t.Errorf("after docs/deep went away: %v", got)
+	}
+}
+
+// Dragging over the file selects its text, without the line numbers, and
+// copies it.
+func TestBrowserSelectFileText(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	dir := t.TempDir()
+	sh(t, dir, "init", "-q")
+	var src strings.Builder
+	for i := 1; i <= 40; i++ {
+		fmt.Fprintf(&src, "line number %d\n", i)
+	}
+	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte(src.String()), 0o644)
+	a := testApp()
+	a.w, a.h = 120, 30
+	a.Update(a.openBrowser(dir)())
+	if a.browse.path != "notes.txt" {
+		t.Fatalf("shown: %q", a.browse.path)
+	}
+	lines := strings.Split(a.View(), "\n")
+	find := func(s string) (int, int) {
+		for y, l := range lines {
+			plain := ansi.Strip(l)
+			if i := strings.Index(plain, s); i >= 0 {
+				return ansi.StringWidth(plain[:i]), y
+			}
+		}
+		t.Fatalf("no %q on screen", s)
+		return 0, 0
+	}
+	x0, y0 := find("line number 2")
+	_, y1 := find("line number 4")
+	last, ylast := find("line number 24") // the last row of the panel
+	if ylast != a.h-4 {
+		t.Fatalf("last file row at %d, want %d", ylast, a.h-4)
+	}
+	press := func(act tea.MouseAction, x, y int) tea.Cmd {
+		return a.onMouse(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: act})
+	}
+	press(tea.MouseActionPress, x0, y0)
+	press(tea.MouseActionMotion, x0+12, y1)
+	if cmd := press(tea.MouseActionRelease, x0+12, y1); cmd == nil || !strings.Contains(a.toast, "copied") {
+		t.Fatalf("no copy: toast %q", a.toast)
+	}
+	if got := a.selText(); got != "line number 2\nline number 3\nline number 4" {
+		t.Errorf("selected %q", got)
+	}
+	// down to the last row, and no further
+	press(tea.MouseActionPress, last, ylast)
+	press(tea.MouseActionMotion, last+20, ylast+3)
+	press(tea.MouseActionRelease, last+20, ylast+3)
+	if got := a.selText(); got != "line number 24" {
+		t.Errorf("last row: %q", got)
+	}
+}
+
+// The cursor stays on screen at the bottom of a long tree.
+func TestBrowserTreeCursorVisible(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	dir := t.TempDir()
+	sh(t, dir, "init", "-q")
+	for i := 0; i < 40; i++ {
+		os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%02d.txt", i)), []byte("x\n"), 0o644)
+	}
+	a := testApp()
+	a.w, a.h = 120, 30
+	a.Update(a.openBrowser(dir)())
+	for i := 0; i < 39; i++ {
+		a.onKey(tea.KeyMsg{Type: tea.KeyDown})
+		name := a.browse.rows[a.browse.cur].name
+		var tree []string
+		for _, l := range strings.Split(a.View(), "\n")[1:] {
+			tree = append(tree, ansi.Strip(ansi.Cut(l, 0, a.browseTreeW())))
+		}
+		if !strings.Contains(strings.Join(tree, "\n"), name) {
+			t.Fatalf("cursor on %s is off screen", name)
+		}
 	}
 }
