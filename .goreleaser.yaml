@@ -115,8 +115,11 @@ homebrew_casks:
     # Pre-releases don't touch the tap: brew users stay on the last release.
     skip_upload: auto
     commit_msg_template: "gitnest {{ .Tag }}"
-    custom_block: |
-      depends_on macos: ">= :ventura"
+    # No custom_block with `depends_on macos: ">= :ventura"`: GoReleaser
+    # always writes `depends_on :macos` for a macOS-only cask, and Homebrew
+    # 7 refuses the two together ("Calling combining depends_on :macos with
+    # a versioned macOS dependency is disabled"), which broke brew upgrade.
+    # macOS 13+ is in README.md and docs/INSTALL.md.
     commit_author:
       name: gitnest-release-bot
       email: noreply@github.com
