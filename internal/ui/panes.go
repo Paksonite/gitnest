@@ -11,6 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/term"
 
 	"github.com/Paksonite/gitnest/v2/internal/update"
@@ -599,7 +600,27 @@ func (s *Shell) View() string {
 	if s.w == 0 || s.h == 0 {
 		return ""
 	}
-	return paintScreen(s.view(), s.w, s.h)
+	view, w, h := s.view(), s.w, s.h
+	// The frame is drawn for the last size Bubble Tea was told about; while
+	// the window shrinks, the terminal is already smaller. Lines past its
+	// bottom would scroll the screen, and iTerm2 keeps what scrolls off the
+	// alternate screen in the shell's scrollback, where it stays after
+	// gitnest quits. Cut the frame to the terminal as it is now.
+	if tw, th, ok := termSize(); ok && (tw < w || th < h) {
+		w, h = min(w, tw), min(h, th)
+		view = cutScreen(view, w, h)
+	}
+	return paintScreen(view, w, h)
+}
+
+// cutScreen keeps the first h lines of view, each at most w cells wide.
+func cutScreen(view string, w, h int) string {
+	lines := strings.Split(view, "\n")
+	lines = lines[:min(len(lines), h)]
+	for i, l := range lines {
+		lines[i] = ansi.Truncate(l, w, "")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (s *Shell) view() string {

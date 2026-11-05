@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -279,7 +280,46 @@ func (a *App) editor() string {
 }
 
 func (a *App) execCmd(c *exec.Cmd) tea.Cmd {
-	return tea.ExecProcess(c, func(err error) tea.Msg { return execDoneMsg{err: err} })
+	return tea.Exec(wrapExec{c}, func(err error) tea.Msg { return execDoneMsg{err: err} })
+}
+
+// Line wrapping (DECAWM), off while gitnest draws.
+const (
+	wrapOff = "\x1b[?7l"
+	wrapOn  = "\x1b[?7h"
+)
+
+// wrapExec runs a program in the terminal (an editor, git rebase -i) with
+// line wrapping on, as it expects, and turns it off again afterwards.
+type wrapExec struct{ *exec.Cmd }
+
+func (c wrapExec) Run() error {
+	out := io.Writer(os.Stdout)
+	if c.Stdout != nil {
+		out = c.Stdout
+	}
+	fmt.Fprint(out, wrapOn)
+	defer fmt.Fprint(out, wrapOff)
+	return c.Cmd.Run()
+}
+
+// As tea.ExecProcess does: the terminal, unless the command has its own.
+func (c wrapExec) SetStdin(r io.Reader) {
+	if c.Stdin == nil {
+		c.Stdin = r
+	}
+}
+
+func (c wrapExec) SetStdout(w io.Writer) {
+	if c.Stdout == nil {
+		c.Stdout = w
+	}
+}
+
+func (c wrapExec) SetStderr(w io.Writer) {
+	if c.Stderr == nil {
+		c.Stderr = w
+	}
 }
 
 // ---------------------------------------------------------------------- keys

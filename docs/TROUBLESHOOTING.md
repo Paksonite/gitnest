@@ -20,6 +20,11 @@ do.
   prompts: use an SSH agent (`ssh-add`) or a credential helper
   (macOS: `osxkeychain`, Linux: `git config --global credential.helper store`
   or `libsecret`). `!` shows git's full error.
+- **Long lines in the shell are cut off instead of wrapping** — gitnest
+  turns line wrapping off while it runs, so a frame drawn as the window
+  shrinks can't scroll the screen, and turns it back on when it quits. If it
+  was killed (`kill -9`, a closed SSH connection), run `reset` or
+  `printf '\e[?7h'`.
 - **macOS says the binary "is damaged"** (only when you downloaded the archive
   in a browser): `xattr -d com.apple.quarantine /path/to/gitnest`.
 

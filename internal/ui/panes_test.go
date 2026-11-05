@@ -524,3 +524,47 @@ func TestNewReleaseAsksToUpdate(t *testing.T) {
 		t.Errorf("while searching: prompt %+v, banner %q", c.p, c.sh.update)
 	}
 }
+
+// A frame drawn for a bigger window than the terminal is now (while it
+// shrinks) is cut to the terminal: a line past its bottom would scroll the
+// screen, and iTerm2 keeps what scrolls off in the shell's scrollback.
+func TestFrameFitsShrunkTerminal(t *testing.T) {
+	for _, dark := range []bool{true, false} {
+		s := shellOf(t, 120, 40, "/r/a")
+		if !dark {
+			old := cBack
+			cBack = lipgloss.NoColor{} // no theme background: lines aren't padded
+			t.Cleanup(func() { cBack = old })
+		}
+		oldSize := termSize
+		termSize = func() (int, int, bool) { return 70, 25, true }
+		t.Cleanup(func() { termSize = oldSize })
+		lines := strings.Split(s.View(), "\n")
+		if len(lines) > 25 {
+			t.Errorf("background %v: %d lines in a 25-line terminal", dark, len(lines))
+		}
+		for i, l := range lines {
+			if w := ansi.StringWidth(l); w > 70 {
+				t.Fatalf("background %v: line %d is %d wide in a 70-column terminal", dark, i, w)
+			}
+		}
+		termSize = func() (int, int, bool) { return 200, 60, true } // bigger: the known size
+		if n := len(strings.Split(s.View(), "\n")); n != 40 && dark {
+			t.Errorf("a bigger terminal: %d lines, want 40", n)
+		}
+	}
+}
+
+// Programs gitnest runs in the terminal get line wrapping back while they
+// run; gitnest turns it off again when they are done.
+func TestExecTurnsWrappingBackOn(t *testing.T) {
+	var out strings.Builder
+	c := wrapExec{exec.Command("sh", "-c", "printf hi")}
+	c.SetStdout(&out)
+	if err := c.Run(); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != wrapOn+"hi"+wrapOff {
+		t.Errorf("output %q", got)
+	}
+}
