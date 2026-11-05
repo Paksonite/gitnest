@@ -88,8 +88,10 @@ if $dev; then
 else
   name=gitnest
   if [ "$version" = latest ]; then
-    version=$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" |
-      sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
+    # The release page redirects to the latest tag (.../releases/tag/vX.Y.Z);
+    # unlike the API, it has no limit on requests without a token.
+    version=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$repo/releases/latest" |
+      sed -n 's|.*/releases/tag/\(v[^/]*\)$|\1|p')
     [ -n "$version" ] || die "could not find the latest release"
   fi
   v=${version#v}
