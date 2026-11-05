@@ -142,6 +142,12 @@ func Run(cfg config.Config, noConfig bool, startDir, cdFile string) error {
 			}
 		}
 	}
+	// No line wrapping while gitnest runs: a frame drawn for a wider
+	// window than the terminal is now (while it is resized) is cut at the
+	// right edge instead of spilling onto the next line and scrolling the
+	// screen (see Shell.View). Programs gitnest runs get it back (wrapExec).
+	fmt.Fprint(os.Stdout, wrapOff)
+	defer fmt.Fprint(os.Stdout, wrapOn)
 	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
 	if config.MouseOn(cfg) {
 		opts = append(opts, tea.WithMouseCellMotion())
